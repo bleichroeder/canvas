@@ -1,23 +1,38 @@
 import { RangeFetcher } from './range-fetcher';
+import { Demuxer } from './demux';
 
 const status = document.getElementById('status');
 const params = new URLSearchParams(location.search);
 const testUrl = params.get('url');
 
+function log(msg: string): void {
+  if (status) status.textContent = msg;
+  console.log('[passenger]', msg);
+}
+
 if (testUrl) {
-  let total = 0;
+  let videoCount = 0;
+  let audioCount = 0;
+  const demuxer = new Demuxer({
+    onReady: (info) => {
+      log(`Ready: ${info.duration.toFixed(1)}s, video=${info.videoConfig?.codec}, audio=${info.audioConfig?.codec}`);
+      console.log('demux info', info);
+    },
+    onVideoSample: () => { videoCount++; },
+    onAudioSample: () => { audioCount++; },
+    onError: (e) => { log(`Demux error: ${e.message}`); },
+  });
   const fetcher = new RangeFetcher({
     url: testUrl,
-    chunkSize: 1 * 1024 * 1024,
-    onChunk: (offset, bytes) => {
-      total += bytes.length;
-      if (status) status.textContent = `Fetched ${(total / 1024 / 1024).toFixed(2)} MiB at ${offset}`;
-    },
-    onError: (e) => { if (status) status.textContent = `Error: ${e.message}`; },
-    onDone: () => { if (status) status.textContent = `Done. Total ${(total / 1024 / 1024).toFixed(2)} MiB`; },
+    chunkSize: 2 * 1024 * 1024,
+    onChunk: (offset, bytes) => { demuxer.appendChunk(offset, bytes); },
+    onError: (e) => { log(`Fetch error: ${e.message}`); },
+    onDone: () => { log(`Done. video samples=${videoCount}, audio samples=${audioCount}`); demuxer.flush(); },
   });
   fetcher.start();
-  setTimeout(() => fetcher.abort(), 10_000);
+  setInterval(() => {
+    log(`Samples: video=${videoCount}, audio=${audioCount}`);
+  }, 1000);
 } else {
-  if (status) status.textContent = 'Player ready (pass ?url=... to test fetcher)';
+  log('Player ready (pass ?url=... to test)');
 }
