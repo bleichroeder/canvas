@@ -9,6 +9,9 @@ interface QueueItem {
 
 const root = document.getElementById('queue-root');
 
+const POLL_OK_MS = 3000;
+const POLL_BACKOFF_MAX_MS = 60_000;
+
 function relativeTime(t: number): string {
   const seconds = Math.floor((Date.now() - t) / 1000);
   if (seconds < 60) return `${seconds}s ago`;
@@ -56,28 +59,57 @@ function render(state:
     .join('');
 }
 
-async function fetchQueue(): Promise<void> {
+let consecutiveErrors = 0;
+
+async function fetchQueueOnce(): Promise<boolean> {
   const base = getApiBase();
   const token = getToken();
-  if (!base || !token) { render({ kind: 'config-missing' }); return; }
+  if (!base || !token) { render({ kind: 'config-missing' }); return false; }
   try {
     const res = await fetch(`${base}/api/queue`, { headers: authHeaders() });
-    if (!res.ok) { render({ kind: 'error', message: `HTTP ${res.status}` }); return; }
+    if (!res.ok) {
+      let detail = '';
+      try { detail = ' — ' + (await res.text()).slice(0, 200); } catch { /* ignore */ }
+      render({ kind: 'error', message: `HTTP ${res.status}${detail}` });
+      return false;
+    }
     const items: QueueItem[] = await res.json();
     render({ kind: 'ok', items });
+    return true;
   } catch (e) {
     render({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
+    return false;
   }
 }
 
 let timer: number | undefined;
+let stopped = false;
+
+function scheduleNext(delayMs: number): void {
+  if (stopped) return;
+  timer = window.setTimeout(tick, delayMs);
+}
+
+async function tick(): Promise<void> {
+  const ok = await fetchQueueOnce();
+  if (ok) {
+    consecutiveErrors = 0;
+    scheduleNext(POLL_OK_MS);
+  } else {
+    consecutiveErrors++;
+    const backoff = Math.min(POLL_BACKOFF_MAX_MS, POLL_OK_MS * 2 ** Math.min(consecutiveErrors - 1, 5));
+    scheduleNext(backoff);
+  }
+}
+
 function startPolling(): void {
   if (timer !== undefined) return;
-  fetchQueue();
-  timer = window.setInterval(fetchQueue, 3000);
+  stopped = false;
+  void tick();
 }
 function stopPolling(): void {
-  if (timer !== undefined) { clearInterval(timer); timer = undefined; }
+  stopped = true;
+  if (timer !== undefined) { clearTimeout(timer); timer = undefined; }
 }
 
 render({ kind: 'loading' });
@@ -86,4 +118,3 @@ startPolling();
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) stopPolling(); else startPolling();
 });
-
