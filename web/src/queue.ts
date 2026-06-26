@@ -72,6 +72,7 @@ async function fetchQueue(): Promise<void> {
 
 let timer: number | undefined;
 function startPolling(): void {
+  if (timer !== undefined) return;
   fetchQueue();
   timer = window.setInterval(fetchQueue, 3000);
 }
