@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Passenger — Settings</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Passenger</h1>
+      <nav>
+        <a href="/index.html">Queue</a>
+        <a href="/settings.html">Settings</a>
+      </nav>
+    </header>
+    <main>
+      <h2>Settings</h2>
+      <p class="muted">Stored in this browser's localStorage only.</p>
+      <form id="settings-form">
+        <label>Worker API base URL<br /><input id="api-base" type="url" placeholder="https://passenger-api.example.workers.dev" /></label>
+        <p></p>
+        <label>Bearer token<br /><input id="token" type="password" /></label>
+        <p></p>
+        <button type="submit">Save</button>
+        <span id="settings-status" class="muted"></span>
+      </form>
+    </main>
+    <script type="module" src="/src/settings.ts"></script>
+  </body>
+</html>
