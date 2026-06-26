@@ -4,11 +4,11 @@ export interface AudioSinkOptions {
 }
 
 export class AudioSink {
-  private readonly ctx: AudioContext;
+  public readonly ctx: AudioContext;
   private readonly decoder: AudioDecoder;
   private readonly sampleRate: number;
   private readonly channelCount: number;
-  private worklet: AudioWorkletNode | null = null;
+  public worklet: AudioWorkletNode | null = null;
   private startedAt: number | null = null;
   private framesPlayed = 0;
 
