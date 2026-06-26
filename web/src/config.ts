@@ -1,8 +1,11 @@
 const API_KEY = 'passenger.apiBase';
 const TOKEN_KEY = 'passenger.token';
 
+const DEFAULT_API = (import.meta.env.VITE_PASSENGER_API ?? '').replace(/\/$/, '');
+const DEFAULT_TOKEN = import.meta.env.VITE_PASSENGER_TOKEN ?? '';
+
 export function getApiBase(): string {
-  return (localStorage.getItem(API_KEY) || '').replace(/\/$/, '');
+  return (localStorage.getItem(API_KEY) || DEFAULT_API).replace(/\/$/, '');
 }
 
 export function setApiBase(v: string): void {
@@ -10,7 +13,7 @@ export function setApiBase(v: string): void {
 }
 
 export function getToken(): string {
-  return localStorage.getItem(TOKEN_KEY) || '';
+  return localStorage.getItem(TOKEN_KEY) || DEFAULT_TOKEN;
 }
 
 export function setToken(v: string): void {
