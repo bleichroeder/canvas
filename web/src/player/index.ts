@@ -71,6 +71,7 @@ async function main(): Promise<void> {
       video = new VideoSink({
         canvas,
         config: info.videoConfig,
+        clock: () => (audio ? audio.currentTime() : performance.now() / 1000),
         onError: (e) => showError(`Video decode error: ${e.message}`),
       });
       if (info.audioConfig) {
