@@ -2303,7 +2303,7 @@ async function main(): Promise<void> {
     chunkSize: 4 * 1024 * 1024,
     onChunk: (offset, bytes) => { demuxer.appendChunk(offset, bytes); },
     onError: (e) => showError(`Fetch error: ${e.message}`),
-    onDone: () => { demuxer.flush(); },
+    onDone: () => { demuxer.flush(); video?.flush().catch(() => {}); },
   });
   fetcher.start();
 
@@ -2634,7 +2634,7 @@ async function main(): Promise<void> {
     chunkSize: 4 * 1024 * 1024,
     onChunk: (offset, bytes) => { demuxer.appendChunk(offset, bytes); },
     onError: (e) => showError(`Fetch error: ${e.message}`),
-    onDone: () => { demuxer.flush(); },
+    onDone: () => { demuxer.flush(); video?.flush().catch(() => {}); },
   });
   fetcher.start();
 
