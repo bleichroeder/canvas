@@ -60,6 +60,7 @@ export class RangeFetcher {
         const res = await fetch(this.url, {
           headers: { Range: `bytes=${this.offset}-${end}` },
           signal: this.controller.signal,
+          referrerPolicy: 'no-referrer',
         });
         if (!res.ok && res.status !== 206 && res.status !== 200) {
           throw new Error(`HTTP ${res.status}`);
