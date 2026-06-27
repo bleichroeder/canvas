@@ -6,10 +6,12 @@ import { Rail } from '../components/Rail';
 import { Link } from '../router';
 import type { HomeRow, Item } from '../types';
 
+interface PerSourceError { source: string; status: number; message: string }
+
 type State =
   | { kind: 'loading' }
   | { kind: 'empty' }
-  | { kind: 'ok'; rows: (HomeRow & { source: string })[] }
+  | { kind: 'ok'; rows: (HomeRow & { source: string })[]; errors: PerSourceError[] }
   | { kind: 'error'; message: string };
 
 export function Home() {
@@ -22,7 +24,7 @@ export function Home() {
       return;
     }
     api.home().then(
-      ({ rows }) => setState({ kind: 'ok', rows }),
+      ({ rows, errors }) => setState({ kind: 'ok', rows, errors }),
       (e: Error) => setState({ kind: 'error', message: e.message }),
     );
   }, []);
@@ -42,6 +44,15 @@ export function Home() {
         {state.kind === 'error' && (
           <p style={{ padding: '0 20px', color: 'var(--danger)' }}>Error: {state.message}</p>
         )}
+        {state.kind === 'ok' && state.errors.length > 0 && (
+          <div style={{ padding: '0 20px 16px' }}>
+            {state.errors.map((err) => (
+              <p key={err.source} style={{ color: 'var(--danger)', margin: '4px 0' }}>
+                {err.source}: {err.message}
+              </p>
+            ))}
+          </div>
+        )}
         {state.kind === 'ok' && state.rows.map((row) => (
           <Rail
             key={`${row.source}:${row.kind}:${row.title}`}
@@ -50,7 +61,7 @@ export function Home() {
             cardWidth={row.items[0]?.type === 'episode' ? 260 : 180}
           />
         ))}
-        {state.kind === 'ok' && state.rows.length === 0 && (
+        {state.kind === 'ok' && state.rows.length === 0 && state.errors.length === 0 && (
           <p style={{ padding: '0 20px' }} class="muted">Your sources are paired but returned nothing yet.</p>
         )}
       </div>

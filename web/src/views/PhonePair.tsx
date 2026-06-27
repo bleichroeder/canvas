@@ -96,8 +96,9 @@ export function PhonePair() {
 
   async function approveWithServer(authToken: string, server: PlexResource) {
     try {
-      // Prefer https + local connection; fall back to relay.
-      const conn = server.connections.find((c) => c.local && c.https)
+      // Prefer non-local https — the worker (not the device) calls these URLs,
+      // so a LAN address would 1002 from Cloudflare's edge.
+      const conn = server.connections.find((c) => !c.local && c.https)
         ?? server.connections.find((c) => c.https)
         ?? server.connections[0];
       if (!conn) throw new Error('No connection for this Plex server');
