@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { api } from '../api';
 import { navigate } from '../router';
 import { PlayerControls } from '../components/PlayerControls';
-import { RangeFetcher } from '../player/range-fetcher';
-import { AutoSource } from '../player/stream-source';
+import { bootEngine, type EngineHandle } from '../player/engine';
 import { VideoSink } from '../player/video';
 import { AudioSink } from '../player/audio';
 import type { PlayResolution } from '../types';
@@ -24,8 +23,7 @@ export function Player({ source, id }: Props) {
   // Long-lived refs for engine pieces.
   const videoRef = useRef<VideoSink | null>(null);
   const audioRef = useRef<AudioSink | null>(null);
-  const sourceRef = useRef<AutoSource | null>(null);
-  const fetcherRef = useRef<RangeFetcher | null>(null);
+  const engineRef = useRef<EngineHandle | null>(null);
   const pendingVideoRef = useRef<EncodedVideoChunk[]>([]);
   const pendingAudioRef = useRef<EncodedAudioChunk[]>([]);
   const startedRef = useRef(false);
@@ -83,7 +81,8 @@ export function Player({ source, id }: Props) {
 
         const canvas = canvasRef.current!;
 
-        const streamSource = new AutoSource({
+        engineRef.current = bootEngine({
+          url: resolution.url,
           onReady: (info) => {
             if (cancelled) return;
             if (!info.videoConfig) { setErrMsg('No video track'); return; }
@@ -111,19 +110,9 @@ export function Player({ source, id }: Props) {
             if (startedRef.current && audioRef.current) audioRef.current.feed(chunk);
             else pendingAudioRef.current.push(chunk);
           },
-          onError: (e) => setErrMsg(`demux: ${e.message}`),
+          onFatal: (e) => setErrMsg(e.message),
+          onDone: () => { videoRef.current?.flush().catch(() => {}); },
         });
-        sourceRef.current = streamSource;
-
-        const fetcher = new RangeFetcher({
-          url: resolution.url,
-          chunkSize: 4 * 1024 * 1024,
-          onChunk: (offset, bytes) => streamSource.appendChunk(offset, bytes),
-          onError: (e) => setErrMsg(`fetch: ${e.message}`),
-          onDone: () => { streamSource.flush(); videoRef.current?.flush().catch(() => {}); },
-        });
-        fetcherRef.current = fetcher;
-        fetcher.start();
       } catch (e) {
         if (!cancelled) setErrMsg((e as Error).message);
       }
@@ -133,7 +122,7 @@ export function Player({ source, id }: Props) {
 
     return () => {
       cancelled = true;
-      fetcherRef.current?.abort();
+      engineRef.current?.dispose();
       videoRef.current?.close();
       audioRef.current?.stop();
     };
