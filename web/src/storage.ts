@@ -72,3 +72,35 @@ export function makeSourceKey(label: string): string {
   while (existing[candidate]) candidate = `${slug}${i++}`;
   return candidate;
 }
+
+const LIBRARY_NAMES_KEY = 'canvas.libraryNames';
+
+export function getLibraryName(srcKey: string, libId: string): string | undefined {
+  try {
+    const raw = localStorage.getItem(LIBRARY_NAMES_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return undefined;
+    const k = `${srcKey}:${libId}`;
+    const v = (parsed as Record<string, unknown>)[k];
+    return typeof v === 'string' ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function setLibraryName(srcKey: string, libId: string, name: string): void {
+  try {
+    const raw = localStorage.getItem(LIBRARY_NAMES_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (typeof parsed === 'object' && parsed !== null) {
+      (parsed as Record<string, string>)[`${srcKey}:${libId}`] = name;
+      localStorage.setItem(LIBRARY_NAMES_KEY, JSON.stringify(parsed));
+    }
+  } catch { /* ignore */ }
+}
+
+export function getSourceLabel(srcKey: string): string | undefined {
+  const s = getSources()[srcKey];
+  return s?.label;
+}
