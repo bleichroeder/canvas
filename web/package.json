@@ -1,22 +1,31 @@
 {
-  "name": "passenger-web",
-  "version": "0.0.2",
+  "name": "canvas-web",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "deploy": "wrangler pages deploy ./dist --project-name=passenger-v2"
+    "deploy": "wrangler pages deploy ./dist --project-name=canvas"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
     "typescript": "^5.4.5",
     "vite": "^5.2.0",
     "wrangler": "^4.105.0"
   },
   "dependencies": {
-    "preact": "^10.22.0",
-    "mp4box": "^0.5.2"
+    "@emotion/react": "^11.13.0",
+    "@emotion/styled": "^11.13.0",
+    "@fontsource/inter": "^5.0.18",
+    "@mui/icons-material": "^6.1.0",
+    "@mui/material": "^6.1.0",
+    "mp4box": "^0.5.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

@@ -1,17 +1,20 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
+import react from '@vitejs/plugin-react';
+import { execSync } from 'node:child_process';
+
+const buildSha = (() => {
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim();
+  } catch {
+    return 'dev';
+  }
+})();
 
 export default defineConfig({
-  esbuild: {
-    jsxFactory: 'h',
-    jsxFragment: 'Fragment',
-    jsxInject: `import { h, Fragment } from 'preact'`,
-  },
-  resolve: {
-    alias: {
-      react: 'preact/compat',
-      'react-dom': 'preact/compat',
-    },
+  plugins: [react()],
+  define: {
+    'import.meta.env.VITE_BUILD_SHA': JSON.stringify(buildSha),
   },
   build: {
     rollupOptions: {
