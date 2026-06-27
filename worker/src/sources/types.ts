@@ -55,6 +55,11 @@ export interface PlayResolution {
   durationSec: number;
   audioTracks?: AudioTrack[];
   subtitleTracks?: SubtitleTrack[];
+  /**
+   * Optional URL template for scrub-bar preview thumbnails. Contains the literal
+   * substring "{ms}" the client replaces with a rounded millisecond offset.
+   */
+  thumbnailUrlTemplate?: string;
 }
 
 export interface SourceAdapter {
@@ -64,6 +69,12 @@ export interface SourceAdapter {
   search(ctx: SourceContext, query: string): Promise<Item[]>;
   library(ctx: SourceContext, libraryId?: string, path?: string): Promise<BrowseResult>;
   item(ctx: SourceContext, id: string): Promise<ItemDetail>;
-  resolveStream(ctx: SourceContext, id: string): Promise<PlayResolution>;
+  /**
+   * Resolve a playable URL.
+   * @param fromSec If provided, the stream should start at this position in seconds.
+   *                Adapters that don't support seek can ignore the param (player will
+   *                still call this on each seek but the URL won't change).
+   */
+  resolveStream(ctx: SourceContext, id: string, fromSec?: number): Promise<PlayResolution>;
   saveProgress(ctx: SourceContext, id: string, posSec: number, completed: boolean): Promise<void>;
 }

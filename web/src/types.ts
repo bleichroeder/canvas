@@ -47,4 +47,5 @@ export interface PlayResolution {
   durationSec: number;
   audioTracks?: { id: string; language?: string; label?: string }[];
   subtitleTracks?: { id: string; language?: string; label?: string; url: string; format: 'vtt' | 'srt' }[];
+  thumbnailUrlTemplate?: string;
 }
