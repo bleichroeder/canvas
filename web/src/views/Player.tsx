@@ -205,7 +205,7 @@ export function Player({ source, id }: Props) {
     return () => {
       const a = audioRef.current;
       if (a && startedRef.current) {
-        const cur = a.currentTime();
+        const cur = sessionBaseRef.current + a.currentTime();
         const url = `${import.meta.env.VITE_PASSENGER_API_V2}/api/progress/${encodeURIComponent(source)}/${encodeURIComponent(id)}`;
         const blob = new Blob(
           [JSON.stringify({ posSec: cur, completed: false })],
@@ -242,7 +242,7 @@ export function Player({ source, id }: Props) {
   async function onClose() {
     const a = audioRef.current;
     if (a && startedRef.current) {
-      await api.progress(source, id, a.currentTime(), false).catch(() => {});
+      await api.progress(source, id, sessionBaseRef.current + a.currentTime(), false).catch(() => {});
     }
     navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
   }
