@@ -45,6 +45,20 @@ interface PlexResource {
   connections: { uri: string; local: boolean; relay: boolean; https: boolean }[];
 }
 
+function isPrivatePlexUri(uri: string): boolean {
+  // plex.direct hostnames encode the IPv4 address: "10-0-15-100.<hash>.plex.direct"
+  const m = uri.match(/\/\/(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\./);
+  if (!m) return false;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  if (a === 10) return true;
+  if (a === 127) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 169 && b === 254) return true;
+  return false;
+}
+
 async function plexListServers(authToken: string): Promise<PlexResource[]> {
   const res = await fetch('https://plex.tv/api/v2/resources?includeHttps=1', {
     headers: {
@@ -96,9 +110,12 @@ export function PhonePair() {
 
   async function approveWithServer(authToken: string, server: PlexResource) {
     try {
-      // Prefer non-local https — the worker (not the device) calls these URLs,
-      // so a LAN address would 1002 from Cloudflare's edge.
-      const conn = server.connections.find((c) => !c.local && c.https)
+      // Prefer a publicly-routable https connection. Plex's `local` flag is
+      // computed per-request (it's "local from the requester's network"), so a
+      // user pairing from inside their own LAN sees their public connection
+      // flagged local too. Parse the IP out of the plex.direct hostname instead
+      // and pick the first non-RFC1918 https connection.
+      const conn = server.connections.find((c) => c.https && !isPrivatePlexUri(c.uri))
         ?? server.connections.find((c) => c.https)
         ?? server.connections[0];
       if (!conn) throw new Error('No connection for this Plex server');
