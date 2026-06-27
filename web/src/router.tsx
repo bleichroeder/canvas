@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 
 export interface Route {
   path: string;
@@ -35,16 +35,16 @@ export function navigate(to: string): void {
 
 interface LinkProps {
   to: string;
-  children: preact.ComponentChildren;
-  class?: string;
-  style?: preact.JSX.CSSProperties;
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
 }
 
-export function Link({ to, children, class: cls, style }: LinkProps): preact.JSX.Element {
+export function Link({ to, children, className, style }: LinkProps): React.JSX.Element {
   return (
     <a
       href={`#${to}`}
-      class={cls}
+      className={className}
       style={style}
       onClick={(e) => {
         e.preventDefault();
@@ -56,7 +56,6 @@ export function Link({ to, children, class: cls, style }: LinkProps): preact.JSX
   );
 }
 
-// Pattern matching for routes like '/item/:src/:id'
 export function matchRoute(pattern: string, path: string): Record<string, string> | null {
   const pParts = pattern.split('/').filter(Boolean);
   const aParts = path.split('/').filter(Boolean);
