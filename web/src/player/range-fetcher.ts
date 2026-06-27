@@ -48,46 +48,64 @@ export class RangeFetcher {
   get total(): number | null { return this.totalSize; }
 
   private async loop(): Promise<void> {
-    while (this.running && !this.paused) {
-      if (this.totalSize !== null && this.offset >= this.totalSize) {
+    // One fetch, streamed via response.body. Range header is still sent so
+    // servers that support Partial Content (206) can resume from `this.offset`
+    // after a seek; servers that don't (Plex's transcoder serves the full file
+    // as 200) work too — we just stream the whole body as it arrives. Either
+    // way, onChunk fires per network read, not after the response completes.
+    this.controller = new AbortController();
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      const res = await fetch(this.url, {
+        headers: this.offset > 0 ? { Range: `bytes=${this.offset}-` } : {},
+        signal: this.controller.signal,
+        referrerPolicy: 'no-referrer',
+      });
+      if (!res.ok && res.status !== 206 && res.status !== 200) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const range = res.headers.get('content-range');
+      if (range) {
+        const m = range.match(/\/(\d+)$/);
+        if (m) this.totalSize = Number(m[1]);
+      } else {
+        const len = res.headers.get('content-length');
+        if (len) this.totalSize = this.offset + Number(len);
+      }
+
+      const body = res.body;
+      if (!body) throw new Error('response has no body');
+      reader = body.getReader();
+      while (this.running) {
+        if (this.paused) {
+          // Stop pulling but keep the stream alive for resume(); browsers will
+          // back-pressure the underlying network connection when we stop reading.
+          await new Promise<void>((resolve) => {
+            const tick = () => {
+              if (!this.running || !this.paused) resolve();
+              else setTimeout(tick, 200);
+            };
+            tick();
+          });
+          if (!this.running) break;
+        }
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value || value.length === 0) continue;
+        const offsetForChunk = this.offset;
+        this.offset += value.length;
+        await this.onChunk(offsetForChunk, value);
+      }
+      if (this.running) {
         this.running = false;
         this.onDone();
-        return;
       }
-      const end = this.offset + this.chunkSize - 1;
-      this.controller = new AbortController();
-      try {
-        const res = await fetch(this.url, {
-          headers: { Range: `bytes=${this.offset}-${end}` },
-          signal: this.controller.signal,
-          referrerPolicy: 'no-referrer',
-        });
-        if (!res.ok && res.status !== 206 && res.status !== 200) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const range = res.headers.get('content-range');
-        if (range) {
-          const m = range.match(/\/(\d+)$/);
-          if (m) this.totalSize = Number(m[1]);
-        } else if (this.totalSize === null) {
-          const len = res.headers.get('content-length');
-          if (len) this.totalSize = Number(len);
-        }
-        const buf = new Uint8Array(await res.arrayBuffer());
-        if (buf.length === 0) {
-          this.running = false;
-          this.onDone();
-          return;
-        }
-        const offsetForChunk = this.offset;
-        this.offset += buf.length;
-        await this.onChunk(offsetForChunk, buf);
-      } catch (e) {
-        if ((e as Error).name === 'AbortError') return;
-        this.running = false;
-        this.onError(e as Error);
-        return;
-      }
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return;
+      this.running = false;
+      this.onError(e as Error);
+    } finally {
+      try { reader?.releaseLock(); } catch { /* ignore */ }
     }
   }
 }
