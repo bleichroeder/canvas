@@ -1,4 +1,4 @@
-class PassengerPlayerProcessor extends AudioWorkletProcessor {
+class CanvasPlayerProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.queue = [];
@@ -41,4 +41,4 @@ class PassengerPlayerProcessor extends AudioWorkletProcessor {
     return true;
   }
 }
-registerProcessor('canvas-player', PassengerPlayerProcessor);
+registerProcessor('canvas-player', CanvasPlayerProcessor);

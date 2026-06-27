@@ -8,7 +8,7 @@ import { api } from '../api';
 import { getSources } from '../storage';
 import { AppShell } from '../components/AppShell';
 import { Rail } from '../components/Rail';
-import { Link, navigate } from '../router';
+import { navigate } from '../router';
 import type { HomeRow, Item } from '../types';
 
 interface PerSourceError { source: string; status: number; message: string }

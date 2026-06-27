@@ -98,7 +98,7 @@ export function Pair() {
         {state.kind === 'pairing' && (
           <>
             <Typography variant="h3" sx={{ mb: 2 }}>On your phone, go to:</Typography>
-            <Typography sx={{ fontSize: 20, mb: 2 }}>canvas.pages.dev/#/pair</Typography>
+            <Typography sx={{ fontSize: 20, mb: 2 }}>{window.location.host}/#/pair</Typography>
             <Typography>Enter this code:</Typography>
             <Typography
               variant="h1"
