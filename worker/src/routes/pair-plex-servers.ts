@@ -1,11 +1,18 @@
 import { withCors } from '../cors';
 
+interface PlexConnection {
+  protocol: string;
+  uri: string;
+  local: boolean;
+  relay: boolean;
+}
+
 interface PlexResource {
   name: string;
   clientIdentifier: string;
   provides: string;
   accessToken: string;
-  connections: { uri: string; local: boolean; https: boolean; relay: boolean }[];
+  connections: PlexConnection[];
 }
 
 function isPrivatePlexUri(uri: string): boolean {
@@ -20,6 +27,10 @@ function isPrivatePlexUri(uri: string): boolean {
   if (a === 172 && b >= 16 && b <= 31) return true;
   if (a === 169 && b === 254) return true;
   return false;
+}
+
+function isHttps(c: PlexConnection): boolean {
+  return c.protocol === 'https';
 }
 
 function json(req: Request, data: unknown, status = 200): Response {
@@ -72,8 +83,8 @@ export async function handlePairPlexServers(req: Request): Promise<Response> {
     .filter((r) => r.provides.split(',').includes('server'))
     .map((r) => {
       const conn =
-        r.connections.find((c) => c.https && !isPrivatePlexUri(c.uri)) ??
-        r.connections.find((c) => c.https) ??
+        r.connections.find((c) => isHttps(c) && !isPrivatePlexUri(c.uri)) ??
+        r.connections.find((c) => isHttps(c)) ??
         r.connections[0];
       const baseUrl = conn?.uri ?? '';
       return {
