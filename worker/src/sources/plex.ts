@@ -142,8 +142,8 @@ export const plexAdapter: SourceAdapter = {
       'fastSeek': '1',
       'session': session,
       'X-Plex-Token': ctx.token,
-      'X-Plex-Client-Identifier': 'passenger',
-      'X-Plex-Product': 'Passenger',
+      'X-Plex-Client-Identifier': 'canvas',
+      'X-Plex-Product': 'Canvas',
       'X-Plex-Platform': 'Web',
     });
     if (typeof fromSec === 'number' && fromSec > 0) {

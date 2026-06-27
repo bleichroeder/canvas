@@ -15,7 +15,7 @@ export async function plexFetch<T = unknown>(
     ...existingHeaders,
     'X-Plex-Token': ctx.token,
     'Accept': 'application/json',
-    'X-Plex-Client-Identifier': 'passenger',
+    'X-Plex-Client-Identifier': 'canvas',
   };
   const res = await fetch(url, { ...init, headers });
   if (!res.ok) {

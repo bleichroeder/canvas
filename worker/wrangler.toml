@@ -1,7 +1,7 @@
-name = "passenger-api-v2"
+name = "canvas-api"
 main = "src/index.ts"
 compatibility_date = "2026-06-01"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "98605c52b962451e929be802f419b122"
+id = "02ec5cf0d1ac4825a040d35e5072bf46"
