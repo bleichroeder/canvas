@@ -12,8 +12,8 @@ export interface Prefs {
   skipIntro: boolean;
 }
 
-const SOURCES_KEY = 'passenger.v2.sources';
-const PREFS_KEY = 'passenger.v2.prefs';
+const SOURCES_KEY = 'canvas.sources';
+const PREFS_KEY = 'canvas.prefs';
 
 const DEFAULT_PREFS: Prefs = {
   autoplayNext: true,

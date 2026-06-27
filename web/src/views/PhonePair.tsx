@@ -1,9 +1,15 @@
-import { useState } from 'preact/hooks';
+import { useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import TextField from '@mui/material/TextField';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
 import { useRoute } from '../router';
 import { api } from '../api';
 
-const PLEX_PRODUCT = 'Passenger';
-const CLIENT_ID_KEY = 'passenger.plex.clientId';
+const PLEX_PRODUCT = 'Canvas';
+const CLIENT_ID_KEY = 'canvas.plex.clientId';
 
 function plexClientId(): string {
   let id = localStorage.getItem(CLIENT_ID_KEY);
@@ -64,14 +70,11 @@ export function PhonePair() {
       setStage({ kind: 'plex-pin', pin });
       const authUrl = `https://app.plex.tv/auth#?clientID=${plexClientId()}&code=${pin.code}&context%5Bdevice%5D%5Bproduct%5D=${encodeURIComponent(PLEX_PRODUCT)}`;
       window.open(authUrl, '_blank');
-      // Poll the pin until it has an authToken.
       const start = Date.now();
       while (Date.now() - start < 10 * 60 * 1000) {
         await new Promise((r) => setTimeout(r, 2000));
         const polled = await plexPollPin(pin.id);
         if (polled.authToken) {
-          // Worker calls plex.tv/resources from CF edge — sees the right
-          // publicly-reachable connection regardless of this device's network.
           const { servers } = await api.pairPlexServers(polled.authToken, plexClientId());
           setStage({ kind: 'plex-servers', servers });
           return;
@@ -100,64 +103,77 @@ export function PhonePair() {
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 500, margin: '0 auto', fontFamily: 'system-ui' }}>
-      <h1>passenger · phone pair</h1>
+    <Box sx={{ p: 3, maxWidth: 500, mx: 'auto', fontFamily: 'system-ui' }}>
+      <Typography variant="h2" sx={{ mb: 2 }}>canvas · phone pair</Typography>
       {stage.kind === 'enter-code' && (
-        <div>
-          <p>Enter the code shown on your Tesla:</p>
-          <input
+        <Box>
+          <Typography sx={{ mb: 1 }}>Enter the code shown on your Tesla:</Typography>
+          <TextField
+            fullWidth
             value={code}
-            onInput={(e) => setCode((e.currentTarget as HTMLInputElement).value.toUpperCase())}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
             placeholder="XXX-XXX"
-            style={{ fontSize: 24, textAlign: 'center', letterSpacing: 4, marginBottom: 16 }}
+            inputProps={{ style: { fontSize: 24, textAlign: 'center', letterSpacing: 4 } }}
+            sx={{ mb: 2 }}
           />
           {(typeFromUrl === 'plex' || code) && (
-            <button
+            <Button
+              fullWidth
+              variant="contained"
+              size="large"
               disabled={code.length < 7}
               onClick={() => { if (typeFromUrl === 'plex' || code) startPlex(); }}
-              style={{ width: '100%', padding: 14, fontSize: 16 }}
             >
               Sign in to Plex →
-            </button>
+            </Button>
           )}
-        </div>
+        </Box>
       )}
       {stage.kind === 'plex-pin' && (
-        <p>Waiting for Plex sign-in to complete in the popup window…</p>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <CircularProgress size={20} />
+          <Typography>Waiting for Plex sign-in in the popup window…</Typography>
+        </Box>
       )}
       {stage.kind === 'plex-servers' && (
-        <div>
-          <p>Pick your Plex server:</p>
-          {stage.servers.length === 0 && <p style={{ color: '#c33' }}>No servers found for this account.</p>}
+        <Box>
+          <Typography sx={{ mb: 1.5 }}>Pick your Plex server:</Typography>
+          {stage.servers.length === 0 && (
+            <Alert severity="warning">No servers found for this account.</Alert>
+          )}
           {stage.servers.map((s) => (
-            <button
+            <Button
               key={s.clientIdentifier}
+              fullWidth
+              variant="outlined"
               onClick={() => approveWithServer(s)}
-              style={{
-                display: 'block', width: '100%', padding: 14, marginBottom: 8, textAlign: 'left',
+              sx={{
+                py: 1.75, mb: 1, justifyContent: 'flex-start',
                 opacity: s.publiclyReachable ? 1 : 0.6,
               }}
-              title={s.publiclyReachable ? '' : 'No publicly-reachable connection — may fail'}
             >
               {s.name}
-              {!s.publiclyReachable && <span style={{ marginLeft: 8, fontSize: 12, color: '#c33' }}>(no public access)</span>}
-            </button>
+              {!s.publiclyReachable && (
+                <Typography variant="caption" color="error" sx={{ ml: 1 }}>
+                  (no public access)
+                </Typography>
+              )}
+            </Button>
           ))}
-        </div>
+        </Box>
       )}
       {stage.kind === 'done' && (
-        <div>
-          <h2 style={{ color: '#0a7d2c' }}>✓ Linked</h2>
-          <p>Return to your Tesla — it should pick up the source within a few seconds.</p>
-        </div>
+        <Box>
+          <Typography variant="h3" color="success.main" sx={{ mb: 1 }}>✓ Linked</Typography>
+          <Typography>Return to your Tesla — it should pick up the source within a few seconds.</Typography>
+        </Box>
       )}
       {stage.kind === 'error' && (
-        <div>
-          <h2 style={{ color: '#c33' }}>Pair failed</h2>
-          <p>{stage.message}</p>
-          <button onClick={() => setStage({ kind: 'enter-code' })} style={{ marginTop: 12 }}>Try again</button>
-        </div>
+        <Box>
+          <Alert severity="error" sx={{ mb: 1.5 }}>{stage.message}</Alert>
+          <Button variant="text" onClick={() => setStage({ kind: 'enter-code' })}>Try again</Button>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 }

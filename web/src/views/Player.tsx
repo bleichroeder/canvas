@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { navigate } from '../router';
 import { PlayerControls } from '../components/PlayerControls';
@@ -20,7 +20,7 @@ export function Player({ source, id }: Props) {
   const [status, setStatus] = useState('Loading…');
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
-  const VOL_KEY = 'passenger.v2.volume';
+  const VOL_KEY = 'canvas.volume';
   const [volume, setVolume] = useState<number>(() => {
     const raw = localStorage.getItem(VOL_KEY);
     const n = raw === null ? 1 : Number(raw);
@@ -29,26 +29,18 @@ export function Player({ source, id }: Props) {
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
-  // Long-lived refs for engine pieces.
   const videoRef = useRef<VideoSink | null>(null);
   const audioRef = useRef<AudioSink | null>(null);
   const engineRef = useRef<EngineHandle | null>(null);
   const pendingVideoRef = useRef<EncodedVideoChunk[]>([]);
   const pendingAudioRef = useRef<EncodedAudioChunk[]>([]);
   const startedRef = useRef(false);
-  const sessionBaseRef = useRef(0); // session offset (seconds) — set on each boot, current pos = sessionBase + audio.currentTime()
   const reportRef = useRef(0);
   const resolutionRef = useRef<PlayResolution | null>(null);
+  const wasPlayingRef = useRef(false);
+  const seekTokenRef = useRef(0);
+  const sessionBaseRef = useRef(0);
 
-  useEffect(() => {
-    audioRef.current?.setVolume(volume);
-    localStorage.setItem(VOL_KEY, String(volume));
-  }, [volume]);
-  useEffect(() => {
-    audioRef.current?.setMuted(muted);
-  }, [muted]);
-
-  // Auto-hide controls after 3s of inactivity.
   useEffect(() => {
     let t: number | undefined;
     const reset = () => {
@@ -66,14 +58,11 @@ export function Player({ source, id }: Props) {
     };
   }, []);
 
-  // Pos/duration polling tick (every 250ms).
   useEffect(() => {
     const t = window.setInterval(() => {
       const a = audioRef.current;
       if (a) setPos(sessionBaseRef.current + a.currentTime());
       if (resolutionRef.current) setDuration(resolutionRef.current.durationSec);
-
-      // Progress save every 15s.
       const now = Date.now();
       if (startedRef.current && now - reportRef.current > PROGRESS_INTERVAL_MS) {
         reportRef.current = now;
@@ -84,16 +73,34 @@ export function Player({ source, id }: Props) {
     return () => clearInterval(t);
   }, [source, id]);
 
-  // Track whether the user has ever tapped play in this view's lifetime.
-  // Survives reseeks so the new engine auto-resumes after a seek.
-  const wasPlayingRef = useRef(false);
-  const seekTokenRef = useRef(0);
+  useEffect(() => {
+    audioRef.current?.setVolume(volume);
+    localStorage.setItem(VOL_KEY, String(volume));
+  }, [volume]);
+  useEffect(() => {
+    audioRef.current?.setMuted(muted);
+  }, [muted]);
 
-  /** Construct (or reconstruct) the engine. Used at mount and on seek. */
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement !== null);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  async function autoStartPlayback(): Promise<void> {
+    if (audioRef.current) await audioRef.current.start();
+    videoRef.current?.start();
+    for (const c of pendingVideoRef.current) videoRef.current?.feed(c);
+    for (const c of pendingAudioRef.current) audioRef.current?.feed(c);
+    pendingVideoRef.current = [];
+    pendingAudioRef.current = [];
+    startedRef.current = true;
+    setPaused(false);
+  }
+
   const bootSession = (fromSec: number): { cancel: () => void } => {
     let cancelled = false;
     let cancelTimer: number | undefined;
-
     void (async () => {
       try {
         setStatus(fromSec > 0 ? 'Seeking…' : 'Resolving stream…');
@@ -102,9 +109,7 @@ export function Player({ source, id }: Props) {
         resolutionRef.current = resolution;
         setDuration(resolution.durationSec);
         setStatus('Loading…');
-
         const canvas = canvasRef.current!;
-
         engineRef.current = bootEngine({
           url: resolution.url,
           onReady: (info) => {
@@ -126,11 +131,9 @@ export function Player({ source, id }: Props) {
               audio.setMuted(muted);
               audioRef.current = audio;
             }
-            // Pos baseline for the new session is fromSec (audio.currentTime() resets to 0 in new engine).
             sessionBaseRef.current = fromSec;
             setStatus('');
             if (wasPlayingRef.current) {
-              // Auto-resume after seek — audio context is already user-gestured.
               void autoStartPlayback();
             } else {
               setStatus('Ready — tap to play');
@@ -151,28 +154,9 @@ export function Player({ source, id }: Props) {
         if (!cancelled) setErrMsg((e as Error).message);
       }
     })();
-
-    return {
-      cancel: () => {
-        cancelled = true;
-        if (cancelTimer) clearTimeout(cancelTimer);
-      },
-    };
+    return { cancel: () => { cancelled = true; if (cancelTimer) clearTimeout(cancelTimer); } };
   };
 
-  /** Common code for entering the playing state — used on first tap AND on auto-resume after seek. */
-  async function autoStartPlayback(): Promise<void> {
-    if (audioRef.current) await audioRef.current.start();
-    videoRef.current?.start();
-    for (const c of pendingVideoRef.current) videoRef.current?.feed(c);
-    for (const c of pendingAudioRef.current) audioRef.current?.feed(c);
-    pendingVideoRef.current = [];
-    pendingAudioRef.current = [];
-    startedRef.current = true;
-    setPaused(false);
-  }
-
-  // Boot the engine on mount; tear down on unmount.
   useEffect(() => {
     const handle = bootSession(0);
     return () => {
@@ -187,64 +171,12 @@ export function Player({ source, id }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, id]);
 
-  async function reseek(targetSec: number): Promise<void> {
-    if (errMsg) return;
-    const target = Math.max(0, Math.min(targetSec, duration > 0 ? duration - 1 : targetSec));
-    const myToken = ++seekTokenRef.current;
-    setPos(target);
-    wasPlayingRef.current = startedRef.current && !paused;
-    // Tear down current engine and sinks.
-    engineRef.current?.dispose();
-    engineRef.current = null;
-    videoRef.current?.close();
-    videoRef.current = null;
-    audioRef.current?.stop();
-    audioRef.current = null;
-    pendingVideoRef.current = [];
-    pendingAudioRef.current = [];
-    startedRef.current = false;
-    // Boot at target.
-    const handle = bootSession(target);
-    // If another seek lands while we're booting, cancel this one.
-    const interval = window.setInterval(() => {
-      if (myToken !== seekTokenRef.current) {
-        handle.cancel();
-        clearInterval(interval);
-      } else if (engineRef.current) {
-        clearInterval(interval);
-      }
-    }, 100);
-  }
-
-  useEffect(() => {
-    const onChange = () => setFullscreen(document.fullscreenElement !== null);
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
-
-  async function onFullscreenToggle(): Promise<void> {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await document.documentElement.requestFullscreen();
-    } catch { /* browser blocked; ignore */ }
-  }
-
-  function onMuteToggle(): void { setMuted((m) => !m); }
-  function onVolumeChange(v: number): void {
-    setVolume(v);
-    if (v > 0 && muted) setMuted(false);
-  }
-
-  function onSeek(sec: number): void { void reseek(sec); }
-  function onSeekRelative(delta: number): void { void reseek(pos + delta); }
-
-  // Save progress on close.
   useEffect(() => {
     return () => {
       const a = audioRef.current;
       if (a && startedRef.current) {
         const cur = sessionBaseRef.current + a.currentTime();
-        const url = `${import.meta.env.VITE_PASSENGER_API_V2}/api/progress/${encodeURIComponent(source)}/${encodeURIComponent(id)}`;
+        const url = `${import.meta.env.VITE_CANVAS_API}/api/progress/${encodeURIComponent(source)}/${encodeURIComponent(id)}`;
         const blob = new Blob(
           [JSON.stringify({ posSec: cur, completed: false })],
           { type: 'application/json' },
@@ -262,7 +194,6 @@ export function Player({ source, id }: Props) {
       setStatus('');
       return;
     }
-    // Toggle pause via AudioContext suspend/resume; video clock follows audio.
     const a = audioRef.current;
     if (!paused) {
       videoRef.current?.stop();
@@ -277,6 +208,47 @@ export function Player({ source, id }: Props) {
     }
   }
 
+  async function reseek(targetSec: number): Promise<void> {
+    if (errMsg) return;
+    const target = Math.max(0, Math.min(targetSec, duration > 0 ? duration - 1 : targetSec));
+    const myToken = ++seekTokenRef.current;
+    setPos(target);
+    wasPlayingRef.current = startedRef.current && !paused;
+    engineRef.current?.dispose();
+    engineRef.current = null;
+    videoRef.current?.close();
+    videoRef.current = null;
+    audioRef.current?.stop();
+    audioRef.current = null;
+    pendingVideoRef.current = [];
+    pendingAudioRef.current = [];
+    startedRef.current = false;
+    const handle = bootSession(target);
+    const interval = window.setInterval(() => {
+      if (myToken !== seekTokenRef.current) {
+        handle.cancel();
+        clearInterval(interval);
+      } else if (engineRef.current) {
+        clearInterval(interval);
+      }
+    }, 100);
+  }
+
+  function onSeek(sec: number): void { void reseek(sec); }
+  function onSeekRelative(delta: number): void { void reseek(pos + delta); }
+
+  async function onFullscreenToggle(): Promise<void> {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch { /* ignore */ }
+  }
+  function onMuteToggle(): void { setMuted((m) => !m); }
+  function onVolumeChange(v: number): void {
+    setVolume(v);
+    if (v > 0 && muted) setMuted(false);
+  }
+
   async function onClose() {
     const a = audioRef.current;
     if (a && startedRef.current) {
@@ -288,9 +260,6 @@ export function Player({ source, id }: Props) {
   return (
     <div
       onClick={() => {
-        // First tap from a hidden-controls state should only reveal the
-        // controls (handled by the global pointerdown listener); the tap-to-
-        // pause behavior only fires when controls were already visible.
         if (!errMsg && controlsVisible) void onPlayPause();
       }}
       style={{
