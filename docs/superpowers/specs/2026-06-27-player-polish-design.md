@@ -329,3 +329,16 @@ This is "done" when on the deployed `passenger-v2.pages.dev`, against the user's
 6. Mute icon tap silences immediately; unmute restores prior level.
 7. Fullscreen button on desktop preview enters/exits fullscreen.
 8. A test MKV with MP3 audio (Plex falls back to it sometimes) plays without error.
+
+## Player polish v1 result (recorded 2026-06-27)
+
+- Worker version: `4107a171-9955-4919-9fcb-5ceee4f10237`
+- Pages deploy: `https://passenger-v2.pages.dev/` (latest bundle `index-yb7u7Ndj.js`)
+- 10 plan tasks shipped + 3 fix waves:
+  - Fix wave 1 (P7): `sessionBase` added to `onClose` + sendBeacon so post-seek progress is reported with absolute file position.
+  - Fix wave 2 (P10): `PlayerControls` hides the thumbnail preview after the first 404. Plex BIF previews require `Settings → Manage → Libraries → Edit → Advanced → Generate video preview thumbnails` to be enabled and analysed; until then the empty preview box is suppressed.
+  - Fix wave 3 (P10): tap-to-pause only fires when controls were already visible; first tap from auto-hidden state only reveals controls.
+- Desktop checklist: tap-toggle, scrub-release reseek, skip ±10s, volume slider, mute, volume persistence, fullscreen all pass.
+- MP3 codec smoke: pending an item known to carry MP3 audio; the demuxer no longer throws `unsupported audio codec A_MPEG/L3`.
+- Thumbnail preview: deferred; no BIFs generated on the user's Plex library yet. Code path is correct but inert until BIFs exist server-side.
+- Tesla shift-out-of-Park re-validation: pending live road test.
