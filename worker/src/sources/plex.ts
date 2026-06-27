@@ -34,8 +34,23 @@ export const plexAdapter: SourceAdapter = {
     return rows;
   },
 
-  async search(_ctx: SourceContext, _query: string): Promise<Item[]> {
-    throw new Error(NOT_IMPLEMENTED);
+  async search(ctx: SourceContext, query: string): Promise<Item[]> {
+    const res = await plexFetch<MediaContainer<{ Metadata?: PlexMetadata[] } & PlexMetadata>>(
+      ctx,
+      `/hubs/search?query=${encodeURIComponent(query)}&limit=20`,
+    );
+    // hubs/search returns a Hub[] each containing Metadata. The shape: MediaContainer.Hub[].Metadata[]
+    const hubs = (res.MediaContainer as unknown as { Hub?: { Metadata?: PlexMetadata[]; type?: string }[] }).Hub ?? [];
+    const items: Item[] = [];
+    for (const hub of hubs) {
+      if (!hub.Metadata) continue;
+      for (const m of hub.Metadata) {
+        if (m.type === 'movie' || m.type === 'show' || m.type === 'episode') {
+          items.push(mapMetadata(ctx, m));
+        }
+      }
+    }
+    return items;
   },
 
   async library(ctx: SourceContext, libraryId?: string): Promise<BrowseResult> {
@@ -65,8 +80,38 @@ export const plexAdapter: SourceAdapter = {
     };
   },
 
-  async item(_ctx: SourceContext, _id: string): Promise<ItemDetail> {
-    throw new Error(NOT_IMPLEMENTED);
+  async item(ctx: SourceContext, id: string): Promise<ItemDetail> {
+    const res = await plexFetch<MediaContainer<PlexMetadata>>(
+      ctx,
+      `/library/metadata/${encodeURIComponent(id)}`,
+    );
+    const m = res.MediaContainer.Metadata?.[0];
+    if (!m) throw new Error(`Plex item ${id} not found`);
+    const base = mapMetadata(ctx, m);
+    const detail: ItemDetail = {
+      ...base,
+      backdrop: m.art ? `${ctx.baseUrl}${m.art}?X-Plex-Token=${encodeURIComponent(ctx.token)}` : undefined,
+      synopsis: m.summary,
+      rating: m.rating,
+    };
+    if (m.type === 'show') {
+      const leaves = await plexFetch<MediaContainer<PlexMetadata & {
+        parentIndex?: number; index?: number;
+      }>>(ctx, `/library/metadata/${encodeURIComponent(id)}/allLeaves`);
+      detail.episodes = (leaves.MediaContainer.Metadata ?? []).map((e) => ({
+        id: e.ratingKey,
+        title: e.title,
+        season: (e as any).parentIndex ?? 0,
+        episode: (e as any).index ?? 0,
+        durationSec: e.duration ? Math.round(e.duration / 1000) : undefined,
+        viewOffsetSec: e.viewOffset ? Math.round(e.viewOffset / 1000) : undefined,
+        synopsis: e.summary,
+        poster: e.thumb
+          ? `${ctx.baseUrl}${e.thumb}?X-Plex-Token=${encodeURIComponent(ctx.token)}`
+          : undefined,
+      }));
+    }
+    return detail;
   },
 
   async resolveStream(_ctx: SourceContext, _id: string): Promise<PlayResolution> {
