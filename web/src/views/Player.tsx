@@ -27,6 +27,7 @@ export function Player({ source, id }: Props) {
   const pendingVideoRef = useRef<EncodedVideoChunk[]>([]);
   const pendingAudioRef = useRef<EncodedAudioChunk[]>([]);
   const startedRef = useRef(false);
+  const sessionBaseRef = useRef(0); // session offset (seconds) — set on each boot, current pos = sessionBase + audio.currentTime()
   const reportRef = useRef(0);
   const resolutionRef = useRef<PlayResolution | null>(null);
 
@@ -52,28 +53,34 @@ export function Player({ source, id }: Props) {
   useEffect(() => {
     const t = window.setInterval(() => {
       const a = audioRef.current;
-      if (a) setPos(a.currentTime());
+      if (a) setPos(sessionBaseRef.current + a.currentTime());
       if (resolutionRef.current) setDuration(resolutionRef.current.durationSec);
 
       // Progress save every 15s.
       const now = Date.now();
       if (startedRef.current && now - reportRef.current > PROGRESS_INTERVAL_MS) {
         reportRef.current = now;
-        const cur = a ? a.currentTime() : 0;
+        const cur = a ? sessionBaseRef.current + a.currentTime() : 0;
         void api.progress(source, id, cur, false).catch(() => {});
       }
     }, 250);
     return () => clearInterval(t);
   }, [source, id]);
 
-  // Boot the engine.
-  useEffect(() => {
-    let cancelled = false;
+  // Track whether the user has ever tapped play in this view's lifetime.
+  // Survives reseeks so the new engine auto-resumes after a seek.
+  const wasPlayingRef = useRef(false);
+  const seekTokenRef = useRef(0);
 
-    async function boot() {
+  /** Construct (or reconstruct) the engine. Used at mount and on seek. */
+  const bootSession = (fromSec: number): { cancel: () => void } => {
+    let cancelled = false;
+    let cancelTimer: number | undefined;
+
+    void (async () => {
       try {
-        setStatus('Resolving stream…');
-        const resolution = await api.play(source, id);
+        setStatus(fromSec > 0 ? 'Seeking…' : 'Resolving stream…');
+        const resolution = await api.play(source, id, fromSec);
         if (cancelled) return;
         resolutionRef.current = resolution;
         setDuration(resolution.durationSec);
@@ -100,7 +107,15 @@ export function Player({ source, id }: Props) {
               });
               audioRef.current = audio;
             }
-            setStatus('Ready — tap to play');
+            // Pos baseline for the new session is fromSec (audio.currentTime() resets to 0 in new engine).
+            sessionBaseRef.current = fromSec;
+            setStatus('');
+            if (wasPlayingRef.current) {
+              // Auto-resume after seek — audio context is already user-gestured.
+              void autoStartPlayback();
+            } else {
+              setStatus('Ready — tap to play');
+            }
           },
           onVideoSample: (chunk) => {
             if (startedRef.current && videoRef.current) videoRef.current.feed(chunk);
@@ -116,17 +131,74 @@ export function Player({ source, id }: Props) {
       } catch (e) {
         if (!cancelled) setErrMsg((e as Error).message);
       }
-    }
+    })();
 
-    void boot();
-
-    return () => {
-      cancelled = true;
-      engineRef.current?.dispose();
-      videoRef.current?.close();
-      audioRef.current?.stop();
+    return {
+      cancel: () => {
+        cancelled = true;
+        if (cancelTimer) clearTimeout(cancelTimer);
+      },
     };
+  };
+
+  /** Common code for entering the playing state — used on first tap AND on auto-resume after seek. */
+  async function autoStartPlayback(): Promise<void> {
+    if (audioRef.current) await audioRef.current.start();
+    videoRef.current?.start();
+    for (const c of pendingVideoRef.current) videoRef.current?.feed(c);
+    for (const c of pendingAudioRef.current) audioRef.current?.feed(c);
+    pendingVideoRef.current = [];
+    pendingAudioRef.current = [];
+    startedRef.current = true;
+    setPaused(false);
+  }
+
+  // Boot the engine on mount; tear down on unmount.
+  useEffect(() => {
+    const handle = bootSession(0);
+    return () => {
+      handle.cancel();
+      engineRef.current?.dispose();
+      engineRef.current = null;
+      videoRef.current?.close();
+      videoRef.current = null;
+      audioRef.current?.stop();
+      audioRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, id]);
+
+  async function reseek(targetSec: number): Promise<void> {
+    if (errMsg) return;
+    const target = Math.max(0, Math.min(targetSec, duration > 0 ? duration - 1 : targetSec));
+    const myToken = ++seekTokenRef.current;
+    setPos(target);
+    wasPlayingRef.current = startedRef.current && !paused;
+    // Tear down current engine and sinks.
+    engineRef.current?.dispose();
+    engineRef.current = null;
+    videoRef.current?.close();
+    videoRef.current = null;
+    audioRef.current?.stop();
+    audioRef.current = null;
+    pendingVideoRef.current = [];
+    pendingAudioRef.current = [];
+    startedRef.current = false;
+    // Boot at target.
+    const handle = bootSession(target);
+    // If another seek lands while we're booting, cancel this one.
+    const interval = window.setInterval(() => {
+      if (myToken !== seekTokenRef.current) {
+        handle.cancel();
+        clearInterval(interval);
+      } else if (engineRef.current) {
+        clearInterval(interval);
+      }
+    }, 100);
+  }
+
+  function onSeek(sec: number): void { void reseek(sec); }
+  function onSeekRelative(delta: number): void { void reseek(pos + delta); }
 
   // Save progress on close.
   useEffect(() => {
@@ -147,14 +219,8 @@ export function Player({ source, id }: Props) {
   async function onPlayPause() {
     if (errMsg) return;
     if (!startedRef.current) {
-      if (audioRef.current) await audioRef.current.start();
-      videoRef.current?.start();
-      for (const c of pendingVideoRef.current) videoRef.current?.feed(c);
-      for (const c of pendingAudioRef.current) audioRef.current?.feed(c);
-      pendingVideoRef.current = [];
-      pendingAudioRef.current = [];
-      startedRef.current = true;
-      setPaused(false);
+      wasPlayingRef.current = true;
+      await autoStartPlayback();
       setStatus('');
       return;
     }
@@ -164,21 +230,13 @@ export function Player({ source, id }: Props) {
       videoRef.current?.stop();
       await a?.ctx.suspend();
       setPaused(true);
+      wasPlayingRef.current = false;
     } else {
       await a?.ctx.resume();
       videoRef.current?.start();
       setPaused(false);
+      wasPlayingRef.current = true;
     }
-  }
-
-  function onSeek(_sec: number) {
-    // Seeking is not yet implemented for MKV streams. mp4box exposes seek()
-    // returning a keyframe byte offset; MKV would need to parse Cues at the
-    // tail of the file, which we don't do in v1. UI scrub bar is non-interactive.
-  }
-
-  function onSeekRelative(_delta: number) {
-    // See onSeek.
   }
 
   async function onClose() {

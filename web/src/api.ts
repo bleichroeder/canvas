@@ -38,8 +38,13 @@ export const api = {
   },
   item: (srcKey: string, id: string) =>
     request<ItemDetail>(`/api/item/${encodeURIComponent(srcKey)}/${encodeURIComponent(id)}`),
-  play: (srcKey: string, id: string) =>
-    request<PlayResolution>(`/api/play/${encodeURIComponent(srcKey)}/${encodeURIComponent(id)}`, { method: 'POST' }),
+  play: (srcKey: string, id: string, fromSec?: number) => {
+    const qs = typeof fromSec === 'number' && fromSec > 0 ? `?fromSec=${Math.floor(fromSec)}` : '';
+    return request<PlayResolution>(
+      `/api/play/${encodeURIComponent(srcKey)}/${encodeURIComponent(id)}${qs}`,
+      { method: 'POST' },
+    );
+  },
   progress: (srcKey: string, id: string, posSec: number, completed = false) =>
     request<void>(`/api/progress/${encodeURIComponent(srcKey)}/${encodeURIComponent(id)}`, {
       method: 'POST',
