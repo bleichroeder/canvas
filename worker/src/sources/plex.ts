@@ -132,7 +132,21 @@ export const plexAdapter: SourceAdapter = {
   async saveProgress(ctx: SourceContext, id: string, posSec: number, completed: boolean): Promise<void> {
     const state = completed ? 'stopped' : 'playing';
     const timeMs = Math.round(posSec * 1000);
-    const url = `/:/timeline?ratingKey=${encodeURIComponent(id)}&key=/library/metadata/${encodeURIComponent(id)}&state=${state}&time=${timeMs}`;
+    // Plex /:/timeline requires `duration` and `identifier` query params plus the
+    // X-Plex-Client-Identifier header (the latter is set globally in plexFetch).
+    const meta = await plexFetch<MediaContainer<PlexMetadata & {
+      Media?: { duration?: number }[];
+    }>>(ctx, `/library/metadata/${encodeURIComponent(id)}`);
+    const m = meta.MediaContainer.Metadata?.[0];
+    const durationMs = m?.duration ?? m?.Media?.[0]?.duration ?? 0;
+    const url =
+      `/:/timeline` +
+      `?ratingKey=${encodeURIComponent(id)}` +
+      `&key=/library/metadata/${encodeURIComponent(id)}` +
+      `&identifier=com.plexapp.plugins.library` +
+      `&state=${state}` +
+      `&time=${timeMs}` +
+      `&duration=${durationMs}`;
     await plexFetch(ctx, url);
   },
 };
