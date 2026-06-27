@@ -6,6 +6,10 @@ import { handleLibrary } from './routes/library';
 import { handleItem } from './routes/item';
 import { handlePlay } from './routes/play';
 import { handleProgress } from './routes/progress';
+import { registerAdapter } from './sources/registry';
+import { plexAdapter } from './sources/plex';
+
+registerAdapter(plexAdapter);
 
 export interface Env {
   KV: KVNamespace;
