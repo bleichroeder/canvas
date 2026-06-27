@@ -114,20 +114,17 @@ export const plexAdapter: SourceAdapter = {
     return detail;
   },
 
-  async resolveStream(ctx: SourceContext, id: string): Promise<PlayResolution> {
+  async resolveStream(ctx: SourceContext, id: string, fromSec?: number): Promise<PlayResolution> {
     // Plex's direct-play hands us the original container — typically MKV with
     // arbitrary codecs (HEVC, AC3, DTS). The canvas pipeline only handles
-    // H.264 + AAC. Route through Plex's transcoder forcing those codecs.
-    //
-    // Plex outputs MKV regardless of the .mp4 extension on the URL; our MKV
-    // source handles that. The transcoder applies the videoCodec/audioCodec
-    // params and a bitrate cap suitable for cellular Tesla.
+    // H.264 + AAC|MP3. Route through Plex's transcoder forcing those codecs.
     const meta = await plexFetch<MediaContainer<PlexMetadata & {
-      Media?: { duration?: number }[];
+      Media?: { duration?: number; Part?: { id?: number; key: string }[] }[];
     }>>(ctx, `/library/metadata/${encodeURIComponent(id)}`);
     const m = meta.MediaContainer.Metadata?.[0];
     if (!m) throw new Error(`Plex item ${id} not found`);
     const durationMs = m.duration ?? m.Media?.[0]?.duration ?? 0;
+    const partId = m.Media?.[0]?.Part?.[0]?.id;
 
     const session = crypto.randomUUID();
     const params = new URLSearchParams({
@@ -149,11 +146,19 @@ export const plexAdapter: SourceAdapter = {
       'X-Plex-Product': 'Passenger',
       'X-Plex-Platform': 'Web',
     });
+    if (typeof fromSec === 'number' && fromSec > 0) {
+      params.set('offset', String(Math.floor(fromSec)));
+    }
     const url = `${ctx.baseUrl}/video/:/transcode/universal/start.mp4?${params.toString()}`;
+
+    const thumbnailUrlTemplate = partId !== undefined
+      ? `${ctx.baseUrl}/library/parts/${partId}/indexes/sd/{ms}?X-Plex-Token=${encodeURIComponent(ctx.token)}`
+      : undefined;
 
     return {
       url,
       durationSec: Math.round(durationMs / 1000),
+      ...(thumbnailUrlTemplate ? { thumbnailUrlTemplate } : {}),
     };
   },
 
