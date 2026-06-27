@@ -1,4 +1,21 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
+import Slider from '@mui/material/Slider';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
+import Fade from '@mui/material/Fade';
+import CloseIcon from '@mui/icons-material/Close';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
+import Replay10Icon from '@mui/icons-material/Replay10';
+import Forward10Icon from '@mui/icons-material/Forward10';
+import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import VolumeMuteIcon from '@mui/icons-material/VolumeMute';
+import VolumeDownIcon from '@mui/icons-material/VolumeDown';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import FullscreenIcon from '@mui/icons-material/Fullscreen';
+import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 
 interface PlayerControlsProps {
   paused: boolean;
@@ -28,122 +45,130 @@ function fmt(sec: number): string {
     : `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function speakerGlyph(v: number, muted: boolean): string {
-  if (muted || v === 0) return '🔇';
-  if (v < 0.34) return '🔈';
-  if (v < 0.67) return '🔉';
-  return '🔊';
+function SpeakerIcon({ volume, muted }: { volume: number; muted: boolean }) {
+  if (muted || volume === 0) return <VolumeOffIcon />;
+  if (volume < 0.34) return <VolumeMuteIcon />;
+  if (volume < 0.67) return <VolumeDownIcon />;
+  return <VolumeUpIcon />;
 }
 
 export function PlayerControls(p: PlayerControlsProps) {
   const [previewPos, setPreviewPos] = useState<number | null>(null);
-  // Once a BIF thumbnail 404s for this item, stop trying for the rest of the
-  // session. Plex only serves /indexes/sd/<ms> when previews have been
-  // pre-generated; many libraries don't have them. Avoids a stream of
-  // empty <img> boxes during scrub.
   const [previewBroken, setPreviewBroken] = useState(false);
 
-  // Reset preview when not actively dragging.
   useEffect(() => {
     if (!p.visible) setPreviewPos(null);
   }, [p.visible]);
 
-  // Reset the broken flag when the source item changes (new template URL).
   useEffect(() => {
     setPreviewBroken(false);
   }, [p.thumbnailUrlTemplate]);
 
   const scrubPos = previewPos ?? p.posSec;
   const sliderMax = Math.max(1, p.durationSec);
-  const previewMs = previewPos !== null
-    ? Math.floor(previewPos * 100) * 100  // round down to nearest 100ms first
-    : null;
-  // BIF bucket = 10s.
+  const previewMs = previewPos !== null ? Math.floor(previewPos * 100) * 100 : null;
   const previewBucketMs = previewMs !== null ? Math.floor(previewMs / 10000) * 10000 : null;
   const previewSrc = p.thumbnailUrlTemplate && previewBucketMs !== null
     ? p.thumbnailUrlTemplate.replace('{ms}', String(previewBucketMs))
     : null;
 
   return (
-    <div onClick={(e) => e.stopPropagation()}>
-      <button
-        onClick={p.onClose}
-        style={{
-          position: 'fixed', top: 16, right: 16, zIndex: 10,
-          opacity: p.visible ? 1 : 0, transition: 'opacity 200ms',
-          pointerEvents: p.visible ? 'auto' : 'none',
-        }}
-      >✕</button>
+    <Box onClick={(e) => e.stopPropagation()}>
+      <Fade in={p.visible} timeout={200}>
+        <IconButton
+          onClick={p.onClose}
+          aria-label="close"
+          sx={{ position: 'fixed', top: 16, right: 16, zIndex: 10, color: 'text.primary' }}
+        >
+          <CloseIcon />
+        </IconButton>
+      </Fade>
 
       {previewSrc && !previewBroken && (
-        <img
-          src={previewSrc}
-          alt=""
-          style={{
-            position: 'fixed', bottom: 110, left: '50%',
-            transform: `translateX(calc(-50% + ${
-              ((scrubPos / sliderMax) - 0.5) * Math.min(window.innerWidth - 40, 1400)
-            }px))`,
-            width: 160, height: 90, objectFit: 'cover',
-            borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-            border: '2px solid #fff',
-            opacity: p.visible ? 1 : 0, transition: 'opacity 100ms',
-            pointerEvents: 'none', zIndex: 11,
-          }}
-          onError={() => setPreviewBroken(true)}
-        />
+        <Fade in={p.visible} timeout={100}>
+          <Box
+            component="img"
+            src={previewSrc}
+            alt=""
+            onError={() => setPreviewBroken(true)}
+            sx={{
+              position: 'fixed', bottom: 110, left: '50%',
+              transform: `translateX(calc(-50% + ${
+                ((scrubPos / sliderMax) - 0.5) * Math.min(window.innerWidth - 40, 1400)
+              }px))`,
+              width: 160, height: 90, objectFit: 'cover',
+              borderRadius: 1, boxShadow: 4,
+              border: '2px solid', borderColor: 'common.white',
+              pointerEvents: 'none', zIndex: 11,
+            }}
+          />
+        </Fade>
       )}
 
-      <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0,
-        padding: '24px 20px 16px',
-        background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0))',
-        opacity: p.visible ? 1 : 0, transition: 'opacity 200ms',
-        pointerEvents: p.visible ? 'auto' : 'none',
-        zIndex: 10,
-      }}>
-        <input
-          type="range"
-          min={0}
-          max={sliderMax}
-          step={1}
-          value={Math.min(scrubPos, sliderMax)}
-          onInput={(e) => setPreviewPos(Number((e.currentTarget as HTMLInputElement).value))}
-          onChange={(e) => {
-            const v = Number((e.currentTarget as HTMLInputElement).value);
-            setPreviewPos(null);
-            p.onSeek(v);
+      <Fade in={p.visible} timeout={200}>
+        <Box
+          sx={{
+            position: 'fixed', left: 0, right: 0, bottom: 0,
+            px: 2.5, pt: 3, pb: 2,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0))',
+            zIndex: 10,
           }}
-          style={{ width: '100%' }}
-        />
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 8 }}>
-          <button onClick={() => p.onSeekRelative(-10)}>◀ 10s</button>
-          <button onClick={p.onPlayPause}>{p.paused ? '▶' : '⏸'}</button>
-          <button onClick={() => p.onSeekRelative(+10)}>10s ▶</button>
-
-          <button onClick={p.onMuteToggle} title="Mute" style={{ marginLeft: 16 }}>
-            {speakerGlyph(p.volume, p.muted)}
-          </button>
-          <input
-            type="range"
+        >
+          <Slider
+            value={Math.min(scrubPos, sliderMax)}
             min={0}
-            max={100}
+            max={sliderMax}
             step={1}
-            value={Math.round(p.volume * 100)}
-            onInput={(e) => p.onVolumeChange(Number((e.currentTarget as HTMLInputElement).value) / 100)}
-            style={{ width: 100 }}
-            aria-label="Volume"
+            onChange={(_, v) => setPreviewPos(typeof v === 'number' ? v : v[0] ?? 0)}
+            onChangeCommitted={(_, v) => {
+              const value = typeof v === 'number' ? v : (v[0] ?? 0);
+              setPreviewPos(null);
+              p.onSeek(value);
+            }}
+            sx={{ color: 'primary.main', height: 4 }}
+            aria-label="Seek"
           />
-
-          <span class="muted" style={{ marginLeft: 'auto' }}>
-            {fmt(scrubPos)} / {fmt(p.durationSec)}
-          </span>
-
-          <button onClick={p.onFullscreenToggle} title={p.fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
-            {p.fullscreen ? '⤓' : '⤢'}
-          </button>
-        </div>
-      </div>
-    </div>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 1 }}>
+            <Tooltip title="Back 10 seconds">
+              <IconButton onClick={() => p.onSeekRelative(-10)} aria-label="back 10s">
+                <Replay10Icon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={p.paused ? 'Play' : 'Pause'}>
+              <IconButton onClick={p.onPlayPause} aria-label="play pause">
+                {p.paused ? <PlayArrowIcon /> : <PauseIcon />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Forward 10 seconds">
+              <IconButton onClick={() => p.onSeekRelative(+10)} aria-label="forward 10s">
+                <Forward10Icon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={p.muted ? 'Unmute' : 'Mute'}>
+              <IconButton onClick={p.onMuteToggle} aria-label="mute toggle" sx={{ ml: 2 }}>
+                <SpeakerIcon volume={p.volume} muted={p.muted} />
+              </IconButton>
+            </Tooltip>
+            <Slider
+              value={Math.round(p.volume * 100)}
+              min={0}
+              max={100}
+              step={1}
+              onChange={(_, v) => p.onVolumeChange((typeof v === 'number' ? v : (v[0] ?? 0)) / 100)}
+              sx={{ width: 100, color: 'primary.main' }}
+              aria-label="Volume"
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+              {fmt(scrubPos)} / {fmt(p.durationSec)}
+            </Typography>
+            <Tooltip title={p.fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+              <IconButton onClick={p.onFullscreenToggle} aria-label="fullscreen toggle">
+                {p.fullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+      </Fade>
+    </Box>
   );
 }
