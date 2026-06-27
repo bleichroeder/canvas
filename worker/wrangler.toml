@@ -1,7 +1,7 @@
-name = "passenger-api"
+name = "passenger-api-v2"
 main = "src/index.ts"
 compatibility_date = "2026-06-01"
 
 [[kv_namespaces]]
-binding = "QUEUE"
-id = "a22da79d2b9f425c8c5dd1b56112d289"
+binding = "KV"
+id = "98605c52b962451e929be802f419b122"
