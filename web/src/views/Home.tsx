@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import AddIcon from '@mui/icons-material/Add';
 import { api } from '../api';
 import { getSources } from '../storage';
-import { Chrome } from '../components/Chrome';
+import { AppShell } from '../components/AppShell';
 import { Rail } from '../components/Rail';
-import { Link } from '../router';
+import { Link, navigate } from '../router';
 import type { HomeRow, Item } from '../types';
 
 interface PerSourceError { source: string; status: number; message: string }
@@ -30,28 +35,34 @@ export function Home() {
   }, []);
 
   return (
-    <Chrome>
-      <div style={{ padding: '20px 0' }}>
-        {state.kind === 'loading' && <p style={{ padding: '0 20px' }} class="muted">Loading…</p>}
+    <AppShell>
+      <Box sx={{ py: 2.5 }}>
+        {state.kind === 'loading' && (
+          <Typography color="text.secondary" sx={{ px: 2.5 }}>Loading…</Typography>
+        )}
         {state.kind === 'empty' && (
-          <div style={{ padding: 40, textAlign: 'center' }}>
-            <p style={{ fontSize: 18, marginBottom: 16 }}>No sources paired yet.</p>
-            <Link to="/settings/pair">
-              <button>+ Pair your first source</button>
-            </Link>
-          </div>
+          <Box sx={{ p: 5, textAlign: 'center' }}>
+            <Typography variant="body1" sx={{ mb: 2 }}>No sources paired yet.</Typography>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/settings/pair')}
+            >
+              Pair your first source
+            </Button>
+          </Box>
         )}
         {state.kind === 'error' && (
-          <p style={{ padding: '0 20px', color: 'var(--danger)' }}>Error: {state.message}</p>
+          <Alert severity="error" sx={{ mx: 2.5 }}>Error: {state.message}</Alert>
         )}
         {state.kind === 'ok' && state.errors.length > 0 && (
-          <div style={{ padding: '0 20px 16px' }}>
+          <Box sx={{ px: 2.5, pb: 2 }}>
             {state.errors.map((err) => (
-              <p key={err.source} style={{ color: 'var(--danger)', margin: '4px 0' }}>
+              <Alert key={err.source} severity="warning" sx={{ my: 0.5 }}>
                 {err.source}: {err.message}
-              </p>
+              </Alert>
             ))}
-          </div>
+          </Box>
         )}
         {state.kind === 'ok' && state.rows.map((row) => (
           <Rail
@@ -62,9 +73,11 @@ export function Home() {
           />
         ))}
         {state.kind === 'ok' && state.rows.length === 0 && state.errors.length === 0 && (
-          <p style={{ padding: '0 20px' }} class="muted">Your sources are paired but returned nothing yet.</p>
+          <Typography color="text.secondary" sx={{ px: 2.5 }}>
+            Your sources are paired but returned nothing yet.
+          </Typography>
         )}
-      </div>
-    </Chrome>
+      </Box>
+    </AppShell>
   );
 }

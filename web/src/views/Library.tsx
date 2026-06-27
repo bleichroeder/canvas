@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
 import { api } from '../api';
-import { Chrome } from '../components/Chrome';
-import { Link } from '../router';
+import { AppShell } from '../components/AppShell';
 import { PosterCard } from '../components/PosterCard';
+import { setLibraryName } from '../storage';
 import type { BrowseResult } from '../types';
 
 interface Props {
@@ -20,40 +23,37 @@ export function Library({ source, libraryId }: Props) {
   useEffect(() => {
     setState({ kind: 'loading' });
     api.library(source, libraryId).then(
-      (data) => setState({ kind: 'ok', data }),
+      (data) => {
+        // Cache library name for breadcrumbs on subsequent visits.
+        const last = data.breadcrumbs[data.breadcrumbs.length - 1];
+        if (libraryId && last && last.libraryId === libraryId && last.name) {
+          setLibraryName(source, libraryId, last.name);
+        }
+        setState({ kind: 'ok', data });
+      },
       (e: Error) => setState({ kind: 'error', message: e.message }),
     );
   }, [source, libraryId]);
 
   return (
-    <Chrome>
-      <div style={{ padding: 20 }}>
+    <AppShell>
+      <Box sx={{ p: 2.5 }}>
+        {state.kind === 'loading' && <Typography color="text.secondary">Loading…</Typography>}
+        {state.kind === 'error' && <Alert severity="error">Error: {state.message}</Alert>}
         {state.kind === 'ok' && (
-          <div style={{ marginBottom: 16, color: 'var(--muted)' }}>
-            {state.data.breadcrumbs.map((b, i) => (
-              <span key={i}>
-                {b.libraryId
-                  ? <Link to={`/lib/${source}/${b.libraryId}`}>{b.name}</Link>
-                  : <Link to={`/lib/${source}`}>{b.name}</Link>}
-                {i < state.data.breadcrumbs.length - 1 ? ' › ' : null}
-              </span>
-            ))}
-          </div>
-        )}
-        {state.kind === 'loading' && <p class="muted">Loading…</p>}
-        {state.kind === 'error' && <p style={{ color: 'var(--danger)' }}>Error: {state.message}</p>}
-        {state.kind === 'ok' && (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, 180px)',
-            gap: 20,
-          }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, 180px)',
+              gap: 2.5,
+            }}
+          >
             {state.data.items.map((it) => (
               <PosterCard key={it.id} item={it} source={source} />
             ))}
-          </div>
+          </Box>
         )}
-      </div>
-    </Chrome>
+      </Box>
+    </AppShell>
   );
 }
