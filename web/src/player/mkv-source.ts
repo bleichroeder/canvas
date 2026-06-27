@@ -98,14 +98,10 @@ export class MkvSource {
     this.buffers.push(bytes);
     this.bufferedSize += bytes.length;
     this.absoluteOffset += bytes.length;
-    if (this.absoluteOffset < 4_000_000 || this.absoluteOffset % 4_000_000 < bytes.length) {
-      console.log('[mkv] appended', bytes.length, 'bytes; total=', this.absoluteOffset, 'buffered=', this.bufferedSize, 'ready=', this.ready);
-    }
     try {
       this.drain();
     } catch (e) {
       this.errored = true;
-      console.error('[mkv] drain threw:', e);
       this.opts.onError(e instanceof Error ? e : new Error(String(e)));
     }
   }
@@ -117,13 +113,7 @@ export class MkvSource {
 
   /** Try to parse as many complete elements out of the buffered bytes as we can. */
   private drain(): void {
-    let iter = 0;
     while (true) {
-      iter++;
-      if (iter > 100000) {
-        console.error('[mkv] drain iter limit; head bytes:', this.peek(16));
-        throw new Error('MKV: drain iter limit hit');
-      }
       const head = this.peek(16);
       if (!head) return;
       const idResult = readVintFromBytes(head, 0);
@@ -143,9 +133,6 @@ export class MkvSource {
         idResult.id === ID_BLOCK_GROUP;
 
       if (isContainer) {
-        if (!this.ready || idResult.id === ID_CLUSTER) {
-          console.log('[mkv] container id=0x' + idResult.id.toString(16), 'size=', sizeResult.size, 'headerLen=', headerLen);
-        }
         this.consume(headerLen);
         if (idResult.id === ID_TRACK_ENTRY) {
           this.tracks.push({
@@ -172,17 +159,9 @@ export class MkvSource {
         throw new Error(`MKV: unknown-size leaf element 0x${idResult.id.toString(16)}`);
       }
       const total = headerLen + payloadSize;
-      if (this.bufferedSize < total) {
-        if (!this.ready && payloadSize > 1_000_000) {
-          console.log('[mkv] waiting for big leaf id=0x' + idResult.id.toString(16), 'payloadSize=', payloadSize, 'have=', this.bufferedSize);
-        }
-        return;
-      }
+      if (this.bufferedSize < total) return;
 
       const payload = this.peek(total)!.subarray(headerLen, total);
-      if (!this.ready) {
-        console.log('[mkv] leaf id=0x' + idResult.id.toString(16), 'payloadSize=', payloadSize);
-      }
       this.handleLeaf(idResult.id, payload);
       this.consume(total);
     }

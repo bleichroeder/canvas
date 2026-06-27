@@ -201,10 +201,13 @@ export function Player({ source, id }: Props) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#000' }}>
+    <div style={{
+      position: 'fixed', inset: 0, background: '#000',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
       <canvas
         ref={canvasRef}
-        style={{ maxWidth: '100vw', maxHeight: '100vh', display: 'block', margin: '0 auto' }}
+        style={{ maxWidth: '100vw', maxHeight: '100vh', display: 'block' }}
       />
       {(status || errMsg) && (
         <div style={{
