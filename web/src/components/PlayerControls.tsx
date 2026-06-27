@@ -37,11 +37,21 @@ function speakerGlyph(v: number, muted: boolean): string {
 
 export function PlayerControls(p: PlayerControlsProps) {
   const [previewPos, setPreviewPos] = useState<number | null>(null);
+  // Once a BIF thumbnail 404s for this item, stop trying for the rest of the
+  // session. Plex only serves /indexes/sd/<ms> when previews have been
+  // pre-generated; many libraries don't have them. Avoids a stream of
+  // empty <img> boxes during scrub.
+  const [previewBroken, setPreviewBroken] = useState(false);
 
   // Reset preview when not actively dragging.
   useEffect(() => {
     if (!p.visible) setPreviewPos(null);
   }, [p.visible]);
+
+  // Reset the broken flag when the source item changes (new template URL).
+  useEffect(() => {
+    setPreviewBroken(false);
+  }, [p.thumbnailUrlTemplate]);
 
   const scrubPos = previewPos ?? p.posSec;
   const sliderMax = Math.max(1, p.durationSec);
@@ -65,7 +75,7 @@ export function PlayerControls(p: PlayerControlsProps) {
         }}
       >✕</button>
 
-      {previewSrc && (
+      {previewSrc && !previewBroken && (
         <img
           src={previewSrc}
           alt=""
@@ -80,7 +90,7 @@ export function PlayerControls(p: PlayerControlsProps) {
             opacity: p.visible ? 1 : 0, transition: 'opacity 100ms',
             pointerEvents: 'none', zIndex: 11,
           }}
-          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          onError={() => setPreviewBroken(true)}
         />
       )}
 
