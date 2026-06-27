@@ -1,5 +1,11 @@
 import { corsHeaders, withCors } from './cors';
 import { handlePairStart, handlePairPoll, handlePairApprove, handlePairDelete } from './routes/pair';
+import { handleHome } from './routes/home';
+import { handleSearch } from './routes/search';
+import { handleLibrary } from './routes/library';
+import { handleItem } from './routes/item';
+import { handlePlay } from './routes/play';
+import { handleProgress } from './routes/progress';
 
 export interface Env {
   KV: KVNamespace;
@@ -22,12 +28,29 @@ async function route(req: Request, env: Env): Promise<Response> {
     return withCors(req, new Response('ok', { headers: { 'content-type': 'text/plain' } }));
   }
 
+  // Pair
   if (url.pathname === '/api/pair/start' && req.method === 'POST') return handlePairStart(req, env.KV);
   if (url.pathname === '/api/pair/poll' && req.method === 'POST') return handlePairPoll(req, env.KV);
   if (url.pathname === '/api/pair/approve' && req.method === 'POST') return handlePairApprove(req, env.KV);
-
   const delMatch = url.pathname.match(/^\/api\/pair\/([A-Z0-9-]+)$/);
   if (delMatch && req.method === 'DELETE') return handlePairDelete(req, env.KV, delMatch[1]!);
+
+  // Federated
+  if (url.pathname === '/api/home' && req.method === 'GET') return handleHome(req);
+  if (url.pathname === '/api/search' && req.method === 'GET') return handleSearch(req, url);
+
+  // Per-source
+  const libMatch = url.pathname.match(/^\/api\/library\/([^/]+)(?:\/([^/]+))?$/);
+  if (libMatch && req.method === 'GET') return handleLibrary(req, url, libMatch[1]!, libMatch[2]);
+
+  const itemMatch = url.pathname.match(/^\/api\/item\/([^/]+)\/(.+)$/);
+  if (itemMatch && req.method === 'GET') return handleItem(req, itemMatch[1]!, itemMatch[2]!);
+
+  const playMatch = url.pathname.match(/^\/api\/play\/([^/]+)\/(.+)$/);
+  if (playMatch && req.method === 'POST') return handlePlay(req, playMatch[1]!, playMatch[2]!);
+
+  const progMatch = url.pathname.match(/^\/api\/progress\/([^/]+)\/(.+)$/);
+  if (progMatch && req.method === 'POST') return handleProgress(req, progMatch[1]!, progMatch[2]!);
 
   return json(req, { error: 'not found' }, 404);
 }
