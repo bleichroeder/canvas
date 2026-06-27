@@ -7,6 +7,7 @@ import { SearchView } from './views/Search';
 import { Settings } from './views/Settings';
 import { Pair } from './views/Pair';
 import { PhonePair } from './views/PhonePair';
+import { Player } from './views/Player';
 
 function NotFound() {
   return <div style={{ padding: 20 }}><h1>Not found</h1></div>;
@@ -20,7 +21,7 @@ function App() {
     ['/lib/:src', (p) => <Library source={p.src!} />],
     ['/lib/:src/:libId', (p) => <Library source={p.src!} libraryId={p.libId} />],
     ['/item/:src/:id', (p) => <ItemDetailView source={p.src!} id={p.id!} />],
-    ['/play/:src/:id', (p) => <div style={{ padding: 20 }}><h1>Play: {p.src} / {p.id}</h1></div>],
+    ['/play/:src/:id', (p) => <Player source={p.src!} id={p.id!} />],
     ['/settings', () => <Settings />],
     ['/settings/pair', () => <Pair />],
     ['/pair', () => <PhonePair />],
