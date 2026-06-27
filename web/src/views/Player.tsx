@@ -146,7 +146,11 @@ export function Player({ source, id }: Props) {
       if (a && startedRef.current) {
         const cur = a.currentTime();
         const url = `${import.meta.env.VITE_PASSENGER_API_V2}/api/progress/${encodeURIComponent(source)}/${encodeURIComponent(id)}`;
-        navigator.sendBeacon?.(url, JSON.stringify({ posSec: cur, completed: false }));
+        const blob = new Blob(
+          [JSON.stringify({ posSec: cur, completed: false })],
+          { type: 'application/json' },
+        );
+        navigator.sendBeacon?.(url, blob);
       }
     };
   }, [source, id]);
@@ -166,13 +170,13 @@ export function Player({ source, id }: Props) {
       return;
     }
     // Toggle pause via AudioContext suspend/resume; video clock follows audio.
-    const a = audioRef.current as unknown as { ctx?: { suspend(): Promise<void>; resume(): Promise<void> } } | null;
+    const a = audioRef.current;
     if (!paused) {
       videoRef.current?.stop();
-      await a?.ctx?.suspend?.();
+      await a?.ctx.suspend();
       setPaused(true);
     } else {
-      await a?.ctx?.resume?.();
+      await a?.ctx.resume();
       videoRef.current?.start();
       setPaused(false);
     }
@@ -197,7 +201,7 @@ export function Player({ source, id }: Props) {
     if (a && startedRef.current) {
       await api.progress(source, id, a.currentTime(), false).catch(() => {});
     }
-    navigate(`/item/${source}/${id}`);
+    navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
   }
 
   return (
