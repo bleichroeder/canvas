@@ -6,6 +6,7 @@ import { ItemDetailView } from './views/ItemDetail';
 import { SearchView } from './views/Search';
 import { Settings } from './views/Settings';
 import { Pair } from './views/Pair';
+import { PhonePair } from './views/PhonePair';
 
 function NotFound() {
   return <div style={{ padding: 20 }}><h1>Not found</h1></div>;
@@ -22,7 +23,7 @@ function App() {
     ['/play/:src/:id', (p) => <div style={{ padding: 20 }}><h1>Play: {p.src} / {p.id}</h1></div>],
     ['/settings', () => <Settings />],
     ['/settings/pair', () => <Pair />],
-    ['/pair', () => <div style={{ padding: 20 }}><h1>Phone pair (TBD)</h1></div>],
+    ['/pair', () => <PhonePair />],
   ];
 
   for (const [pattern, renderFn] of routes) {
