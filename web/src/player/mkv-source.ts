@@ -45,6 +45,7 @@ const TRACK_TYPE_AUDIO = 2;
 
 const CODEC_H264 = 'V_MPEG4/ISO/AVC';
 const CODEC_AAC = 'A_AAC';
+const CODEC_MP3 = 'A_MPEG/L3';
 
 export interface MkvInfo {
   duration: number;
@@ -310,23 +311,31 @@ export class MkvSource {
           description: t.codecPrivate,
         };
       } else if (t.trackType === TRACK_TYPE_AUDIO && this.audioTrackNumber === null) {
-        if (t.codecId !== CODEC_AAC) {
-          this.opts.onError(new Error(`MKV: unsupported audio codec ${t.codecId}; only AAC supported`));
+        let codecString: string;
+        let description: Uint8Array | undefined;
+        if (t.codecId === CODEC_AAC) {
+          if (!t.codecPrivate) {
+            this.opts.onError(new Error('MKV: AAC track missing CodecPrivate (AudioSpecificConfig)'));
+            this.errored = true;
+            return;
+          }
+          codecString = aacCodecString(t.codecPrivate);
+          description = t.codecPrivate;
+        } else if (t.codecId === CODEC_MP3) {
+          // MP3 frames are self-describing; no CodecPrivate needed.
+          codecString = 'mp3';
+          description = undefined;
+        } else {
+          this.opts.onError(new Error(`MKV: unsupported audio codec ${t.codecId}; only AAC and MP3 supported`));
           this.errored = true;
           return;
         }
-        if (!t.codecPrivate) {
-          this.opts.onError(new Error('MKV: AAC track missing CodecPrivate (AudioSpecificConfig)'));
-          this.errored = true;
-          return;
-        }
-        const codecString = aacCodecString(t.codecPrivate);
         this.audioTrackNumber = t.trackNumber;
         audioConfig = {
           codec: codecString,
           sampleRate: t.samplingFrequency || 48000,
           numberOfChannels: t.channels || 2,
-          description: t.codecPrivate,
+          ...(description ? { description } : {}),
         };
       }
     }
