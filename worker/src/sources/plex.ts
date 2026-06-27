@@ -115,17 +115,45 @@ export const plexAdapter: SourceAdapter = {
   },
 
   async resolveStream(ctx: SourceContext, id: string): Promise<PlayResolution> {
-    const res = await plexFetch<MediaContainer<PlexMetadata & {
-      Media?: { duration?: number; Part?: { key: string; container?: string }[] }[];
+    // Plex's direct-play hands us the original container — typically MKV with
+    // arbitrary codecs (HEVC, AC3, DTS). The canvas pipeline only handles
+    // H.264 + AAC. Route through Plex's transcoder forcing those codecs.
+    //
+    // Plex outputs MKV regardless of the .mp4 extension on the URL; our MKV
+    // source handles that. The transcoder applies the videoCodec/audioCodec
+    // params and a bitrate cap suitable for cellular Tesla.
+    const meta = await plexFetch<MediaContainer<PlexMetadata & {
+      Media?: { duration?: number }[];
     }>>(ctx, `/library/metadata/${encodeURIComponent(id)}`);
-    const m = res.MediaContainer.Metadata?.[0];
+    const m = meta.MediaContainer.Metadata?.[0];
     if (!m) throw new Error(`Plex item ${id} not found`);
-    const part = m.Media?.[0]?.Part?.[0];
-    if (!part) throw new Error(`Plex item ${id} has no playable Part`);
-    const url = `${ctx.baseUrl}${part.key}?X-Plex-Token=${encodeURIComponent(ctx.token)}`;
+    const durationMs = m.duration ?? m.Media?.[0]?.duration ?? 0;
+
+    const session = crypto.randomUUID();
+    const params = new URLSearchParams({
+      'protocol': 'http',
+      'path': `/library/metadata/${id}`,
+      'mediaIndex': '0',
+      'partIndex': '0',
+      'directPlay': '0',
+      'directStream': '0',
+      'videoCodec': 'h264',
+      'audioCodec': 'aac',
+      'videoQuality': '80',
+      'videoResolution': '1920x1080',
+      'maxVideoBitrate': '8000',
+      'fastSeek': '1',
+      'session': session,
+      'X-Plex-Token': ctx.token,
+      'X-Plex-Client-Identifier': 'passenger',
+      'X-Plex-Product': 'Passenger',
+      'X-Plex-Platform': 'Web',
+    });
+    const url = `${ctx.baseUrl}/video/:/transcode/universal/start.mp4?${params.toString()}`;
+
     return {
       url,
-      durationSec: m.duration ? Math.round(m.duration / 1000) : (m.Media?.[0]?.duration ?? 0) / 1000,
+      durationSec: Math.round(durationMs / 1000),
     };
   },
 

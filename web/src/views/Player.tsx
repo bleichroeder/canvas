@@ -3,7 +3,7 @@ import { api } from '../api';
 import { navigate } from '../router';
 import { PlayerControls } from '../components/PlayerControls';
 import { RangeFetcher } from '../player/range-fetcher';
-import { Demuxer } from '../player/demux';
+import { AutoSource } from '../player/stream-source';
 import { VideoSink } from '../player/video';
 import { AudioSink } from '../player/audio';
 import type { PlayResolution } from '../types';
@@ -24,7 +24,7 @@ export function Player({ source, id }: Props) {
   // Long-lived refs for engine pieces.
   const videoRef = useRef<VideoSink | null>(null);
   const audioRef = useRef<AudioSink | null>(null);
-  const demuxerRef = useRef<Demuxer | null>(null);
+  const sourceRef = useRef<AutoSource | null>(null);
   const fetcherRef = useRef<RangeFetcher | null>(null);
   const pendingVideoRef = useRef<EncodedVideoChunk[]>([]);
   const pendingAudioRef = useRef<EncodedAudioChunk[]>([]);
@@ -83,7 +83,7 @@ export function Player({ source, id }: Props) {
 
         const canvas = canvasRef.current!;
 
-        const demuxer = new Demuxer({
+        const streamSource = new AutoSource({
           onReady: (info) => {
             if (cancelled) return;
             if (!info.videoConfig) { setErrMsg('No video track'); return; }
@@ -113,14 +113,14 @@ export function Player({ source, id }: Props) {
           },
           onError: (e) => setErrMsg(`demux: ${e.message}`),
         });
-        demuxerRef.current = demuxer;
+        sourceRef.current = streamSource;
 
         const fetcher = new RangeFetcher({
           url: resolution.url,
           chunkSize: 4 * 1024 * 1024,
-          onChunk: (offset, bytes) => demuxer.appendChunk(offset, bytes),
+          onChunk: (offset, bytes) => streamSource.appendChunk(offset, bytes),
           onError: (e) => setErrMsg(`fetch: ${e.message}`),
-          onDone: () => { demuxer.flush(); videoRef.current?.flush().catch(() => {}); },
+          onDone: () => { streamSource.flush(); videoRef.current?.flush().catch(() => {}); },
         });
         fetcherRef.current = fetcher;
         fetcher.start();
@@ -182,18 +182,14 @@ export function Player({ source, id }: Props) {
     }
   }
 
-  function onSeek(sec: number) {
-    const dem = demuxerRef.current;
-    const fet = fetcherRef.current;
-    const v = videoRef.current;
-    if (!dem || !fet) return;
-    const { videoByteOffset } = dem.seek(sec);
-    v?.reset();
-    fet.seek(videoByteOffset);
+  function onSeek(_sec: number) {
+    // Seeking is not yet implemented for MKV streams. mp4box exposes seek()
+    // returning a keyframe byte offset; MKV would need to parse Cues at the
+    // tail of the file, which we don't do in v1. UI scrub bar is non-interactive.
   }
 
-  function onSeekRelative(delta: number) {
-    onSeek(Math.max(0, pos + delta));
+  function onSeekRelative(_delta: number) {
+    // See onSeek.
   }
 
   async function onClose() {

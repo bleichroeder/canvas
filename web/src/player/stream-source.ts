@@ -1,0 +1,128 @@
+/**
+ * Common stream-source contract. Both the MP4 (mp4box-backed) demuxer and the
+ * MKV (custom EBML) demuxer implement this. The Player view talks only to the
+ * common interface and doesn't care which container is on the wire.
+ */
+import { Demuxer } from './demux';
+import { MkvSource } from './mkv-source';
+
+export interface StreamInfo {
+  duration: number;
+  videoConfig: VideoDecoderConfig | null;
+  audioConfig: AudioDecoderConfig | null;
+}
+
+export interface StreamSourceCallbacks {
+  onReady: (info: StreamInfo) => void;
+  onVideoSample: (chunk: EncodedVideoChunk) => void;
+  onAudioSample: (chunk: EncodedAudioChunk) => void;
+  onError: (err: Error) => void;
+}
+
+export interface StreamSource {
+  appendChunk(offset: number, bytes: Uint8Array): void;
+  flush(): void;
+}
+
+/**
+ * Identify the container by sniffing the first 8 bytes of the stream.
+ *   - 0x1A 0x45 0xDF 0xA3 → EBML/Matroska (MKV / WebM)
+ *   - bytes 4..8 == 'ftyp' → ISOBMFF (MP4)
+ */
+export type StreamFormat = 'mp4' | 'mkv' | 'unknown';
+
+export function sniffFormat(head: Uint8Array): StreamFormat {
+  if (head.length >= 4 && head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) {
+    return 'mkv';
+  }
+  if (head.length >= 8 && head[4] === 0x66 && head[5] === 0x74 && head[6] === 0x79 && head[7] === 0x70) {
+    return 'mp4';
+  }
+  return 'unknown';
+}
+
+/**
+ * Buffering source that sniffs the first chunk to pick the real demuxer,
+ * then forwards all buffered + future bytes to it. Lets the caller wire the
+ * RangeFetcher → source without knowing the container in advance.
+ */
+export class AutoSource implements StreamSource {
+  private readonly opts: StreamSourceCallbacks;
+  private inner: StreamSource | null = null;
+  private pending: { offset: number; bytes: Uint8Array }[] = [];
+  private sniffed = false;
+  private head: Uint8Array = new Uint8Array(0);
+
+  constructor(opts: StreamSourceCallbacks) {
+    this.opts = opts;
+  }
+
+  appendChunk(offset: number, bytes: Uint8Array): void {
+    if (this.inner) {
+      this.inner.appendChunk(offset, bytes);
+      return;
+    }
+    // Buffer until we have enough to sniff.
+    this.pending.push({ offset, bytes });
+    if (this.head.length < 16) {
+      const merged = new Uint8Array(this.head.length + bytes.length);
+      merged.set(this.head, 0);
+      merged.set(bytes, this.head.length);
+      this.head = merged.subarray(0, Math.min(16, merged.length));
+    }
+    if (!this.sniffed && this.head.length >= 8) {
+      const format = sniffFormat(this.head);
+      this.sniffed = true;
+      if (format === 'mkv') {
+        this.inner = new MkvSourceAdapter(this.opts);
+      } else if (format === 'mp4') {
+        this.inner = new Mp4SourceAdapter(this.opts);
+      } else {
+        this.opts.onError(new Error(`Unrecognised container; first bytes: ${[...this.head].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join(' ')}`));
+        return;
+      }
+      // Replay buffered chunks into the chosen source.
+      for (const p of this.pending) this.inner.appendChunk(p.offset, p.bytes);
+      this.pending = [];
+    }
+  }
+
+  flush(): void {
+    this.inner?.flush();
+  }
+}
+
+/** Adapter so the MP4 path implements the common StreamSource shape. */
+class Mp4SourceAdapter implements StreamSource {
+  private readonly demuxer: Demuxer;
+  constructor(opts: StreamSourceCallbacks) {
+    this.demuxer = new Demuxer({
+      onReady: (info) =>
+        opts.onReady({
+          duration: info.duration,
+          videoConfig: info.videoConfig,
+          audioConfig: info.audioConfig,
+        }),
+      onVideoSample: opts.onVideoSample,
+      onAudioSample: opts.onAudioSample,
+      onError: opts.onError,
+    });
+  }
+  appendChunk(offset: number, bytes: Uint8Array): void { this.demuxer.appendChunk(offset, bytes); }
+  flush(): void { this.demuxer.flush(); }
+}
+
+/** Adapter so the MKV path implements the common StreamSource shape. */
+class MkvSourceAdapter implements StreamSource {
+  private readonly mkv: MkvSource;
+  constructor(opts: StreamSourceCallbacks) {
+    this.mkv = new MkvSource({
+      onReady: opts.onReady,
+      onVideoSample: opts.onVideoSample,
+      onAudioSample: opts.onAudioSample,
+      onError: opts.onError,
+    });
+  }
+  appendChunk(offset: number, bytes: Uint8Array): void { this.mkv.appendChunk(offset, bytes); }
+  flush(): void { this.mkv.flush(); }
+}
