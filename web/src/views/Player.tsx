@@ -20,6 +20,15 @@ export function Player({ source, id }: Props) {
   const [status, setStatus] = useState('Loading…');
   const [errMsg, setErrMsg] = useState<string | null>(null);
 
+  const VOL_KEY = 'passenger.v2.volume';
+  const [volume, setVolume] = useState<number>(() => {
+    const raw = localStorage.getItem(VOL_KEY);
+    const n = raw === null ? 1 : Number(raw);
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 1;
+  });
+  const [muted, setMuted] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+
   // Long-lived refs for engine pieces.
   const videoRef = useRef<VideoSink | null>(null);
   const audioRef = useRef<AudioSink | null>(null);
@@ -30,6 +39,14 @@ export function Player({ source, id }: Props) {
   const sessionBaseRef = useRef(0); // session offset (seconds) — set on each boot, current pos = sessionBase + audio.currentTime()
   const reportRef = useRef(0);
   const resolutionRef = useRef<PlayResolution | null>(null);
+
+  useEffect(() => {
+    audioRef.current?.setVolume(volume);
+    localStorage.setItem(VOL_KEY, String(volume));
+  }, [volume]);
+  useEffect(() => {
+    audioRef.current?.setMuted(muted);
+  }, [muted]);
 
   // Auto-hide controls after 3s of inactivity.
   useEffect(() => {
@@ -105,6 +122,8 @@ export function Player({ source, id }: Props) {
                 config: info.audioConfig,
                 onError: (e) => setErrMsg(`audio: ${e.message}`),
               });
+              audio.setVolume(volume);
+              audio.setMuted(muted);
               audioRef.current = audio;
             }
             // Pos baseline for the new session is fromSec (audio.currentTime() resets to 0 in new engine).
@@ -197,6 +216,25 @@ export function Player({ source, id }: Props) {
     }, 100);
   }
 
+  useEffect(() => {
+    const onChange = () => setFullscreen(document.fullscreenElement !== null);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  async function onFullscreenToggle(): Promise<void> {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch { /* browser blocked; ignore */ }
+  }
+
+  function onMuteToggle(): void { setMuted((m) => !m); }
+  function onVolumeChange(v: number): void {
+    setVolume(v);
+    if (v > 0 && muted) setMuted(false);
+  }
+
   function onSeek(sec: number): void { void reseek(sec); }
   function onSeekRelative(delta: number): void { void reseek(pos + delta); }
 
@@ -270,10 +308,17 @@ export function Player({ source, id }: Props) {
         posSec={pos}
         durationSec={duration}
         visible={controlsVisible}
+        thumbnailUrlTemplate={resolutionRef.current?.thumbnailUrlTemplate}
+        volume={volume}
+        muted={muted}
+        fullscreen={fullscreen}
         onPlayPause={onPlayPause}
         onSeek={onSeek}
         onSeekRelative={onSeekRelative}
         onClose={onClose}
+        onVolumeChange={onVolumeChange}
+        onMuteToggle={onMuteToggle}
+        onFullscreenToggle={onFullscreenToggle}
       />
     </div>
   );
