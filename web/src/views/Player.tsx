@@ -287,7 +287,12 @@ export function Player({ source, id }: Props) {
 
   return (
     <div
-      onClick={() => { if (!errMsg) void onPlayPause(); }}
+      onClick={() => {
+        // First tap from a hidden-controls state should only reveal the
+        // controls (handled by the global pointerdown listener); the tap-to-
+        // pause behavior only fires when controls were already visible.
+        if (!errMsg && controlsVisible) void onPlayPause();
+      }}
       style={{
         position: 'fixed', inset: 0, background: '#000',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
