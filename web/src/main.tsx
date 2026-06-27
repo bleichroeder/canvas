@@ -1,4 +1,8 @@
-import { render } from 'preact';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import { theme } from './theme';
 import { useRoute, matchRoute } from './router';
 import { Home } from './views/Home';
 import { Library } from './views/Library';
@@ -15,7 +19,7 @@ function NotFound() {
 
 function App() {
   const route = useRoute();
-  const routes: Array<[string, (params: Record<string, string>) => preact.JSX.Element]> = [
+  const routes: Array<[string, (params: Record<string, string>) => React.JSX.Element]> = [
     ['/', () => <Home />],
     ['/search', () => <SearchView />],
     ['/lib/:src', (p) => <Library source={p.src!} />],
@@ -26,7 +30,6 @@ function App() {
     ['/settings/pair', () => <Pair />],
     ['/pair', () => <PhonePair />],
   ];
-
   for (const [pattern, renderFn] of routes) {
     const params = matchRoute(pattern, route.path);
     if (params) return renderFn(params);
@@ -35,4 +38,13 @@ function App() {
 }
 
 const root = document.getElementById('app');
-if (root) render(<App />, root);
+if (root) {
+  createRoot(root).render(
+    <StrictMode>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <App />
+      </ThemeProvider>
+    </StrictMode>,
+  );
+}
