@@ -37,7 +37,7 @@ export class AudioSink {
       ? '/src/player/audio-worklet.js'
       : '/audio-worklet.js';
     await this.ctx.audioWorklet.addModule(workletUrl);
-    this.worklet = new AudioWorkletNode(this.ctx, 'passenger-player', {
+    this.worklet = new AudioWorkletNode(this.ctx, 'canvas-player', {
       outputChannelCount: [this.channelCount],
     });
     this.worklet.port.onmessage = (e) => {

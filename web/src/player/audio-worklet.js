@@ -41,4 +41,4 @@ class PassengerPlayerProcessor extends AudioWorkletProcessor {
     return true;
   }
 }
-registerProcessor('passenger-player', PassengerPlayerProcessor);
+registerProcessor('canvas-player', PassengerPlayerProcessor);
