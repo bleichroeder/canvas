@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'react';
+import Box from '@mui/material/Box';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import Typography from '@mui/material/Typography';
+import SearchIcon from '@mui/icons-material/Search';
 import { api } from '../api';
-import { Chrome } from '../components/Chrome';
+import { AppShell } from '../components/AppShell';
 import { PosterCard } from '../components/PosterCard';
 import type { Item } from '../types';
 
@@ -28,30 +33,41 @@ export function SearchView() {
   }, [q]);
 
   return (
-    <Chrome>
-      <div style={{ padding: 20 }}>
-        <input
-          type="search"
-          placeholder="Search…"
-          value={q}
-          onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)}
+    <AppShell>
+      <Box sx={{ p: 2.5 }}>
+        <TextField
+          fullWidth
           autoFocus
-          style={{ fontSize: 18, padding: 14 }}
+          placeholder="Search across your libraries…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
         />
-        {loading && <p class="muted" style={{ marginTop: 16 }}>Searching…</p>}
-        {!loading && results.length === 0 && q.trim().length >= 2 && (
-          <p class="muted" style={{ marginTop: 16 }}>No results.</p>
+        {loading && (
+          <Typography color="text.secondary" sx={{ mt: 2 }}>Searching…</Typography>
         )}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, 180px)',
-          gap: 20, marginTop: 20,
-        }}>
+        {!loading && results.length === 0 && q.trim().length >= 2 && (
+          <Typography color="text.secondary" sx={{ mt: 2 }}>No results.</Typography>
+        )}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, 180px)',
+            gap: 2.5,
+            mt: 2.5,
+          }}
+        >
           {results.map((it) => (
             <PosterCard key={`${it.source}:${it.id}`} item={it} source={it.source} />
           ))}
-        </div>
-      </div>
-    </Chrome>
+        </Box>
+      </Box>
+    </AppShell>
   );
 }

@@ -1,7 +1,12 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { api } from '../api';
-import { Chrome } from '../components/Chrome';
-import { Link, navigate } from '../router';
+import { AppShell } from '../components/AppShell';
+import { navigate, Link } from '../router';
 import type { ItemDetail } from '../types';
 
 interface Props { source: string; id: string }
@@ -34,80 +39,118 @@ export function ItemDetailView({ source, id }: Props) {
     );
   }, [source, id]);
 
-  if (state.kind === 'loading') return <Chrome><p style={{ padding: 20 }} class="muted">Loading…</p></Chrome>;
-  if (state.kind === 'error') return <Chrome><p style={{ padding: 20, color: 'var(--danger)' }}>{state.message}</p></Chrome>;
+  if (state.kind === 'loading') {
+    return <AppShell><Typography sx={{ p: 2.5 }} color="text.secondary">Loading…</Typography></AppShell>;
+  }
+  if (state.kind === 'error') {
+    return <AppShell><Alert severity="error" sx={{ m: 2.5 }}>{state.message}</Alert></AppShell>;
+  }
 
   const { item } = state;
   const resume = (item.viewOffsetSec ?? 0) > 60;
 
   return (
-    <Chrome>
+    <AppShell>
       {item.backdrop && (
-        <div style={{
-          height: 320, backgroundImage: `url(${item.backdrop})`,
-          backgroundSize: 'cover', backgroundPosition: 'center',
-          position: 'relative',
-        }}>
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(to bottom, transparent 50%, var(--bg) 100%)',
-          }} />
-        </div>
+        <Box
+          sx={{
+            height: 320,
+            backgroundImage: `url(${item.backdrop})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            position: 'relative',
+          }}
+        >
+          <Box
+            sx={{
+              position: 'absolute', inset: 0,
+              background: 'linear-gradient(to bottom, transparent 50%, var(--mui-palette-background-default, #0e0f12) 100%)',
+            }}
+          />
+        </Box>
       )}
-      <div style={{ padding: '0 20px', marginTop: item.backdrop ? -80 : 20, position: 'relative' }}>
-        <div style={{ display: 'flex', gap: 24 }}>
+      <Box sx={{ px: 2.5, mt: item.backdrop ? -10 : 2.5, position: 'relative' }}>
+        <Box sx={{ display: 'flex', gap: 3 }}>
           {item.poster && (
-            <img src={item.poster} style={{ width: 200, height: 300, borderRadius: 8, objectFit: 'cover' }} alt="" />
+            <Box
+              component="img"
+              src={item.poster}
+              alt=""
+              sx={{ width: 200, height: 300, borderRadius: 1, objectFit: 'cover' }}
+            />
           )}
-          <div style={{ flex: 1, paddingTop: item.backdrop ? 60 : 0 }}>
-            <h1 style={{ margin: '0 0 8px', fontSize: 32 }}>{item.title}</h1>
-            <div class="muted" style={{ marginBottom: 16 }}>
+          <Box sx={{ flex: 1, pt: item.backdrop ? 7.5 : 0 }}>
+            <Typography variant="h1" sx={{ mb: 1 }}>{item.title}</Typography>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
               {[item.year, formatRuntime(item.durationSec), item.rating ? `★ ${item.rating}` : null]
                 .filter(Boolean).join(' · ')}
-            </div>
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-              <button
-                style={{ padding: '14px 28px', fontSize: 16, background: 'var(--accent)', border: 'none' }}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<PlayArrowIcon />}
                 onClick={() => navigate(`/play/${source}/${item.id}`)}
               >
-                ▶ {resume ? `Resume ${formatPos(item.viewOffsetSec!)}` : 'Play'}
-              </button>
+                {resume ? `Resume ${formatPos(item.viewOffsetSec!)}` : 'Play'}
+              </Button>
               {resume && (
-                <button onClick={() => navigate(`/play/${source}/${item.id}?from=0`)}>
+                <Button
+                  variant="text"
+                  onClick={() => navigate(`/play/${source}/${item.id}?from=0`)}
+                >
                   Start over
-                </button>
+                </Button>
               )}
-            </div>
-            {item.synopsis && <p style={{ maxWidth: 700, lineHeight: 1.5 }}>{item.synopsis}</p>}
-          </div>
-        </div>
+            </Box>
+            {item.synopsis && (
+              <Typography variant="body1" sx={{ maxWidth: 720, lineHeight: 1.5 }}>
+                {item.synopsis}
+              </Typography>
+            )}
+          </Box>
+        </Box>
 
         {item.episodes && item.episodes.length > 0 && (
-          <div style={{ marginTop: 32 }}>
-            <h2 style={{ fontSize: 20, marginBottom: 12 }}>Episodes</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="h3" sx={{ mb: 1.5 }}>Episodes</Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               {item.episodes.map((ep) => (
                 <Link
                   key={ep.id}
                   to={`/play/${source}/${ep.id}`}
                   style={{
                     display: 'flex', gap: 16, padding: 12,
-                    background: 'var(--row)', borderRadius: 8, color: 'var(--fg)',
+                    backgroundColor: 'var(--mui-palette-background-paper, #181a1f)',
+                    border: '1px solid var(--mui-palette-divider, #2a2d36)',
+                    borderRadius: 8,
+                    color: 'inherit',
                   }}
                 >
                   {ep.poster && (
-                    <img src={ep.poster} style={{ width: 160, height: 90, borderRadius: 4, objectFit: 'cover' }} alt="" />
+                    <Box
+                      component="img"
+                      src={ep.poster}
+                      alt=""
+                      sx={{ width: 160, height: 90, borderRadius: 0.5, objectFit: 'cover' }}
+                    />
                   )}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600 }}>S{ep.season}·E{ep.episode} · {ep.title}</div>
-                    {ep.synopsis && <div class="muted" style={{ marginTop: 4, fontSize: 14 }}>{ep.synopsis}</div>}
-                  </div>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography sx={{ fontWeight: 600 }}>
+                      S{ep.season}·E{ep.episode} · {ep.title}
+                    </Typography>
+                    {ep.synopsis && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {ep.synopsis}
+                      </Typography>
+                    )}
+                  </Box>
                 </Link>
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
         )}
-      </div>
-    </Chrome>
+      </Box>
+    </AppShell>
   );
 }
