@@ -98,10 +98,14 @@ export class MkvSource {
     this.buffers.push(bytes);
     this.bufferedSize += bytes.length;
     this.absoluteOffset += bytes.length;
+    if (this.absoluteOffset < 4_000_000 || this.absoluteOffset % 4_000_000 < bytes.length) {
+      console.log('[mkv] appended', bytes.length, 'bytes; total=', this.absoluteOffset, 'buffered=', this.bufferedSize, 'ready=', this.ready);
+    }
     try {
       this.drain();
     } catch (e) {
       this.errored = true;
+      console.error('[mkv] drain threw:', e);
       this.opts.onError(e instanceof Error ? e : new Error(String(e)));
     }
   }
@@ -113,18 +117,21 @@ export class MkvSource {
 
   /** Try to parse as many complete elements out of the buffered bytes as we can. */
   private drain(): void {
+    let iter = 0;
     while (true) {
-      // Peek a flat view large enough to decode the next element header.
-      // We need up to 16 bytes (max VINT ID = 4 bytes + max VINT size = 8 bytes).
+      iter++;
+      if (iter > 100000) {
+        console.error('[mkv] drain iter limit; head bytes:', this.peek(16));
+        throw new Error('MKV: drain iter limit hit');
+      }
       const head = this.peek(16);
-      if (!head) return; // not enough data yet
+      if (!head) return;
       const idResult = readVintFromBytes(head, 0);
       if (!idResult) return;
       const sizeResult = readVintFromBytes(head, idResult.byteLength);
       if (!sizeResult) return;
       const headerLen = idResult.byteLength + sizeResult.byteLength;
 
-      // Container elements we want to recurse INTO (no skipping past their size).
       const isContainer =
         idResult.id === ID_SEGMENT ||
         idResult.id === ID_INFO ||
@@ -136,11 +143,11 @@ export class MkvSource {
         idResult.id === ID_BLOCK_GROUP;
 
       if (isContainer) {
-        // Consume header only; parse children inline next loop iteration.
+        if (!this.ready || idResult.id === ID_CLUSTER) {
+          console.log('[mkv] container id=0x' + idResult.id.toString(16), 'size=', sizeResult.size, 'headerLen=', headerLen);
+        }
         this.consume(headerLen);
-        if (idResult.id === ID_SEGMENT) {
-          // Segment is the document body — no special handling, just recurse.
-        } else if (idResult.id === ID_TRACK_ENTRY) {
+        if (idResult.id === ID_TRACK_ENTRY) {
           this.tracks.push({
             trackNumber: 0,
             trackType: 0,
@@ -152,8 +159,7 @@ export class MkvSource {
             channels: 0,
           });
         } else if (idResult.id === ID_CLUSTER) {
-          this.clusterTimestamp = 0; // reset; will be set when we see ID_TIMESTAMP inside
-          // If we haven't finalized tracks yet, do it now (clusters mean we've seen all tracks).
+          this.clusterTimestamp = 0;
           if (!this.ready && this.tracks.length > 0) {
             this.finalizeReady();
           }
@@ -161,16 +167,22 @@ export class MkvSource {
         continue;
       }
 
-      // Leaf element: need the full payload to interpret.
       const payloadSize = sizeResult.size;
       if (payloadSize === null) {
-        // Unknown size on a leaf element — Matroska forbids this; bail.
-        throw new Error(`MKV: unknown-size leaf element ${idResult.id.toString(16)}`);
+        throw new Error(`MKV: unknown-size leaf element 0x${idResult.id.toString(16)}`);
       }
       const total = headerLen + payloadSize;
-      if (this.bufferedSize < total) return; // wait for more bytes
+      if (this.bufferedSize < total) {
+        if (!this.ready && payloadSize > 1_000_000) {
+          console.log('[mkv] waiting for big leaf id=0x' + idResult.id.toString(16), 'payloadSize=', payloadSize, 'have=', this.bufferedSize);
+        }
+        return;
+      }
 
       const payload = this.peek(total)!.subarray(headerLen, total);
+      if (!this.ready) {
+        console.log('[mkv] leaf id=0x' + idResult.id.toString(16), 'payloadSize=', payloadSize);
+      }
       this.handleLeaf(idResult.id, payload);
       this.consume(total);
     }
@@ -248,12 +260,14 @@ export class MkvSource {
 
   private handleBlock(id: number, payload: Uint8Array): void {
     // SimpleBlock: VINT track | int16 BE relative timestamp | byte flags | frame data
-    // Block (inside BlockGroup): same layout but keyframe bit is in flags differently;
-    //   ignore the flag distinction — assume keyframe ONLY for video if SimpleBlock's
-    //   keyframe bit set, else mark as 'delta'. For audio every frame is 'key'.
+    // Block (inside BlockGroup): same layout but keyframe inferred from
+    //   ReferenceBlock absence inside the BlockGroup; we don't track that, so
+    //   Block samples are always marked 'delta'.
     const trackVint = readVintFromBytes(payload, 0);
-    if (!trackVint) return;
-    const trackNumber = trackVint.id;
+    if (trackVint === null || trackVint.size === null) return;
+    // Track number is a VINT *value* (marker bit stripped), not an EBML element
+    // ID — use .size rather than .id.
+    const trackNumber = trackVint.size;
     const tsDeltaOffset = trackVint.byteLength;
     if (payload.length < tsDeltaOffset + 3) return;
     const tsDelta =
@@ -347,7 +361,8 @@ export class MkvSource {
 
   /** Return a contiguous Uint8Array view of up to `len` bytes from the head, or null if not enough buffered. */
   private peek(len: number): Uint8Array | null {
-    if (this.bufferedSize - this.parsedOffset < len) return null;
+    // bufferedSize already excludes consumed bytes (decremented in consume()).
+    if (this.bufferedSize < len) return null;
     // Fast path: first buffer has enough after parsedOffset.
     const first = this.buffers[0];
     if (first && first.length - this.parsedOffset >= len) {
