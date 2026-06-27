@@ -114,11 +114,25 @@ export const plexAdapter: SourceAdapter = {
     return detail;
   },
 
-  async resolveStream(_ctx: SourceContext, _id: string): Promise<PlayResolution> {
-    throw new Error(NOT_IMPLEMENTED);
+  async resolveStream(ctx: SourceContext, id: string): Promise<PlayResolution> {
+    const res = await plexFetch<MediaContainer<PlexMetadata & {
+      Media?: { duration?: number; Part?: { key: string; container?: string }[] }[];
+    }>>(ctx, `/library/metadata/${encodeURIComponent(id)}`);
+    const m = res.MediaContainer.Metadata?.[0];
+    if (!m) throw new Error(`Plex item ${id} not found`);
+    const part = m.Media?.[0]?.Part?.[0];
+    if (!part) throw new Error(`Plex item ${id} has no playable Part`);
+    const url = `${ctx.baseUrl}${part.key}?X-Plex-Token=${encodeURIComponent(ctx.token)}`;
+    return {
+      url,
+      durationSec: m.duration ? Math.round(m.duration / 1000) : (m.Media?.[0]?.duration ?? 0) / 1000,
+    };
   },
 
-  async saveProgress(_ctx: SourceContext, _id: string, _posSec: number, _completed: boolean): Promise<void> {
-    throw new Error(NOT_IMPLEMENTED);
+  async saveProgress(ctx: SourceContext, id: string, posSec: number, completed: boolean): Promise<void> {
+    const state = completed ? 'stopped' : 'playing';
+    const timeMs = Math.round(posSec * 1000);
+    const url = `/:/timeline?ratingKey=${encodeURIComponent(id)}&key=/library/metadata/${encodeURIComponent(id)}&state=${state}&time=${timeMs}`;
+    await plexFetch(ctx, url);
   },
 };
