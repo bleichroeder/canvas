@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
 import { api } from '../api';
-import { Chrome } from '../components/Chrome';
+import { AppShell } from '../components/AppShell';
 import { addSource, makeSourceKey } from '../storage';
 import { navigate } from '../router';
 import type { StoredSource } from '../storage';
@@ -15,9 +20,9 @@ type State =
 
 const SOURCE_TYPES: Array<{ type: SourceType; label: string; available: boolean }> = [
   { type: 'plex', label: 'Plex Media Server', available: true },
-  { type: 'jellyfin', label: 'Jellyfin', available: false }, // wired in Plan B
-  { type: 'flixify', label: 'thecalm.site (Flixify)', available: false }, // wired in Plan B
-  { type: 'generic', label: 'Direct URL', available: false }, // wired in Plan B
+  { type: 'jellyfin', label: 'Jellyfin', available: false },
+  { type: 'flixify', label: 'thecalm.site (Flixify)', available: false },
+  { type: 'generic', label: 'Direct URL', available: false },
 ];
 
 export function Pair() {
@@ -59,59 +64,76 @@ export function Pair() {
     };
     void poll();
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.kind === 'pairing' ? state.code : null]);
 
   return (
-    <Chrome>
-      <div style={{ padding: 40, maxWidth: 600, margin: '0 auto', textAlign: 'center' }}>
+    <AppShell>
+      <Box sx={{ p: 5, maxWidth: 600, mx: 'auto', textAlign: 'center' }}>
         {state.kind === 'choose' && (
-          <div>
-            <h2>Pair a new source</h2>
-            <p class="muted" style={{ marginBottom: 24 }}>Choose what kind of source you want to add.</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <>
+            <Typography variant="h3" sx={{ mb: 1 }}>Pair a new source</Typography>
+            <Typography color="text.secondary" sx={{ mb: 3 }}>
+              Choose what kind of source you want to add.
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {SOURCE_TYPES.map((s) => (
-                <button
+                <Button
                   key={s.type}
+                  variant="outlined"
                   disabled={!s.available}
                   onClick={() => startPair(s.type)}
-                  style={{ padding: '16px 20px', textAlign: 'left' }}
+                  sx={{ py: 2, justifyContent: 'flex-start', px: 2.5 }}
                 >
-                  {s.label} {!s.available && <span class="muted" style={{ fontSize: 13 }}>(coming soon)</span>}
-                </button>
+                  {s.label}{!s.available && (
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                      (coming soon)
+                    </Typography>
+                  )}
+                </Button>
               ))}
-            </div>
-          </div>
+            </Box>
+          </>
         )}
         {state.kind === 'pairing' && (
-          <div>
-            <h2>On your phone, go to:</h2>
-            <p style={{ fontSize: 20, margin: '16px 0' }}>passenger-v2.pages.dev/#/pair</p>
-            <p>Enter this code:</p>
-            <div style={{
-              fontSize: 56, fontWeight: 700, letterSpacing: 4,
-              background: 'var(--row)', padding: '24px 32px', borderRadius: 12,
-              display: 'inline-block', margin: '16px 0',
-            }}>{state.code}</div>
-            <p class="muted">Waiting for approval…</p>
-            <p class="muted" style={{ fontSize: 13, marginTop: 16 }}>
+          <>
+            <Typography variant="h3" sx={{ mb: 2 }}>On your phone, go to:</Typography>
+            <Typography sx={{ fontSize: 20, mb: 2 }}>canvas.pages.dev/#/pair</Typography>
+            <Typography>Enter this code:</Typography>
+            <Typography
+              variant="h1"
+              sx={{
+                fontSize: 80, fontWeight: 700, letterSpacing: '16px',
+                backgroundColor: 'background.paper',
+                border: '1px solid', borderColor: 'divider',
+                py: 3, px: 4, borderRadius: 2,
+                display: 'inline-block', my: 2,
+              }}
+            >
+              {state.code}
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
+              <CircularProgress size={20} />
+              <Typography color="text.secondary">Waiting for approval…</Typography>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
               Code expires {new Date(state.expiresAt).toLocaleTimeString()}.
-            </p>
-          </div>
+            </Typography>
+          </>
         )}
         {state.kind === 'paired' && (
-          <div>
-            <h2 style={{ color: 'var(--accent)' }}>✓ Paired</h2>
-            <p>{state.label} is now linked. Redirecting…</p>
-          </div>
+          <>
+            <Typography variant="h3" color="success.main" sx={{ mb: 1 }}>✓ Paired</Typography>
+            <Typography>{state.label} is now linked. Redirecting…</Typography>
+          </>
         )}
         {state.kind === 'error' && (
-          <div>
-            <h2 style={{ color: 'var(--danger)' }}>Pair failed</h2>
-            <p>{state.message}</p>
-            <button onClick={() => setState({ kind: 'choose' })} style={{ marginTop: 16 }}>Try again</button>
-          </div>
+          <>
+            <Alert severity="error" sx={{ mb: 2, textAlign: 'left' }}>{state.message}</Alert>
+            <Button variant="text" onClick={() => setState({ kind: 'choose' })}>Try again</Button>
+          </>
         )}
-      </div>
-    </Chrome>
+      </Box>
+    </AppShell>
   );
 }
