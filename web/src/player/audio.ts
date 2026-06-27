@@ -5,12 +5,15 @@ export interface AudioSinkOptions {
 
 export class AudioSink {
   public readonly ctx: AudioContext;
-  private readonly decoder: AudioDecoder;
-  private readonly sampleRate: number;
-  private readonly channelCount: number;
   public worklet: AudioWorkletNode | null = null;
+  private gain: GainNode | null = null;
+  private decoder: AudioDecoder;
+  private sampleRate: number;
+  private channelCount: number;
   private startedAt: number | null = null;
   private framesPlayed = 0;
+  private currentVolume = 1;
+  private muted = false;
 
   constructor(opts: AudioSinkOptions) {
     this.sampleRate = opts.config.sampleRate;
@@ -40,20 +43,44 @@ export class AudioSink {
     this.worklet.port.onmessage = (e) => {
       if (e.data?.type === 'progress') this.framesPlayed = e.data.framesPlayed;
     };
-    this.worklet.connect(this.ctx.destination);
+    this.gain = this.ctx.createGain();
+    this.gain.gain.value = this.muted ? 0 : this.currentVolume;
+    this.worklet.connect(this.gain);
+    this.gain.connect(this.ctx.destination);
     await this.ctx.resume();
     this.startedAt = this.ctx.currentTime;
   }
 
   stop(): void {
     this.worklet?.disconnect();
+    this.gain?.disconnect();
     this.worklet = null;
+    this.gain = null;
     if (this.decoder.state !== 'closed') this.decoder.close();
     void this.ctx.close();
   }
 
   currentTime(): number {
     return this.framesPlayed / this.sampleRate;
+  }
+
+  setVolume(v: number): void {
+    const clamped = Math.max(0, Math.min(1, v));
+    this.currentVolume = clamped;
+    if (this.gain && !this.muted) this.gain.gain.value = clamped;
+  }
+
+  getVolume(): number {
+    return this.currentVolume;
+  }
+
+  setMuted(m: boolean): void {
+    this.muted = m;
+    if (this.gain) this.gain.gain.value = m ? 0 : this.currentVolume;
+  }
+
+  isMuted(): boolean {
+    return this.muted;
   }
 
   private onData(data: AudioData): void {
@@ -64,7 +91,7 @@ export class AudioSink {
       data.copyTo(buf, { planeIndex: c, format: 'f32-planar' });
       channels.push(buf);
     }
-    (channels as any).offset = 0;
+    (channels as unknown as { offset: number }).offset = 0;
     this.worklet.port.postMessage({ type: 'samples', channels });
     data.close();
   }
