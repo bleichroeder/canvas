@@ -286,10 +286,14 @@ export function Player({ source, id }: Props) {
   }
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: '#000',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
+    <div
+      onClick={() => { if (!errMsg) void onPlayPause(); }}
+      style={{
+        position: 'fixed', inset: 0, background: '#000',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer',
+      }}
+    >
       <canvas
         ref={canvasRef}
         style={{ maxWidth: '100vw', maxHeight: '100vh', display: 'block' }}
