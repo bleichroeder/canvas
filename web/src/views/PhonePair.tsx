@@ -37,39 +37,12 @@ async function plexPollPin(id: number): Promise<PlexPin> {
   return res.json();
 }
 
-interface PlexResource {
+interface ResolvedServer {
   name: string;
   clientIdentifier: string;
-  product: string;
-  provides: string;
-  connections: { uri: string; local: boolean; relay: boolean; https: boolean }[];
-}
-
-function isPrivatePlexUri(uri: string): boolean {
-  // plex.direct hostnames encode the IPv4 address: "10-0-15-100.<hash>.plex.direct"
-  const m = uri.match(/\/\/(\d{1,3})-(\d{1,3})-(\d{1,3})-(\d{1,3})\./);
-  if (!m) return false;
-  const a = Number(m[1]);
-  const b = Number(m[2]);
-  if (a === 10) return true;
-  if (a === 127) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 169 && b === 254) return true;
-  return false;
-}
-
-async function plexListServers(authToken: string): Promise<PlexResource[]> {
-  const res = await fetch('https://plex.tv/api/v2/resources?includeHttps=1', {
-    headers: {
-      Accept: 'application/json',
-      'X-Plex-Token': authToken,
-      'X-Plex-Client-Identifier': plexClientId(),
-    },
-  });
-  if (!res.ok) throw new Error(`plex.tv GET /resources failed: ${res.status}`);
-  const all = await res.json() as PlexResource[];
-  return all.filter((r) => r.provides.split(',').includes('server'));
+  baseUrl: string;
+  accessToken: string;
+  publiclyReachable: boolean;
 }
 
 export function PhonePair() {
@@ -80,7 +53,7 @@ export function PhonePair() {
   const [stage, setStage] = useState<
     | { kind: 'enter-code' }
     | { kind: 'plex-pin'; pin: PlexPin }
-    | { kind: 'plex-servers'; authToken: string; servers: PlexResource[] }
+    | { kind: 'plex-servers'; servers: ResolvedServer[] }
     | { kind: 'done' }
     | { kind: 'error'; message: string }
   >({ kind: 'enter-code' });
@@ -97,8 +70,10 @@ export function PhonePair() {
         await new Promise((r) => setTimeout(r, 2000));
         const polled = await plexPollPin(pin.id);
         if (polled.authToken) {
-          const servers = await plexListServers(polled.authToken);
-          setStage({ kind: 'plex-servers', authToken: polled.authToken, servers });
+          // Worker calls plex.tv/resources from CF edge — sees the right
+          // publicly-reachable connection regardless of this device's network.
+          const { servers } = await api.pairPlexServers(polled.authToken, plexClientId());
+          setStage({ kind: 'plex-servers', servers });
           return;
         }
       }
@@ -108,22 +83,14 @@ export function PhonePair() {
     }
   }
 
-  async function approveWithServer(authToken: string, server: PlexResource) {
+  async function approveWithServer(server: ResolvedServer) {
     try {
-      // Prefer a publicly-routable https connection. Plex's `local` flag is
-      // computed per-request (it's "local from the requester's network"), so a
-      // user pairing from inside their own LAN sees their public connection
-      // flagged local too. Parse the IP out of the plex.direct hostname instead
-      // and pick the first non-RFC1918 https connection.
-      const conn = server.connections.find((c) => c.https && !isPrivatePlexUri(c.uri))
-        ?? server.connections.find((c) => c.https)
-        ?? server.connections[0];
-      if (!conn) throw new Error('No connection for this Plex server');
+      if (!server.baseUrl) throw new Error('No connection URL for this server');
       await api.pairApprove({
         code,
         type: 'plex',
-        baseUrl: conn.uri,
-        token: authToken,
+        baseUrl: server.baseUrl,
+        token: server.accessToken,
         label: server.name,
       });
       setStage({ kind: 'done' });
@@ -165,10 +132,15 @@ export function PhonePair() {
           {stage.servers.map((s) => (
             <button
               key={s.clientIdentifier}
-              onClick={() => approveWithServer(stage.authToken, s)}
-              style={{ display: 'block', width: '100%', padding: 14, marginBottom: 8, textAlign: 'left' }}
+              onClick={() => approveWithServer(s)}
+              style={{
+                display: 'block', width: '100%', padding: 14, marginBottom: 8, textAlign: 'left',
+                opacity: s.publiclyReachable ? 1 : 0.6,
+              }}
+              title={s.publiclyReachable ? '' : 'No publicly-reachable connection — may fail'}
             >
               {s.name}
+              {!s.publiclyReachable && <span style={{ marginLeft: 8, fontSize: 12, color: '#c33' }}>(no public access)</span>}
             </button>
           ))}
         </div>

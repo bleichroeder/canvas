@@ -58,4 +58,17 @@ export const api = {
   pairApprove: (payload: { code: string; type: StoredSource['type']; baseUrl: string; token: string; label: string }) =>
     request<void>('/api/pair/approve', { method: 'POST', body: JSON.stringify(payload) }),
   pairDelete: (code: string) => request<void>(`/api/pair/${encodeURIComponent(code)}`, { method: 'DELETE' }),
+  pairPlexServers: (authToken: string, clientId: string) =>
+    request<{
+      servers: {
+        name: string;
+        clientIdentifier: string;
+        baseUrl: string;
+        accessToken: string;
+        publiclyReachable: boolean;
+      }[];
+    }>('/api/pair/plex-servers', {
+      method: 'POST',
+      body: JSON.stringify({ authToken, clientId }),
+    }),
 };

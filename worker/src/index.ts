@@ -1,5 +1,6 @@
 import { corsHeaders, withCors } from './cors';
 import { handlePairStart, handlePairPoll, handlePairApprove, handlePairDelete } from './routes/pair';
+import { handlePairPlexServers } from './routes/pair-plex-servers';
 import { handleHome } from './routes/home';
 import { handleSearch } from './routes/search';
 import { handleLibrary } from './routes/library';
@@ -36,6 +37,7 @@ async function route(req: Request, env: Env): Promise<Response> {
   if (url.pathname === '/api/pair/start' && req.method === 'POST') return handlePairStart(req, env.KV);
   if (url.pathname === '/api/pair/poll' && req.method === 'POST') return handlePairPoll(req, env.KV);
   if (url.pathname === '/api/pair/approve' && req.method === 'POST') return handlePairApprove(req, env.KV);
+  if (url.pathname === '/api/pair/plex-servers' && req.method === 'POST') return handlePairPlexServers(req);
   const delMatch = url.pathname.match(/^\/api\/pair\/([A-Z0-9-]+)$/);
   if (delMatch && req.method === 'DELETE') return handlePairDelete(req, env.KV, delMatch[1]!);
 
