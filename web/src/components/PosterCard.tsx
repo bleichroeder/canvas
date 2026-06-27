@@ -1,4 +1,8 @@
-import { Link } from '../router';
+import Card from '@mui/material/Card';
+import CardActionArea from '@mui/material/CardActionArea';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import { navigate } from '../router';
 import type { Item } from '../types';
 
 export interface PosterCardProps {
@@ -14,22 +18,38 @@ export function PosterCard({ item, source, width = 180 }: PosterCardProps) {
     : `/item/${source}/${item.id}`;
   const aspectRatio = item.type === 'episode' ? 16 / 9 : 2 / 3;
   return (
-    <Link to={href} style={{ display: 'block', flexShrink: 0, width }}>
-      <div style={{
-        width,
-        aspectRatio: String(aspectRatio),
-        background: 'var(--row)',
-        borderRadius: 8,
-        overflow: 'hidden',
-        backgroundImage: item.poster ? `url(${item.poster})` : undefined,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }} />
-      <div style={{ marginTop: 8, color: 'var(--fg)', fontSize: 14, fontWeight: 500,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {item.title}
-      </div>
-      {item.year ? <div style={{ fontSize: 12, color: 'var(--muted)' }}>{item.year}</div> : null}
-    </Link>
+    <Card sx={{ flexShrink: 0, width, backgroundColor: 'transparent', border: 'none' }}>
+      <CardActionArea onClick={() => navigate(href)} sx={{ borderRadius: 1 }}>
+        <Box
+          sx={{
+            width,
+            aspectRatio: String(aspectRatio),
+            backgroundColor: 'background.paper',
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'divider',
+            backgroundImage: item.poster ? `url(${item.poster})` : undefined,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <Typography
+          variant="body2"
+          sx={{
+            mt: 1,
+            fontWeight: 500,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            color: 'text.primary',
+          }}
+        >
+          {item.title}
+        </Typography>
+        {item.year ? (
+          <Typography variant="caption" color="text.secondary">{item.year}</Typography>
+        ) : null}
+      </CardActionArea>
+    </Card>
   );
 }
