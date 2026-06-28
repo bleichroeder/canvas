@@ -31,8 +31,14 @@ import type { HomeRow, Item, ItemDetail, BrowseResult, PlayResolution, SourceHom
 export const api = {
   home: () => request<{ rows: (HomeRow & { source: string })[]; errors: { source: string; status: number; message: string }[]; libraryCounts: Record<string, number> }>('/api/home'),
   search: (q: string) => request<{ hits: (Item & { source: string })[]; errors: unknown[] }>(`/api/search?q=${encodeURIComponent(q)}`),
-  library: (srcKey: string, libId?: string, path?: string) => {
-    const qs = path ? `?path=${encodeURIComponent(path)}` : '';
+  library: (srcKey: string, libId?: string, path?: string, page?: { offset: number; limit: number }) => {
+    const params = new URLSearchParams();
+    if (path) params.set('path', path);
+    if (page) {
+      params.set('offset', String(page.offset));
+      params.set('limit', String(page.limit));
+    }
+    const qs = params.toString() ? `?${params.toString()}` : '';
     const lib = libId ? `/${encodeURIComponent(libId)}` : '';
     return request<BrowseResult>(`/api/library/${encodeURIComponent(srcKey)}${lib}${qs}`);
   },

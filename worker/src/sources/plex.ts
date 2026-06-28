@@ -53,7 +53,7 @@ export const plexAdapter: SourceAdapter = {
     return items;
   },
 
-  async library(ctx: SourceContext, libraryId?: string): Promise<BrowseResult> {
+  async library(ctx: SourceContext, libraryId?: string, _path?: string, page?: { offset: number; limit: number }): Promise<BrowseResult> {
     if (!libraryId) {
       // List sections as folder items.
       const sections = await plexFetch<MediaContainer<PlexSection>>(ctx, '/library/sections');
@@ -62,21 +62,31 @@ export const plexAdapter: SourceAdapter = {
         type: 'folder',
         title: s.title,
       }));
-      return { breadcrumbs: [{ name: 'Libraries' }], items };
+      return { breadcrumbs: [{ name: 'Libraries' }], items, totalSize: items.length };
     }
-    // Browse one section.
-    const all = await plexFetch<MediaContainer<PlexMetadata & { librarySectionTitle?: string }>>(
+    // Browse one section, paged.
+    const offset = page?.offset ?? 0;
+    const limit = page?.limit ?? 60;
+    const params = new URLSearchParams({
+      'X-Plex-Container-Start': String(offset),
+      'X-Plex-Container-Size': String(limit),
+    });
+    const all = await plexFetch<MediaContainer<PlexMetadata & { librarySectionTitle?: string }> & {
+      MediaContainer: { totalSize?: number };
+    }>(
       ctx,
-      `/library/sections/${encodeURIComponent(libraryId)}/all?X-Plex-Container-Size=200`,
+      `/library/sections/${encodeURIComponent(libraryId)}/all?${params.toString()}`,
     );
     const items = (all.MediaContainer.Metadata ?? []).map((m) => mapMetadata(ctx, m));
     const sectionTitle = all.MediaContainer.Metadata?.[0]?.librarySectionTitle ?? 'Library';
+    const totalSize = all.MediaContainer.totalSize ?? items.length;
     return {
       breadcrumbs: [
         { name: 'Libraries' },
         { name: sectionTitle, libraryId },
       ],
       items,
+      totalSize,
     };
   },
 

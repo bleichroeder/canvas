@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import Skeleton from '@mui/material/Skeleton';
+import CircularProgress from '@mui/material/CircularProgress';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import { api } from '../api';
 import { navigate } from '../router';
@@ -10,19 +11,30 @@ import { AppShell } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { PosterCard } from '../components/PosterCard';
 import { setLibraryName } from '../storage';
-import type { BrowseResult } from '../types';
+import type { Item } from '../types';
 
 interface Props {
   source: string;
   libraryId?: string;
 }
 
+const PAGE_SIZE = 60;
+
+type State =
+  | { kind: 'loading' }
+  | {
+      kind: 'ok';
+      items: Item[];
+      totalSize: number;
+      breadcrumbs: { name: string; libraryId?: string; path?: string }[];
+      loadingMore: boolean;
+    }
+  | { kind: 'error'; message: string };
+
 export function Library({ source, libraryId }: Props) {
-  const [state, setState] = useState<
-    | { kind: 'loading' }
-    | { kind: 'ok'; data: BrowseResult }
-    | { kind: 'error'; message: string }
-  >({ kind: 'loading' });
+  const [state, setState] = useState<State>({ kind: 'loading' });
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     if (!libraryId) {
@@ -30,18 +42,66 @@ export function Library({ source, libraryId }: Props) {
       return;
     }
     setState({ kind: 'loading' });
-    api.library(source, libraryId).then(
+    inFlightRef.current = false;
+    api.library(source, libraryId, undefined, { offset: 0, limit: PAGE_SIZE }).then(
       (data) => {
-        // Cache library name for breadcrumbs on subsequent visits.
         const last = data.breadcrumbs[data.breadcrumbs.length - 1];
         if (libraryId && last && last.libraryId === libraryId && last.name) {
           setLibraryName(source, libraryId, last.name);
         }
-        setState({ kind: 'ok', data });
+        setState({
+          kind: 'ok',
+          items: data.items,
+          totalSize: data.totalSize ?? data.items.length,
+          breadcrumbs: data.breadcrumbs,
+          loadingMore: false,
+        });
       },
       (e: Error) => setState({ kind: 'error', message: e.message }),
     );
   }, [source, libraryId]);
+
+  // Infinite-scroll loader: fetch next page when sentinel approaches viewport.
+  useEffect(() => {
+    if (state.kind !== 'ok') return;
+    if (state.items.length >= state.totalSize) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        if (inFlightRef.current) return;
+        if (state.kind !== 'ok') return;
+        if (state.items.length >= state.totalSize) return;
+
+        inFlightRef.current = true;
+        setState((s) => (s.kind === 'ok' ? { ...s, loadingMore: true } : s));
+        api.library(source, libraryId, undefined, { offset: state.items.length, limit: PAGE_SIZE })
+          .then((data) => {
+            setState((s) => {
+              if (s.kind !== 'ok') return s;
+              return {
+                ...s,
+                items: [...s.items, ...data.items],
+                totalSize: data.totalSize ?? s.totalSize,
+                loadingMore: false,
+              };
+            });
+          })
+          .catch(() => {
+            setState((s) => (s.kind === 'ok' ? { ...s, loadingMore: false } : s));
+          })
+          .finally(() => {
+            inFlightRef.current = false;
+          });
+      },
+      { rootMargin: '400px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [source, libraryId, state]);
 
   if (!libraryId) return null;
 
@@ -69,9 +129,9 @@ export function Library({ source, libraryId }: Props) {
           <>
             <Box sx={{ mb: 3 }}>
               <Typography variant="h1">
-                {state.data.breadcrumbs[state.data.breadcrumbs.length - 1]?.name ?? 'Library'}
+                {state.breadcrumbs[state.breadcrumbs.length - 1]?.name ?? 'Library'}
                 <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1.5 }}>
-                  · {state.data.items.length} {state.data.items.length === 1 ? 'item' : 'items'}
+                  · {state.totalSize} {state.totalSize === 1 ? 'item' : 'items'}
                 </Typography>
               </Typography>
             </Box>
@@ -82,17 +142,23 @@ export function Library({ source, libraryId }: Props) {
                 gap: 2.5,
               }}
             >
-              {state.data.items.map((it) => (
+              {state.items.map((it) => (
                 <PosterCard key={it.id} item={it} source={source} />
               ))}
             </Box>
-            {state.data.items.length === 0 && (
+            {state.totalSize === 0 && (
               <EmptyState
                 icon={<InboxOutlinedIcon />}
                 title="This library is empty"
                 actionLabel="Back to source"
                 onAction={() => navigate(`/source/${source}`)}
               />
+            )}
+            {/* Sentinel + loading indicator for infinite scroll. */}
+            {state.items.length < state.totalSize && (
+              <Box ref={sentinelRef} sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                {state.loadingMore && <CircularProgress size={28} />}
+              </Box>
             )}
           </>
         )}

@@ -39,6 +39,7 @@ export interface HomeRow {
 export interface BrowseResult {
   breadcrumbs: { name: string; libraryId?: string; path?: string }[];
   items: Item[];
+  totalSize?: number;
 }
 
 export interface PlayResolution {

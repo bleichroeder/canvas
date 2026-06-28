@@ -24,20 +24,33 @@ export function PosterCard({ item, source, width = 180, showSourceBadge = false 
   return (
     <Card sx={{ flexShrink: 0, width, backgroundColor: 'transparent', border: 'none' }}>
       <CardActionArea onClick={() => navigate(href)} sx={{ borderRadius: 1 }}>
-        <Box sx={{ position: 'relative', width }}>
-          <Box
-            sx={{
-              width,
-              aspectRatio: String(aspectRatio),
-              backgroundColor: 'background.paper',
-              borderRadius: 1,
-              border: '1px solid',
-              borderColor: 'divider',
-              backgroundImage: item.poster ? `url(${item.poster})` : undefined,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-            }}
-          />
+        <Box
+          sx={{
+            position: 'relative',
+            width,
+            aspectRatio: String(aspectRatio),
+            backgroundColor: 'background.paper',
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'divider',
+            overflow: 'hidden',
+          }}
+        >
+          {item.poster && (
+            <Box
+              component="img"
+              src={item.poster}
+              loading="lazy"
+              decoding="async"
+              alt=""
+              sx={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+              }}
+            />
+          )}
           {src && (
             <Box
               sx={{

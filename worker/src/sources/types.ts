@@ -44,6 +44,12 @@ export interface HomeRow {
 export interface BrowseResult {
   breadcrumbs: { name: string; libraryId?: string; path?: string }[];
   items: Item[];
+  totalSize?: number;
+}
+
+export interface BrowsePage {
+  offset: number;
+  limit: number;
 }
 
 export interface AudioTrack { id: string; language?: string; label?: string }
@@ -67,7 +73,7 @@ export interface SourceAdapter {
   startPair(code: string): Promise<{ pairUrl: string; expiresAt: number }>;
   home(ctx: SourceContext): Promise<HomeRow[]>;
   search(ctx: SourceContext, query: string): Promise<Item[]>;
-  library(ctx: SourceContext, libraryId?: string, path?: string): Promise<BrowseResult>;
+  library(ctx: SourceContext, libraryId?: string, path?: string, page?: BrowsePage): Promise<BrowseResult>;
   item(ctx: SourceContext, id: string): Promise<ItemDetail>;
   /**
    * Resolve a playable URL.
