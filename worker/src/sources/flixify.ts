@@ -61,7 +61,7 @@ export function harvestCookies(res: Response, auth: FlixifyAuth): FlixifyAuth {
     const value = pair.slice(eq + 1).trim();
     if (name === 'pip' || name === 'session' || name === 'profile_id') {
       if (!next) next = { ...auth };
-      (next as Record<string, string | undefined>)[name] = value;
+      (next as unknown as Record<string, string>)[name] = value;
     }
   }
   return next ?? auth;
@@ -175,11 +175,6 @@ function mapCollectionItem(auth: FlixifyAuth, m: FlixifyListItem & { image?: str
     poster: imageUrl(auth, imageRel),
     librarySectionType: 'movie',
   };
-}
-
-function log(msg: string): void {
-  // Mirror Plex adapter's logging style (no-op for now; console.* works in CF).
-  console.log(`FLIXIFY: ${msg}`);
 }
 
 interface FlixifyResp<T> {
