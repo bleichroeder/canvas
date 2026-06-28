@@ -119,7 +119,7 @@ export function Player({ source, id }: Props) {
           url: resolution.url,
           onReady: (info) => {
             if (cancelled) return;
-            if (!info.videoConfig) { setErrMsg('No video track'); return; }
+            if (!info.videoConfig) { setErrMsg('No video track'); setReseeking(false); return; }
             const video = new VideoSink({
               canvas,
               config: info.videoConfig,

@@ -38,6 +38,7 @@ export function Pair() {
     QRCode.toString(url, { type: 'svg', errorCorrectionLevel: 'M', margin: 2, width: 280 })
       .then(setQrSvg)
       .catch(() => setQrSvg(''));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.kind, state.kind === 'pairing' ? state.code : null, state.kind === 'pairing' ? state.type : null]);
 
   async function startPair(type: SourceType) {
