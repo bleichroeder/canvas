@@ -9,6 +9,7 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import Avatar from '@mui/material/Avatar';
 import LinearProgress from '@mui/material/LinearProgress';
+import Skeleton from '@mui/material/Skeleton';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StarIcon from '@mui/icons-material/Star';
 import { api } from '../api';
@@ -55,7 +56,24 @@ export function ItemDetailView({ source, id }: Props) {
   }, [source, id]);
 
   if (state.kind === 'loading') {
-    return <AppShell><Typography sx={{ p: 2.5 }} color="text.secondary">Loading…</Typography></AppShell>;
+    return (
+      <AppShell>
+        <Skeleton variant="rectangular" height={320} />
+        <Box sx={{ px: 2.5, mt: -10, position: 'relative' }}>
+          <Box sx={{ display: 'flex', gap: 3 }}>
+            <Skeleton variant="rectangular" width={200} height={300} sx={{ borderRadius: 1, flexShrink: 0 }} />
+            <Box sx={{ flex: 1, pt: 7.5 }}>
+              <Skeleton variant="text" width="60%" height={56} sx={{ mb: 1 }} />
+              <Skeleton variant="text" width="40%" height={24} sx={{ mb: 2 }} />
+              <Skeleton variant="rounded" width={180} height={42} sx={{ mb: 2 }} />
+              <Skeleton variant="text" width="100%" />
+              <Skeleton variant="text" width="100%" />
+              <Skeleton variant="text" width="80%" />
+            </Box>
+          </Box>
+        </Box>
+      </AppShell>
+    );
   }
   if (state.kind === 'error') {
     return <AppShell><Alert severity="error" sx={{ m: 2.5 }}>{state.message}</Alert></AppShell>;

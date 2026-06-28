@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
+import Skeleton from '@mui/material/Skeleton';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
@@ -34,7 +35,24 @@ export function SourceHome({ source }: Props) {
     <AppShell>
       <Box sx={{ py: 2.5 }}>
         {state.kind === 'loading' && (
-          <Typography color="text.secondary" sx={{ px: 2.5 }}>Loading…</Typography>
+          <>
+            <Skeleton variant="text" width={240} height={48} sx={{ mx: 2.5, mb: 3 }} />
+            {[1, 2].map((i) => (
+              <Box key={i} sx={{ mb: 4 }}>
+                <Skeleton variant="text" width={180} height={28} sx={{ ml: 2.5, mb: 1.5 }} />
+                <Box sx={{ display: 'flex', gap: 1.5, px: 2.5, overflow: 'hidden' }}>
+                  {[1, 2, 3, 4].map((j) => (
+                    <Skeleton key={j} variant="rectangular" width={180} height={270} sx={{ flexShrink: 0, borderRadius: 1 }} />
+                  ))}
+                </Box>
+              </Box>
+            ))}
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 200px)', gap: 2.5, px: 2.5 }}>
+              {[1, 2, 3, 4].map((j) => (
+                <Skeleton key={j} variant="rectangular" height={120} sx={{ borderRadius: 1 }} />
+              ))}
+            </Box>
+          </>
         )}
         {state.kind === 'error' && (
           <Alert severity="error" sx={{ mx: 2.5 }}>Error: {state.message}</Alert>

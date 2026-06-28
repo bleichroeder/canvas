@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
+import Skeleton from '@mui/material/Skeleton';
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import { api } from '../api';
 import { navigate } from '../router';
@@ -47,7 +48,22 @@ export function Library({ source, libraryId }: Props) {
   return (
     <AppShell>
       <Box sx={{ p: 2.5 }}>
-        {state.kind === 'loading' && <Typography color="text.secondary">Loading…</Typography>}
+        {state.kind === 'loading' && (
+          <>
+            <Skeleton variant="text" width={300} height={48} sx={{ mb: 3 }} />
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, 180px)',
+                gap: 2.5,
+              }}
+            >
+              {[...Array(12)].map((_, i) => (
+                <Skeleton key={i} variant="rectangular" width={180} height={270} sx={{ borderRadius: 1 }} />
+              ))}
+            </Box>
+          </>
+        )}
         {state.kind === 'error' && <Alert severity="error">Error: {state.message}</Alert>}
         {state.kind === 'ok' && (
           <>

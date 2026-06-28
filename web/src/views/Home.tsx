@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
+import Skeleton from '@mui/material/Skeleton';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import LibraryAddOutlinedIcon from '@mui/icons-material/LibraryAddOutlined';
 import { api } from '../api';
@@ -61,7 +62,21 @@ export function Home() {
     <AppShell>
       <Box sx={{ py: 2.5 }}>
         {state.kind === 'loading' && (
-          <Typography color="text.secondary" sx={{ px: 2.5 }}>Loading…</Typography>
+          <>
+            <Box sx={{ mx: 2.5, mb: 3 }}>
+              <Skeleton variant="rounded" height={320} />
+            </Box>
+            {[1, 2].map((i) => (
+              <Box key={i} sx={{ mb: 4 }}>
+                <Skeleton variant="text" width={180} height={28} sx={{ ml: 2.5, mb: 1.5 }} />
+                <Box sx={{ display: 'flex', gap: 1.5, px: 2.5, overflow: 'hidden' }}>
+                  {[1, 2, 3, 4, 5].map((j) => (
+                    <Skeleton key={j} variant="rectangular" width={180} height={270} sx={{ flexShrink: 0, borderRadius: 1 }} />
+                  ))}
+                </Box>
+              </Box>
+            ))}
+          </>
         )}
         {state.kind === 'empty' && (
           <EmptyState
