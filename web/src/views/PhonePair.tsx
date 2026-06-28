@@ -67,9 +67,25 @@ export function PhonePair() {
   >({ kind: 'enter-code' });
 
   const signInBtnRef = useRef<HTMLButtonElement>(null);
-  const isFlixifyFlow = typeFromUrl === 'flixify';
-  const isPlexFlow = typeFromUrl === 'plex';
+  const [detectedType, setDetectedType] = useState<string>(typeFromUrl);
+  const isFlixifyFlow = detectedType === 'flixify';
+  const isPlexFlow = detectedType === 'plex';
   const prefilled = stripPin(codeFromUrl).length === 6 && (isPlexFlow || isFlixifyFlow);
+
+  // When the URL didn't carry a type but the user types a complete code,
+  // ask the worker which adapter started this pair session so we can label
+  // the button correctly and avoid the wrong-flow dispatch.
+  useEffect(() => {
+    if (typeFromUrl) { setDetectedType(typeFromUrl); return; }
+    if (stripPin(code).length !== 6) { setDetectedType(''); return; }
+    let cancelled = false;
+    api.pairPoll(code).then((poll) => {
+      if (cancelled) return;
+      if (poll.status === 'expired') return;
+      if (poll.sourceType) setDetectedType(poll.sourceType);
+    }).catch(() => { /* silent — fall back to default on click */ });
+    return () => { cancelled = true; };
+  }, [code, typeFromUrl]);
 
   useEffect(() => {
     // When arriving from a QR scan with a valid pre-filled code, draw attention

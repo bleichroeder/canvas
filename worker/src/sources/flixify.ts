@@ -116,11 +116,32 @@ function flixifyTypeToItemType(t: string): Item['type'] {
   }
 }
 
+/**
+ * Encode the Flixify id + url path into an opaque canvas Item.id so the
+ * adapter can recover the navigation URL on later .item() calls. Format:
+ * `<id>~<url-encoded path>`. The `~` is URL-safe and absent from both
+ * Flixify ids (ObjectIDs / digits) and paths.
+ */
+export function encodeFlixifyItemId(id: string | number, url: string | undefined): string {
+  const idStr = String(id);
+  if (!url) return idStr;
+  return `${idStr}~${encodeURIComponent(url)}`;
+}
+
+export function decodeFlixifyItemId(combined: string): { id: string; url?: string } {
+  const tilde = combined.indexOf('~');
+  if (tilde < 0) return { id: combined };
+  return {
+    id: combined.slice(0, tilde),
+    url: decodeURIComponent(combined.slice(tilde + 1)),
+  };
+}
+
 function mapItem(auth: FlixifyAuth, m: FlixifyMetadata): Item {
   const type = flixifyTypeToItemType(m.type);
   const isEpisode = type === 'episode';
   return {
-    id: String(m.id),
+    id: encodeFlixifyItemId(m.id, m.url),
     type,
     title: m.title,
     year: m.year,
@@ -156,9 +177,14 @@ export async function flixifyGet<T>(
   params?: Record<string, string | number>,
 ): Promise<FlixifyResp<T>> {
   const auth = parseFlixifyAuth(ctx.token);
-  const url = new URL(FLIXIFY_API_BASE + path);
+  // Path may already start with the FLIXIFY_API_BASE path component (e.g.
+  // /movies/123) or be an absolute path the Flixify home response gave us.
+  const url = new URL(path.startsWith('http') ? path : FLIXIFY_API_BASE + path);
   if (params) for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   url.searchParams.set('_', String(Date.now()));
+  // Flixify uses 302s to canonicalize content URLs (e.g. /shows/<id> →
+  // /shows/<slug>); we follow those automatically. Only redirects landing
+  // on /login or /logout indicate auth loss — checked via res.url below.
   const res = await fetch(url.toString(), {
     method: 'GET',
     headers: {
@@ -166,13 +192,12 @@ export async function flixifyGet<T>(
       'User-Agent': USER_AGENT,
       'Accept': 'application/json',
     },
-    redirect: 'manual',
   });
   const nextAuth = harvestCookies(res, auth);
+  if (res.url.includes('/login') || res.url.includes('/logout')) {
+    throw new Error(`Flixify auth lost (redirected to ${res.url})`);
+  }
   if (!res.ok) {
-    if (res.status === 302) {
-      throw new Error(`Flixify auth lost (302) on ${path}`);
-    }
     throw new Error(`Flixify ${res.status} ${path}`);
   }
   let data: T | null = null;
@@ -263,19 +288,28 @@ export const flixifyAdapter: SourceAdapter = {
 
   async library(ctx: SourceContext, libraryId?: string, _path?: string, page?: { offset: number; limit: number }): Promise<BrowseResult> {
     const auth = parseFlixifyAuth(ctx.token);
+    // Canonical library sections (matches the Flixify sidebar). Each entry's
+    // url maps to a server endpoint; we encode it into the libraryId so the
+    // browse step can recover it without a second round-trip.
+    const SECTIONS: Array<{ url: string; title: string; type: string }> = [
+      { url: '/movies',                  title: 'Movies',        type: 'movie' },
+      { url: '/shows',                   title: 'TV Series',     type: 'show' },
+      { url: '/latest/episodes',         title: 'New Episodes',  type: 'show' },
+      { url: '/collections',             title: 'Collections',   type: 'movie' },
+      { url: '/account/favorites',       title: 'Favorites',     type: 'movie' },
+      { url: '/account/playlist/wl',     title: 'Watch Later',   type: 'movie' },
+    ];
     if (!libraryId) {
-      const homeResp = await flixifyGet<KodiHomeResp>(ctx, '/api/kodi/home');
-      const sections = (homeResp.data?.items ?? [])
-        .filter((l) => l.act === 'items' && l.url)
-        .map<Item>((l) => ({
-          id: encodeURIComponent(l.url!),
-          type: 'folder',
-          title: l.title ?? l.url!,
-          librarySectionType: 'movie',  // generic; Flixify mixes types per section
-        }));
+      const sections: Item[] = SECTIONS.map((s) => ({
+        id: encodeURIComponent(s.url),
+        type: 'folder',
+        title: s.title,
+        librarySectionType: s.type,
+      }));
       return { breadcrumbs: [{ name: 'Libraries' }], items: sections, totalSize: sections.length };
     }
     const sectionUrl = decodeURIComponent(libraryId);
+    const matched = SECTIONS.find((s) => s.url === sectionUrl);
     const offset = page?.offset ?? 0;
     const limit = page?.limit ?? 60;
     const p = Math.floor(offset / limit) + 1;
@@ -284,7 +318,7 @@ export const flixifyAdapter: SourceAdapter = {
     });
     const items = (resp.data?.items ?? []).map((m) => mapItem(auth, m));
     return {
-      breadcrumbs: [{ name: 'Libraries' }, { name: sectionUrl, libraryId }],
+      breadcrumbs: [{ name: 'Libraries' }, { name: matched?.title ?? sectionUrl, libraryId }],
       items,
       totalSize: resp.data?.total ?? items.length,
     };
@@ -292,31 +326,26 @@ export const flixifyAdapter: SourceAdapter = {
 
   async item(ctx: SourceContext, id: string): Promise<ItemDetail> {
     const auth = parseFlixifyAuth(ctx.token);
-    // Try as a movie first; on type mismatch or 404, fall through to show.
-    let movieResp: FlixifyResp<{ item: FlixifyMetadata }> | null = null;
-    try {
-      movieResp = await flixifyGet<{ item: FlixifyMetadata }>(ctx, `/movies/${encodeURIComponent(id)}`, {
-        skip_redirect: '1', sub: '1', no_media: '1', no_subs: '1',
-      });
-    } catch (e) {
-      log(`movies/${id} fetch failed: ${(e as Error).message}`);
-    }
-    if (movieResp?.data?.item && movieResp.data.item.type === 'movie') {
-      const m = movieResp.data.item;
-      const base = mapItem(auth, m);
+    const { id: realId, url: storedUrl } = decodeFlixifyItemId(id);
+    // If we have the stored navigation URL from a previous list response,
+    // use it; that's the canonical path. Otherwise default to /movies/{id}.
+    const primaryPath = storedUrl ?? `/movies/${encodeURIComponent(realId)}`;
+    const detailResp = await flixifyGet<{ item: FlixifyMetadata; seasons?: FlixifyMetadata[] }>(
+      ctx, primaryPath, { skip_redirect: '1', sub: '1', no_media: '1', no_subs: '1' },
+    );
+    const fetched = detailResp.data?.item;
+    if (!fetched) throw new Error(`Flixify item ${realId} not found`);
+    if (fetched.type === 'movie') {
+      const base = mapItem(auth, fetched);
       return {
         ...base,
-        backdrop: imageUrl(auth, m.images?.preview_large),
-        synopsis: m.description,
+        backdrop: imageUrl(auth, fetched.images?.preview_large),
+        synopsis: fetched.description,
       };
     }
-    // Assume show.
-    const showResp = await flixifyGet<ShowDetailResp>(ctx, `/shows/${encodeURIComponent(id)}`, {
-      postersize: 'poster-big',
-    });
-    if (!showResp.data?.item) throw new Error(`Flixify show ${id} not found`);
-    const show = showResp.data.item;
-    const seasons = showResp.data.seasons ?? [];
+    // tvshow: fan out seasons → episodes.
+    const show = fetched;
+    const seasons = detailResp.data?.seasons ?? [];
     // Fan-out fetch each season's episodes in parallel, then flatten + sort.
     const seasonFetches = await Promise.all(seasons.map((s) =>
       s.url
@@ -348,35 +377,37 @@ export const flixifyAdapter: SourceAdapter = {
   },
 
   async resolveStream(ctx: SourceContext, id: string, fromSec?: number): Promise<PlayResolution> {
-    void fromSec;  // Flixify direct-streams are static URLs; Player handles offset via reseek.
-    const linksResp = await flixifyGet<{ media: Record<string, string> }>(ctx, `/media/links/${encodeURIComponent(id)}`);
+    void fromSec;  // Flixify streams are static URLs; Player handles offset via reseek.
+    const { id: realId, url: storedUrl } = decodeFlixifyItemId(id);
+    const linksResp = await flixifyGet<{ media: Record<string, string> }>(ctx, `/media/links/${encodeURIComponent(realId)}`);
     const media = linksResp.data?.media ?? {};
     const qualities = Object.keys(media).sort((a, b) => Number(b) - Number(a));
     if (qualities.length === 0) throw new Error('Flixify item has no playable media');
     const url = media[qualities[0]!]!;
 
-    // Duration from a follow-up metadata call (links endpoint doesn't include it).
+    // Duration from a follow-up metadata call (links endpoint doesn't carry it).
     let durationSec = 0;
     try {
-      const itemResp = await flixifyGet<{ item: FlixifyMetadata }>(ctx, `/movies/${encodeURIComponent(id)}`, {
+      const metaPath = storedUrl ?? `/movies/${encodeURIComponent(realId)}`;
+      const itemResp = await flixifyGet<{ item: FlixifyMetadata }>(ctx, metaPath, {
         skip_redirect: '1', no_media: '1', no_subs: '1',
       });
       durationSec = Number(itemResp.data?.item?.duration ?? 0);
     } catch { /* leave 0 */ }
 
-    // Subtitles via the worker proxy. We pass `path` query so the proxy
-    // assembles `https://${asset_host}${path}` server-side.
+    // Subtitles via the worker proxy. We pass `path` so the proxy assembles
+    // `https://${asset_host}${path}` server-side.
     const subtitleTracks: NonNullable<PlayResolution['subtitleTracks']> = [];
     try {
       const subsResp = await flixifyGet<{ subtitles: Record<string, Array<{ url?: string; title?: string; lang?: string }>> }>(
-        ctx, `/media/subs/${encodeURIComponent(id)}`,
+        ctx, `/media/subs/${encodeURIComponent(realId)}`,
       );
       let trackIdx = 0;
       for (const [lang, subs] of Object.entries(subsResp.data?.subtitles ?? {})) {
         for (const s of subs) {
           if (!s.url) continue;
           subtitleTracks.push({
-            id: `${id}-${lang}-${trackIdx++}`,
+            id: `${realId}-${lang}-${trackIdx++}`,
             language: lang,
             label: s.title ?? lang.toUpperCase(),
             url: `/api/subtitles?path=${encodeURIComponent(s.url)}`,
