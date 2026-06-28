@@ -2,6 +2,7 @@ import { corsHeaders, withCors } from './cors';
 import { handlePairStart, handlePairPoll, handlePairApprove, handlePairDelete } from './routes/pair';
 import { handlePairPlexServers } from './routes/pair-plex-servers';
 import { handleHome } from './routes/home';
+import { handleSourceHome } from './routes/source-home';
 import { handleSearch } from './routes/search';
 import { handleSourceStatus } from './routes/source-status';
 import { handleLibrary } from './routes/library';
@@ -46,6 +47,18 @@ async function route(req: Request, env: Env): Promise<Response> {
   if (url.pathname === '/api/home' && req.method === 'GET') return handleHome(req);
   if (url.pathname === '/api/search' && req.method === 'GET') return handleSearch(req, url);
   if (url.pathname === '/api/source-status' && req.method === 'GET') return handleSourceStatus(req, env, url);
+
+  // Source home
+  const srcHomeMatch = url.pathname === '/api/source-home';
+  if (srcHomeMatch && req.method === 'GET') {
+    const key = url.searchParams.get('key');
+    if (!key) {
+      return withCors(req, new Response(JSON.stringify({ error: 'missing key' }), {
+        status: 400, headers: { 'content-type': 'application/json' },
+      }));
+    }
+    return handleSourceHome(req, url, key);
+  }
 
   // Per-source
   const libMatch = url.pathname.match(/^\/api\/library\/([^/]+)(?:\/([^/]+))?$/);

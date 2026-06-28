@@ -7,14 +7,21 @@ export async function handleHome(req: Request): Promise<Response> {
   const sources = parseXSources(req);
   const { results, errors } = await callPerSource(sources, async (_key, src) => {
     const adapter = getAdapter(src.type);
-    return adapter.home({ baseUrl: src.baseUrl, token: src.token });
+    const ctx = { baseUrl: src.baseUrl, token: src.token };
+    const [home, libs] = await Promise.all([
+      adapter.home(ctx),
+      adapter.library(ctx).then((r) => r.items.filter((i) => i.type === 'folder').length).catch(() => 0),
+    ]);
+    return { home, libCount: libs };
   });
   const rows = Object.entries(results).flatMap(([key, rs]) =>
-    rs.map((r) => ({ ...r, source: key })),
+    rs.home.map((r) => ({ ...r, source: key })),
   );
+  const libraryCounts: Record<string, number> = {};
+  for (const [key, rs] of Object.entries(results)) libraryCounts[key] = rs.libCount;
   return withCors(
     req,
-    new Response(JSON.stringify({ rows, errors }), {
+    new Response(JSON.stringify({ rows, errors, libraryCounts }), {
       headers: { 'content-type': 'application/json' },
     }),
   );
