@@ -6,6 +6,7 @@ import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
+import QRCode from 'qrcode';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
 import { addSource, makeSourceKey } from '../storage';
@@ -29,6 +30,15 @@ const SOURCE_TYPES: Array<{ type: SourceType; label: string; available: boolean 
 
 export function Pair() {
   const [state, setState] = useState<State>({ kind: 'choose' });
+  const [qrSvg, setQrSvg] = useState<string>('');
+
+  useEffect(() => {
+    if (state.kind !== 'pairing') return;
+    const url = `${window.location.protocol}//${window.location.host}/#/pair?code=${encodeURIComponent(state.code)}&type=${state.type}`;
+    QRCode.toString(url, { type: 'svg', errorCorrectionLevel: 'M', margin: 2, width: 280 })
+      .then(setQrSvg)
+      .catch(() => setQrSvg(''));
+  }, [state.kind, state.kind === 'pairing' ? state.code : null, state.kind === 'pairing' ? state.type : null]);
 
   async function startPair(type: SourceType) {
     try {
@@ -98,22 +108,24 @@ export function Pair() {
         )}
         {state.kind === 'pairing' && (
           <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="h2" sx={{ mb: 3 }}>Pair your phone</Typography>
-            <Typography color="text.secondary" sx={{ mb: 1 }}>
-              Or enter this code on your phone at:
-            </Typography>
-            <Typography sx={{ fontSize: 18, mb: 3 }}>{window.location.host}/#/pair</Typography>
-            <Typography
-              variant="h1"
-              sx={{
-                fontSize: 80, fontWeight: 700, letterSpacing: '16px',
-                backgroundColor: 'background.paper',
-                border: '1px solid', borderColor: 'divider',
-                py: 3, px: 4, borderRadius: 2,
-                display: 'inline-block', my: 2,
-              }}
-            >
-              {state.code}
+            <Typography variant="h2" sx={{ mb: 3 }}>Scan with your phone to pair</Typography>
+            {qrSvg ? (
+              <Box
+                sx={{
+                  display: 'inline-block', p: 2.5,
+                  backgroundColor: '#ffffff',
+                  borderRadius: 2,
+                  mb: 3,
+                }}
+                dangerouslySetInnerHTML={{ __html: qrSvg }}
+              />
+            ) : (
+              <Box sx={{ width: 280, height: 280, mx: 'auto', mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CircularProgress />
+              </Box>
+            )}
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+              Or enter <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{state.code}</Box> at {window.location.host}/#/pair
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mt: 2 }}>
               <CircularProgress size={20} />
