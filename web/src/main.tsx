@@ -1,7 +1,8 @@
-import { StrictMode } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import Fade from '@mui/material/Fade';
 import { theme } from './theme';
 import { useRoute, matchRoute } from './router';
 import { Home } from './views/Home';
@@ -20,6 +21,14 @@ function NotFound() {
 
 function App() {
   const route = useRoute();
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      window.dispatchEvent(new Event('canvas:ready'));
+    }, 400);
+    return () => clearTimeout(t);
+  }, []);
+
   const routes: Array<[string, (params: Record<string, string>) => React.JSX.Element]> = [
     ['/', () => <Home />],
     ['/search', () => <SearchView />],
@@ -32,11 +41,18 @@ function App() {
     ['/settings/pair', () => <Pair />],
     ['/pair', () => <PhonePair />],
   ];
+
+  let element: React.JSX.Element = <NotFound />;
   for (const [pattern, renderFn] of routes) {
     const params = matchRoute(pattern, route.path);
-    if (params) return renderFn(params);
+    if (params) { element = renderFn(params); break; }
   }
-  return <NotFound />;
+
+  return (
+    <Fade in key={route.path} timeout={250}>
+      <div>{element}</div>
+    </Fade>
+  );
 }
 
 const root = document.getElementById('app');

@@ -5,9 +5,42 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>canvas</title>
     <link rel="stylesheet" href="/src/styles.css" />
+    <style>
+      html, body { margin: 0; padding: 0; background-color: #0e0f12; }
+      #canvas-splash {
+        position: fixed; inset: 0;
+        background-color: #0e0f12;
+        display: flex; align-items: center; justify-content: center;
+        z-index: 9999;
+        pointer-events: none;
+        transition: opacity 400ms ease-out;
+      }
+      #canvas-splash.canvas-splash-fade { opacity: 0; }
+      #canvas-splash-wordmark {
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 64px;
+        font-weight: 500;
+        letter-spacing: 8px;
+        color: #f4f5f7;
+        animation: canvas-splash-breathe 1.6s ease-in-out infinite;
+      }
+      @keyframes canvas-splash-breathe {
+        0%, 100% { opacity: 0.55; }
+        50%      { opacity: 1; }
+      }
+    </style>
   </head>
   <body>
+    <div id="canvas-splash"><div id="canvas-splash-wordmark">canvas</div></div>
     <div id="app"></div>
+    <script>
+      window.addEventListener('canvas:ready', function () {
+        var el = document.getElementById('canvas-splash');
+        if (!el) return;
+        el.classList.add('canvas-splash-fade');
+        setTimeout(function () { el.remove(); }, 500);
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
