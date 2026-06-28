@@ -4,22 +4,8 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { navigate } from '../router';
 import { getSources } from '../storage';
+import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
 import type { Item } from '../types';
-import type { StoredSource } from '../storage';
-
-const TYPE_COLOR: Record<StoredSource['type'], string> = {
-  plex: '#e5a00d',
-  jellyfin: '#aa5cc3',
-  flixify: '#cc3333',
-  generic: '#6b7280',
-};
-
-const TYPE_GLYPH: Record<StoredSource['type'], string> = {
-  plex: 'P',
-  jellyfin: 'J',
-  flixify: 'F',
-  generic: '·',
-};
 
 export interface PosterCardProps {
   item: Item;
@@ -34,7 +20,7 @@ export function PosterCard({ item, source, width = 180, showSourceBadge = false 
     ? `/lib/${source}/${item.id}`
     : `/item/${source}/${item.id}`;
   const aspectRatio = item.type === 'episode' ? 16 / 9 : 2 / 3;
-  const sourceType = showSourceBadge ? getSources()[source]?.type : undefined;
+  const src = showSourceBadge ? getSources()[source] : undefined;
   return (
     <Card sx={{ flexShrink: 0, width, backgroundColor: 'transparent', border: 'none' }}>
       <CardActionArea onClick={() => navigate(href)} sx={{ borderRadius: 1 }}>
@@ -52,24 +38,25 @@ export function PosterCard({ item, source, width = 180, showSourceBadge = false 
               backgroundPosition: 'center',
             }}
           />
-          {sourceType && (
+          {src && (
             <Box
               sx={{
                 position: 'absolute',
                 top: 6, right: 6,
-                width: 24, height: 24,
+                minWidth: 28, height: 24, px: 0.75,
                 borderRadius: 0.5,
-                backgroundColor: TYPE_COLOR[sourceType],
+                backgroundColor: SOURCE_TYPE_COLOR[src.type],
                 color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontWeight: 700,
-                fontSize: 13,
+                fontSize: 11,
+                letterSpacing: 0.5,
                 boxShadow: '0 1px 3px rgba(0,0,0,0.5)',
               }}
             >
-              {TYPE_GLYPH[sourceType]}
+              {sourceGlyph(src.label)}
             </Box>
           )}
         </Box>

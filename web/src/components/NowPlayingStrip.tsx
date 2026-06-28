@@ -15,14 +15,8 @@ import {
   getSources,
   NOW_PLAYING_EVENT,
 } from '../storage';
-import type { NowPlaying, StoredSource } from '../storage';
-
-const TYPE_COLOR: Record<StoredSource['type'], string> = {
-  plex: '#e5a00d',
-  jellyfin: '#aa5cc3',
-  flixify: '#cc3333',
-  generic: '#6b7280',
-};
+import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
+import type { NowPlaying } from '../storage';
 
 function useNowPlaying(): NowPlaying | undefined {
   const [np, setNp] = useState<NowPlaying | undefined>(getNowPlaying);
@@ -111,14 +105,14 @@ export function NowPlayingStrip() {
             {sourceType && (
               <Box
                 sx={{
-                  width: 14, height: 14, borderRadius: 0.5,
-                  backgroundColor: TYPE_COLOR[sourceType],
+                  width: 16, height: 14, borderRadius: 0.5,
+                  backgroundColor: SOURCE_TYPE_COLOR[sourceType],
                   color: '#fff',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 9, fontWeight: 700,
                 }}
               >
-                {sourceLabel[0]?.toUpperCase() ?? '·'}
+                {sourceGlyph(sourceLabel, 1)}
               </Box>
             )}
             <Typography variant="caption" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

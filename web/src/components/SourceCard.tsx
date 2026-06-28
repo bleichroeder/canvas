@@ -8,6 +8,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogActions from '@mui/material/DialogActions';
 import { api } from '../api';
+import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
 import type { StoredSource } from '../storage';
 
 export interface SourceCardProps {
@@ -17,20 +18,6 @@ export interface SourceCardProps {
   baseUrl: string;
   onUnpair(): void;
 }
-
-const TYPE_COLOR: Record<StoredSource['type'], string> = {
-  plex: '#e5a00d',
-  jellyfin: '#aa5cc3',
-  flixify: '#cc3333',
-  generic: '#6b7280',
-};
-
-const TYPE_GLYPH: Record<StoredSource['type'], string> = {
-  plex: 'P',
-  jellyfin: 'J',
-  flixify: 'F',
-  generic: '·',
-};
 
 const DOT_COLOR: Record<string, string> = {
   ok: '#67d391',
@@ -97,14 +84,15 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair }: SourceCar
         <Box
           sx={{
             width: 40, height: 40, borderRadius: 1,
-            backgroundColor: TYPE_COLOR[type],
+            backgroundColor: SOURCE_TYPE_COLOR[type],
             color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, fontSize: 22,
+            fontWeight: 700, fontSize: 16,
+            letterSpacing: 1,
             flexShrink: 0,
           }}
         >
-          {TYPE_GLYPH[type]}
+          {sourceGlyph(label)}
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="body1" sx={{ fontWeight: 500 }}>{label}</Typography>

@@ -3,6 +3,7 @@ import CardActionArea from '@mui/material/CardActionArea';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { navigate } from '../router';
+import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
 import type { StoredSource } from '../storage';
 
 export interface SourcePickerCardProps {
@@ -11,20 +12,6 @@ export interface SourcePickerCardProps {
   type: StoredSource['type'];
   libraryCount?: number;
 }
-
-const TYPE_COLOR: Record<StoredSource['type'], string> = {
-  plex: '#e5a00d',
-  jellyfin: '#aa5cc3',
-  flixify: '#cc3333',
-  generic: '#6b7280',
-};
-
-const TYPE_GLYPH: Record<StoredSource['type'], string> = {
-  plex: 'P',
-  jellyfin: 'J',
-  flixify: 'F',
-  generic: '·',
-};
 
 export function SourcePickerCard({ srcKey, label, type, libraryCount }: SourcePickerCardProps) {
   return (
@@ -35,14 +22,15 @@ export function SourcePickerCard({ srcKey, label, type, libraryCount }: SourcePi
       >
         <Box
           sx={{
-            width: 40, height: 40, borderRadius: 1,
-            backgroundColor: TYPE_COLOR[type],
+            width: 44, height: 44, borderRadius: 1,
+            backgroundColor: SOURCE_TYPE_COLOR[type],
             color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, fontSize: 22,
+            fontWeight: 700, fontSize: 18,
+            letterSpacing: 1,
           }}
         >
-          {TYPE_GLYPH[type]}
+          {sourceGlyph(label)}
         </Box>
         <Box>
           <Typography variant="body1" sx={{ fontWeight: 500 }}>{label}</Typography>
