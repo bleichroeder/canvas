@@ -137,13 +137,18 @@ export function decodeFlixifyItemId(combined: string): { id: string; url?: strin
   };
 }
 
-function mapItem(auth: FlixifyAuth, m: FlixifyMetadata): Item {
+// Some Flixify list shapes (collections, certain favorites) use `name`
+// instead of `title`. Tolerate both.
+type FlixifyListItem = FlixifyMetadata & { name?: string; slug?: string };
+
+function mapItem(auth: FlixifyAuth, m: FlixifyListItem): Item {
   const type = flixifyTypeToItemType(m.type);
   const isEpisode = type === 'episode';
+  const title = m.title ?? m.name ?? '';
   return {
     id: encodeFlixifyItemId(m.id, m.url),
     type,
-    title: m.title,
+    title,
     year: m.year,
     poster: pickPoster(auth, m),
     durationSec: m.duration,
@@ -152,6 +157,23 @@ function mapItem(auth: FlixifyAuth, m: FlixifyMetadata): Item {
     ...(isEpisode && m.tvshow_title ? { showTitle: m.tvshow_title } : {}),
     ...(isEpisode && m.parent_seq !== undefined ? { season: m.parent_seq } : {}),
     ...(isEpisode && m.seq !== undefined ? { episode: m.seq } : {}),
+  };
+}
+
+// Collections listings are a separate Flixify shape: items have name/slug,
+// no url field, no canvas-recognized type. Map them to folder cards that
+// navigate to /collections/{slug-or-id} when clicked.
+function mapCollectionItem(auth: FlixifyAuth, m: FlixifyListItem & { image?: string }): Item {
+  const slug = m.slug ?? String(m.id);
+  const url = `/collections/${slug}`;
+  // Poster path could be in images.poster, image (singular), or images.preview.
+  const imageRel = m.images?.poster ?? m.images?.preview_large ?? m.images?.preview ?? m.image;
+  return {
+    id: encodeFlixifyItemId(slug, url),
+    type: 'folder',
+    title: m.name ?? m.title ?? 'Untitled collection',
+    poster: imageUrl(auth, imageRel),
+    librarySectionType: 'movie',
   };
 }
 
@@ -315,7 +337,13 @@ export const flixifyAdapter: SourceAdapter = {
     const resp = await flixifyGet<PagedItemsResp>(ctx, sectionUrl, {
       p, postersize: 'poster-big', add_mroot_title: '1',
     });
-    const items = (resp.data?.items ?? []).map((m) => mapItem(auth, m));
+    // Collection list items have a different shape (name/slug, no url/type) —
+    // map them with a dedicated helper so they get proper titles, posters,
+    // and drill-in URLs to /collections/<slug>.
+    const isCollectionsList = sectionUrl === '/collections';
+    const items = (resp.data?.items ?? []).map((m) =>
+      isCollectionsList ? mapCollectionItem(auth, m as FlixifyListItem & { image?: string }) : mapItem(auth, m),
+    );
     return {
       breadcrumbs: [{ name: 'Libraries' }, { name: matched?.title ?? sectionUrl, libraryId }],
       items,
