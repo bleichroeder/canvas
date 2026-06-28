@@ -61,12 +61,15 @@ export function PhonePair() {
     | { kind: 'enter-code' }
     | { kind: 'plex-pin'; pin: PlexPin }
     | { kind: 'plex-servers'; servers: ResolvedServer[] }
+    | { kind: 'flixify-pin'; pin: string; pinUrl: string; mirror: string }
     | { kind: 'done' }
     | { kind: 'error'; message: string }
   >({ kind: 'enter-code' });
 
   const signInBtnRef = useRef<HTMLButtonElement>(null);
-  const prefilled = stripPin(codeFromUrl).length === 6 && typeFromUrl === 'plex';
+  const isFlixifyFlow = typeFromUrl === 'flixify';
+  const isPlexFlow = typeFromUrl === 'plex';
+  const prefilled = stripPin(codeFromUrl).length === 6 && (isPlexFlow || isFlixifyFlow);
 
   useEffect(() => {
     // When arriving from a QR scan with a valid pre-filled code, draw attention
@@ -96,6 +99,26 @@ export function PhonePair() {
         }
       }
       setStage({ kind: 'error', message: 'Plex sign-in timed out' });
+    } catch (e) {
+      setStage({ kind: 'error', message: (e as Error).message });
+    }
+  }
+
+  async function startFlixify() {
+    try {
+      const res = await api.flixifyPairStart(code);
+      setStage({ kind: 'flixify-pin', pin: res.pin, pinUrl: res.pinUrl, mirror: res.mirror });
+      const start = Date.now();
+      while (Date.now() - start < 10 * 60 * 1000) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const poll = await api.flixifyPairPoll(code);
+        if (poll.status === 'approved') { setStage({ kind: 'done' }); return; }
+        if (poll.status === 'expired') {
+          setStage({ kind: 'error', message: 'Pair code expired. Try again.' });
+          return;
+        }
+      }
+      setStage({ kind: 'error', message: 'Flixify pairing timed out' });
     } catch (e) {
       setStage({ kind: 'error', message: (e as Error).message });
     }
@@ -136,14 +159,18 @@ export function PhonePair() {
               Tap below to continue to Plex sign-in.
             </Typography>
           )}
-          {(typeFromUrl === 'plex' || code) && (
+          {(isPlexFlow || isFlixifyFlow || code) && (
             <Button
               ref={signInBtnRef}
               fullWidth
               variant="contained"
               size="large"
               disabled={stripPin(code).length < 6}
-              onClick={() => { if (typeFromUrl === 'plex' || code) startPlex(); }}
+              onClick={() => {
+                if (stripPin(code).length < 6) return;
+                if (isFlixifyFlow) { void startFlixify(); return; }
+                void startPlex();
+              }}
               sx={prefilled ? {
                 animation: 'canvas-pulse 1.4s ease-in-out infinite',
                 '@keyframes canvas-pulse': {
@@ -152,7 +179,7 @@ export function PhonePair() {
                 },
               } : undefined}
             >
-              Sign in to Plex →
+              {isFlixifyFlow ? 'Continue with Flixify →' : 'Sign in to Plex →'}
             </Button>
           )}
         </Box>
@@ -161,6 +188,35 @@ export function PhonePair() {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <CircularProgress size={20} />
           <Typography>Waiting for Plex sign-in in the popup window…</Typography>
+        </Box>
+      )}
+      {stage.kind === 'flixify-pin' && (
+        <Box>
+          <Typography sx={{ mb: 1 }}>Open this page on any device:</Typography>
+          <Typography sx={{ fontFamily: 'monospace', fontSize: 16, mb: 2 }}>
+            {stage.pinUrl}
+          </Typography>
+          <Typography sx={{ mb: 1 }}>Enter this PIN:</Typography>
+          <Typography
+            sx={{
+              fontFamily: 'monospace',
+              fontSize: 48,
+              fontWeight: 700,
+              textAlign: 'center',
+              letterSpacing: 6,
+              p: 2,
+              backgroundColor: 'background.paper',
+              border: '1px solid', borderColor: 'divider',
+              borderRadius: 1,
+              mb: 2,
+            }}
+          >
+            {stage.pin}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <CircularProgress size={20} />
+            <Typography color="text.secondary">Waiting for you to authorize this device on {stage.mirror}…</Typography>
+          </Box>
         </Box>
       )}
       {stage.kind === 'plex-servers' && (

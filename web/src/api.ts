@@ -89,6 +89,17 @@ export const api = {
       `/api/source-status?key=${encodeURIComponent(srcKey)}`,
     ),
 
+  flixifyPairStart: (code: string, mirror?: string) =>
+    request<{ pin: string; pinRaw: string; mirror: string; pinUrl: string }>('/api/pair/flixify-start', {
+      method: 'POST',
+      body: JSON.stringify({ code, ...(mirror ? { mirror } : {}) }),
+    }),
+  flixifyPairPoll: (code: string) =>
+    request<{ status: 'waiting' | 'approved' | 'expired' }>('/api/pair/flixify-poll', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
+
   // Fetch a VTT subtitle file by relative worker path. The subtitle proxy
   // route needs the x-sources header to look up the source's token, so we
   // can't fetch directly from the URL the worker hands back.

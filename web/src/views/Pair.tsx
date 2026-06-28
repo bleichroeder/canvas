@@ -24,7 +24,7 @@ type State =
 const SOURCE_TYPES: Array<{ type: SourceType; label: string; available: boolean }> = [
   { type: 'plex', label: 'Plex Media Server', available: true },
   { type: 'jellyfin', label: 'Jellyfin', available: false },
-  { type: 'flixify', label: 'thecalm.site (Flixify)', available: false },
+  { type: 'flixify', label: 'Flixify (thecalm.site)', available: true },
   { type: 'generic', label: 'Direct URL', available: false },
 ];
 
