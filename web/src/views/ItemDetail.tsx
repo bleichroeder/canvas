@@ -2,11 +2,18 @@ import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import Stack from '@mui/material/Stack';
+import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
+import List from '@mui/material/List';
+import ListItemButton from '@mui/material/ListItemButton';
+import Avatar from '@mui/material/Avatar';
+import LinearProgress from '@mui/material/LinearProgress';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import StarIcon from '@mui/icons-material/Star';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
-import { navigate, Link } from '../router';
+import { navigate } from '../router';
 import { setItemTitle } from '../storage';
 import type { ItemDetail } from '../types';
 
@@ -23,6 +30,10 @@ function formatPos(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function Dot() {
+  return <Box component="span" sx={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: 'text.secondary' }} />;
 }
 
 export function ItemDetailView({ source, id }: Props) {
@@ -52,6 +63,7 @@ export function ItemDetailView({ source, id }: Props) {
 
   const { item } = state;
   const resume = (item.viewOffsetSec ?? 0) > 60;
+  const genres: string[] = []; // TODO: when adapter exposes genres on ItemDetail, wire here. (no genres for v1)
 
   return (
     <AppShell>
@@ -68,7 +80,7 @@ export function ItemDetailView({ source, id }: Props) {
           <Box
             sx={{
               position: 'absolute', inset: 0,
-              background: 'linear-gradient(to bottom, transparent 50%, var(--mui-palette-background-default, #0e0f12) 100%)',
+              background: 'linear-gradient(to bottom, transparent 40%, var(--mui-palette-background-default) 100%)',
             }}
           />
         </Box>
@@ -80,15 +92,26 @@ export function ItemDetailView({ source, id }: Props) {
               component="img"
               src={item.poster}
               alt=""
-              sx={{ width: 200, height: 300, borderRadius: 1, objectFit: 'cover' }}
+              sx={{ width: 200, height: 300, borderRadius: 1, objectFit: 'cover', flexShrink: 0 }}
             />
           )}
           <Box sx={{ flex: 1, pt: item.backdrop ? 7.5 : 0 }}>
             <Typography variant="h1" sx={{ mb: 1 }}>{item.title}</Typography>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
-              {[item.year, formatRuntime(item.durationSec), item.rating ? `★ ${item.rating}` : null]
-                .filter(Boolean).join(' · ')}
-            </Typography>
+            <Stack direction="row" spacing={1.5} alignItems="center" divider={<Dot />} sx={{ mb: 1, color: 'text.secondary' }}>
+              {item.year && <Typography variant="body2">{item.year}</Typography>}
+              {item.durationSec && <Typography variant="body2">{formatRuntime(item.durationSec)}</Typography>}
+              {item.rating !== undefined && (
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                  <StarIcon fontSize="small" sx={{ color: '#f5a623' }} />
+                  <Typography variant="body2">{item.rating.toFixed(1)}</Typography>
+                </Stack>
+              )}
+            </Stack>
+            {genres.length > 0 && (
+              <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+                {genres.map((g) => <Chip key={g} label={g} size="small" variant="outlined" />)}
+              </Stack>
+            )}
             <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
               <Button
                 variant="contained"
@@ -118,40 +141,57 @@ export function ItemDetailView({ source, id }: Props) {
         {item.episodes && item.episodes.length > 0 && (
           <Box sx={{ mt: 4 }}>
             <Typography variant="h3" sx={{ mb: 1.5 }}>Episodes</Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {item.episodes.map((ep) => (
-                <Link
-                  key={ep.id}
-                  to={`/play/${source}/${ep.id}`}
-                  style={{
-                    display: 'flex', gap: 16, padding: 12,
-                    backgroundColor: 'var(--mui-palette-background-paper, #181a1f)',
-                    border: '1px solid var(--mui-palette-divider, #2a2d36)',
-                    borderRadius: 8,
-                    color: 'inherit',
-                  }}
-                >
-                  {ep.poster && (
-                    <Box
-                      component="img"
-                      src={ep.poster}
-                      alt=""
-                      sx={{ width: 160, height: 90, borderRadius: 0.5, objectFit: 'cover' }}
-                    />
-                  )}
-                  <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontWeight: 600 }}>
-                      S{ep.season}·E{ep.episode} · {ep.title}
-                    </Typography>
-                    {ep.synopsis && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {ep.synopsis}
-                      </Typography>
+            <List sx={{ p: 0 }}>
+              {item.episodes.map((ep) => {
+                const pct = ep.durationSec && ep.viewOffsetSec
+                  ? Math.min(100, Math.round((ep.viewOffsetSec / ep.durationSec) * 100))
+                  : 0;
+                const resumeEp = (ep.viewOffsetSec ?? 0) > 60;
+                return (
+                  <ListItemButton
+                    key={ep.id}
+                    onClick={() => navigate(`/play/${source}/${ep.id}`)}
+                    sx={{
+                      position: 'relative',
+                      mb: 1, p: 1.5,
+                      backgroundColor: 'background.paper',
+                      border: '1px solid', borderColor: 'divider',
+                      borderRadius: 1,
+                      gap: 2, alignItems: 'flex-start',
+                    }}
+                  >
+                    {ep.poster && (
+                      <Avatar
+                        variant="rounded"
+                        src={ep.poster}
+                        sx={{ width: 160, height: 90, flexShrink: 0 }}
+                      />
                     )}
-                  </Box>
-                </Link>
-              ))}
-            </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography sx={{ fontWeight: 600 }}>
+                        S{ep.season}·E{ep.episode} · {ep.title}
+                      </Typography>
+                      <Stack direction="row" spacing={1.5} divider={<Dot />} sx={{ mt: 0.5, color: 'text.secondary' }}>
+                        {ep.durationSec && <Typography variant="caption">{formatRuntime(ep.durationSec)}</Typography>}
+                        {resumeEp && <Typography variant="caption">Resume {formatPos(ep.viewOffsetSec!)}</Typography>}
+                      </Stack>
+                      {ep.synopsis && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                          {ep.synopsis}
+                        </Typography>
+                      )}
+                    </Box>
+                    {resumeEp && (
+                      <LinearProgress
+                        variant="determinate"
+                        value={pct}
+                        sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, borderRadius: 0 }}
+                      />
+                    )}
+                  </ListItemButton>
+                );
+              })}
+            </List>
           </Box>
         )}
       </Box>
