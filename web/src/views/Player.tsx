@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { navigate } from '../router';
+import { navigate, useRoute } from '../router';
 import { PlayerControls } from '../components/PlayerControls';
 import { bootEngine, type EngineHandle } from '../player/engine';
 import { VideoSink } from '../player/video';
 import { AudioSink } from '../player/audio';
+import { updateNowPlayingProgress } from '../storage';
 import type { PlayResolution } from '../types';
 import Backdrop from '@mui/material/Backdrop';
 import Stack from '@mui/material/Stack';
@@ -16,6 +17,13 @@ interface Props { source: string; id: string }
 const PROGRESS_INTERVAL_MS = 15_000;
 
 export function Player({ source, id }: Props) {
+  const route = useRoute();
+  const fromQuery = (() => {
+    const raw = route.query.from;
+    if (raw === undefined) return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  })();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [paused, setPaused] = useState(true);
@@ -73,6 +81,7 @@ export function Player({ source, id }: Props) {
         reportRef.current = now;
         const cur = a ? sessionBaseRef.current + a.currentTime() : 0;
         void api.progress(source, id, cur, false).catch(() => {});
+        updateNowPlayingProgress(source, id, cur);
       }
     }, 250);
     return () => clearInterval(t);
@@ -167,7 +176,7 @@ export function Player({ source, id }: Props) {
   };
 
   useEffect(() => {
-    const handle = bootSession(0);
+    const handle = bootSession(fromQuery);
     return () => {
       handle.cancel();
       engineRef.current?.dispose();
@@ -191,6 +200,7 @@ export function Player({ source, id }: Props) {
           { type: 'application/json' },
         );
         navigator.sendBeacon?.(url, blob);
+        updateNowPlayingProgress(source, id, cur);
       }
     };
   }, [source, id]);

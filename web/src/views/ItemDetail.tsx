@@ -15,7 +15,7 @@ import StarIcon from '@mui/icons-material/Star';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
 import { navigate } from '../router';
-import { setItemTitle } from '../storage';
+import { setItemTitle, setNowPlaying } from '../storage';
 import type { ItemDetail } from '../types';
 
 interface Props { source: string; id: string }
@@ -136,14 +136,31 @@ export function ItemDetailView({ source, id }: Props) {
                 variant="contained"
                 size="large"
                 startIcon={<PlayArrowIcon />}
-                onClick={() => navigate(`/play/${source}/${item.id}`)}
+                onClick={() => {
+                  const fromSec = resume ? Math.floor(item.viewOffsetSec!) : 0;
+                  setNowPlaying({
+                    src: source, id: item.id, title: item.title,
+                    poster: item.poster, posSec: fromSec,
+                    durationSec: item.durationSec ?? 0,
+                    ts: Date.now(),
+                  });
+                  navigate(`/play/${source}/${item.id}?from=${fromSec}`);
+                }}
               >
                 {resume ? `Resume ${formatPos(item.viewOffsetSec!)}` : 'Play'}
               </Button>
               {resume && (
                 <Button
                   variant="text"
-                  onClick={() => navigate(`/play/${source}/${item.id}?from=0`)}
+                  onClick={() => {
+                    setNowPlaying({
+                      src: source, id: item.id, title: item.title,
+                      poster: item.poster, posSec: 0,
+                      durationSec: item.durationSec ?? 0,
+                      ts: Date.now(),
+                    });
+                    navigate(`/play/${source}/${item.id}?from=0`);
+                  }}
                 >
                   Start over
                 </Button>
@@ -169,7 +186,17 @@ export function ItemDetailView({ source, id }: Props) {
                 return (
                   <ListItemButton
                     key={ep.id}
-                    onClick={() => navigate(`/play/${source}/${ep.id}`)}
+                    onClick={() => {
+                      const fromSec = Math.floor(ep.viewOffsetSec ?? 0);
+                      const epTitle = `${item.title} · S${ep.season}E${ep.episode}: ${ep.title}`;
+                      setNowPlaying({
+                        src: source, id: ep.id, title: epTitle,
+                        poster: ep.poster, posSec: fromSec,
+                        durationSec: ep.durationSec ?? 0,
+                        ts: Date.now(),
+                      });
+                      navigate(`/play/${source}/${ep.id}?from=${fromSec}`);
+                    }}
                     sx={{
                       position: 'relative',
                       mb: 1, p: 1.5,

@@ -131,3 +131,52 @@ export function setItemTitle(srcKey: string, itemId: string, title: string): voi
     }
   } catch { /* ignore */ }
 }
+
+// Now-playing — most-recently-played item, surfaced by the persistent footer.
+export interface NowPlaying {
+  src: string;
+  id: string;
+  title: string;
+  poster?: string;
+  posSec: number;
+  durationSec: number;
+  ts: number;
+}
+
+const NOW_PLAYING_KEY = 'canvas.nowPlaying';
+export const NOW_PLAYING_EVENT = 'canvas:nowPlayingUpdated';
+
+export function getNowPlaying(): NowPlaying | undefined {
+  try {
+    const raw = localStorage.getItem(NOW_PLAYING_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return undefined;
+    const np = parsed as NowPlaying;
+    if (typeof np.src !== 'string' || typeof np.id !== 'string') return undefined;
+    if (Date.now() - np.ts > 7 * 24 * 60 * 60 * 1000) return undefined;
+    return np;
+  } catch {
+    return undefined;
+  }
+}
+
+export function setNowPlaying(np: NowPlaying): void {
+  try {
+    localStorage.setItem(NOW_PLAYING_KEY, JSON.stringify(np));
+    window.dispatchEvent(new Event(NOW_PLAYING_EVENT));
+  } catch { /* ignore */ }
+}
+
+export function updateNowPlayingProgress(src: string, id: string, posSec: number): void {
+  const cur = getNowPlaying();
+  if (!cur || cur.src !== src || cur.id !== id) return;
+  setNowPlaying({ ...cur, posSec, ts: Date.now() });
+}
+
+export function clearNowPlaying(): void {
+  try {
+    localStorage.removeItem(NOW_PLAYING_KEY);
+    window.dispatchEvent(new Event(NOW_PLAYING_EVENT));
+  } catch { /* ignore */ }
+}

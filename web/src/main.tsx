@@ -14,6 +14,7 @@ import { Settings } from './views/Settings';
 import { Pair } from './views/Pair';
 import { PhonePair } from './views/PhonePair';
 import { Player } from './views/Player';
+import { NowPlayingStrip } from './components/NowPlayingStrip';
 
 function NotFound() {
   return <div style={{ padding: 20 }}><h1>Not found</h1></div>;
@@ -49,9 +50,12 @@ function App() {
   }
 
   return (
-    <Fade in key={route.path} timeout={250}>
-      <div>{element}</div>
-    </Fade>
+    <>
+      <Fade in key={route.path} timeout={250}>
+        <div>{element}</div>
+      </Fade>
+      <NowPlayingStrip />
+    </>
   );
 }
 
