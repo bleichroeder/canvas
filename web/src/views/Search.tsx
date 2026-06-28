@@ -7,6 +7,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
 import { PosterCard } from '../components/PosterCard';
+import { getSourceLabel } from '../storage';
 import type { Item } from '../types';
 
 export function SearchView() {
@@ -32,6 +33,14 @@ export function SearchView() {
     return () => { if (debounce.current) clearTimeout(debounce.current); };
   }, [q]);
 
+  // Group results by source.
+  const grouped = new Map<string, (Item & { source: string })[]>();
+  for (const hit of results) {
+    const arr = grouped.get(hit.source) ?? [];
+    arr.push(hit);
+    grouped.set(hit.source, arr);
+  }
+
   return (
     <AppShell>
       <Box sx={{ p: 2.5 }}>
@@ -48,23 +57,39 @@ export function SearchView() {
               </InputAdornment>
             ),
           }}
+          sx={{ opacity: loading ? 0.6 : 1, transition: 'opacity 100ms' }}
         />
-        {loading && (
-          <Typography color="text.secondary" sx={{ mt: 2 }}>Searching…</Typography>
-        )}
         {!loading && results.length === 0 && q.trim().length >= 2 && (
-          <Typography color="text.secondary" sx={{ mt: 2 }}>No results.</Typography>
+          <Typography color="text.secondary" sx={{ mt: 4, textAlign: 'center' }}>
+            No results for "{q}".
+          </Typography>
         )}
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, 180px)',
-            gap: 2.5,
-            mt: 2.5,
-          }}
-        >
-          {results.map((it) => (
-            <PosterCard key={`${it.source}:${it.id}`} item={it} source={it.source} />
+        {q.trim().length < 2 && (
+          <Typography color="text.secondary" sx={{ mt: 4, textAlign: 'center' }}>
+            Search runs across all paired sources.
+          </Typography>
+        )}
+        <Box sx={{ mt: 2.5, opacity: loading ? 0.5 : 1, transition: 'opacity 100ms' }}>
+          {[...grouped.entries()].map(([srcKey, hits]) => (
+            <Box key={srcKey} sx={{ mb: 4 }}>
+              <Typography variant="h3" sx={{ mb: 1.5 }}>
+                {getSourceLabel(srcKey) ?? srcKey}
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1.5 }}>
+                  · {hits.length} {hits.length === 1 ? 'result' : 'results'}
+                </Typography>
+              </Typography>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, 180px)',
+                  gap: 2.5,
+                }}
+              >
+                {hits.map((it) => (
+                  <PosterCard key={`${it.source}:${it.id}`} item={it} source={it.source} />
+                ))}
+              </Box>
+            </Box>
           ))}
         </Box>
       </Box>
