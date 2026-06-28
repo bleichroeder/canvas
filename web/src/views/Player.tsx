@@ -153,11 +153,14 @@ export function Player({ source, id }: Props) {
             if (startedRef.current && audioRef.current) audioRef.current.feed(chunk);
             else pendingAudioRef.current.push(chunk);
           },
-          onFatal: (e) => setErrMsg(e.message),
+          onFatal: (e) => { setErrMsg(e.message); setReseeking(false); },
           onDone: () => { videoRef.current?.flush().catch(() => {}); },
         });
       } catch (e) {
-        if (!cancelled) setErrMsg((e as Error).message);
+        if (!cancelled) {
+          setErrMsg((e as Error).message);
+          setReseeking(false);
+        }
       }
     })();
     return { cancel: () => { cancelled = true; if (cancelTimer) clearTimeout(cancelTimer); } };
