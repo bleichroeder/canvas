@@ -8,13 +8,12 @@ import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import AddIcon from '@mui/icons-material/Add';
 import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
-import CloudOffOutlinedIcon from '@mui/icons-material/CloudOffOutlined';
 import { AppShell } from '../components/AppShell';
 import { SourceCard } from '../components/SourceCard';
 import { navigate } from '../router';
 import { getSources, removeSource, renameSource, getPrefs, setPrefs, SOURCES_EVENT } from '../storage';
 import { useAuth } from '../lib/use-auth';
-import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
+import { getSupabase } from '../lib/supabase';
 import type { StoredSource, Prefs } from '../storage';
 
 export function Settings() {
@@ -54,51 +53,54 @@ export function Settings() {
 
   const auth = useAuth();
   const sb = getSupabase();
+  const [signingOut, setSigningOut] = useState(false);
   async function signOut() {
-    if (!sb) return;
-    await sb.auth.signOut();
+    if (!sb || signingOut) return;
+    setSigningOut(true);
+    // scope: 'local' clears local session immediately. The default ('global')
+    // first awaits a /logout round-trip to Supabase, and if that hangs the
+    // local session never clears and the redirect never fires — exactly the
+    // "click sign out and nothing happens" symptom.
+    try {
+      await sb.auth.signOut({ scope: 'local' });
+    } catch (e) {
+      console.warn('sign-out failed:', e);
+    } finally {
+      // App's auth-state listener will fire SIGNED_OUT and redirect to
+      // /sign-in. Call navigate too as a belt-and-suspenders.
+      navigate('/sign-in');
+      setSigningOut(false);
+    }
   }
+
+  // Settings is auth-gated at the router level (App redirects to /sign-in if
+  // not signed in). The local useAuth() instance here starts with user=null /
+  // loading=true and resolves async — don't gate rendering on it or we'd flash
+  // a blank page on every navigation here.
 
   return (
     <AppShell>
       <Box sx={{ p: 2.5, maxWidth: 700 }}>
         <Typography variant="h1" sx={{ mb: 3 }}>Settings</Typography>
 
-        {isSupabaseConfigured() && (
-          <>
-            <Typography variant="h3" sx={{ mb: 2 }}>Account</Typography>
-            <Box sx={{
-              display: 'flex', alignItems: 'center', gap: 2, p: 2, mb: 3,
-              backgroundColor: 'background.paper',
-              border: '1px solid', borderColor: 'divider',
-              borderRadius: 1,
-            }}>
-              {auth.user ? (
-                <>
-                  <CloudOutlinedIcon sx={{ color: 'success.main' }} />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 500 }}>{auth.user.email ?? 'Signed in'}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Sources sync to your canvas account.
-                    </Typography>
-                  </Box>
-                  <Button variant="text" onClick={() => void signOut()}>Sign out</Button>
-                </>
-              ) : (
-                <>
-                  <CloudOffOutlinedIcon sx={{ color: 'text.secondary' }} />
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 500 }}>Local-only</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Sign in to sync your sources across devices.
-                    </Typography>
-                  </Box>
-                  <Button variant="contained" onClick={() => navigate('/sign-in')}>Sign in</Button>
-                </>
-              )}
-            </Box>
-          </>
-        )}
+        <Typography variant="h3" sx={{ mb: 2 }}>Account</Typography>
+        <Box sx={{
+          display: 'flex', alignItems: 'center', gap: 2, p: 2, mb: 3,
+          backgroundColor: 'background.paper',
+          border: '1px solid', borderColor: 'divider',
+          borderRadius: 1,
+        }}>
+          <CloudOutlinedIcon sx={{ color: 'success.main' }} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 500 }}>{auth.user?.email ?? 'Signed in'}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Sources sync to your canvas account.
+            </Typography>
+          </Box>
+          <Button variant="text" onClick={() => void signOut()} disabled={signingOut}>
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </Button>
+        </Box>
 
         <Typography variant="h3" sx={{ mb: 2 }}>Sources</Typography>
         {entries.length === 0 && (

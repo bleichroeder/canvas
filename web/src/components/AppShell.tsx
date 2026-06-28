@@ -57,7 +57,7 @@ export function AppShell({ children }: AppShellProps) {
               mr: 'auto',
             }}
           >
-            canvas
+            {'<canvas>'}
           </Typography>
           <IconButton onClick={() => navigate('/search')} aria-label="search">
             <SearchIcon />

@@ -120,17 +120,35 @@ export function startCloudSync(): () => void {
   if (!sb) return () => {};
   const onSources = () => schedulePush();
   window.addEventListener(SOURCES_EVENT, onSources);
-  const { data: sub } = sb.auth.onAuthStateChange(async (event, session) => {
+  const { data: sub } = sb.auth.onAuthStateChange((event, session) => {
     const nextUserId = session?.user?.id ?? null;
     if (nextUserId && nextUserId !== currentUserId) {
       currentUserId = nextUserId;
       // SIGNED_IN fires both on fresh sign-in and on session restore; reconcile
       // in either case so a returning device picks up the latest cloud state.
+      // CRITICAL: do NOT await supabase calls inside this callback — supabase-js
+      // holds an internal auth lock while the callback runs, and any sb.*() call
+      // here (PostgREST query, getSession, signOut, etc.) queues behind that lock
+      // and deadlocks the entire client. Defer the reconcile to a microtask so
+      // the callback returns first and the lock is released.
       if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-        await reconcileOnSignIn(nextUserId);
+        setTimeout(() => void reconcileOnSignIn(nextUserId), 0);
       }
     } else if (!nextUserId) {
+      const wasSignedIn = currentUserId !== null;
+      // Null currentUserId BEFORE clearing local sources so the SOURCES_EVENT
+      // that fires from setSources() doesn't try to push the empty map up.
       currentUserId = null;
+      if (state.conflict) {
+        state.conflict = null;
+        emitState();
+      }
+      // Local sources belong to whichever user just signed out — leaving them
+      // behind makes the next sign-in pop a conflict dialog comparing two
+      // different accounts' libraries.
+      if (wasSignedIn && Object.keys(getSources()).length > 0) {
+        setSources({});
+      }
     }
   });
   // Cover the case where session is already present at boot — onAuthStateChange
