@@ -3,6 +3,7 @@ export interface VideoSinkOptions {
   config: VideoDecoderConfig;
   clock: () => number;
   onError: (err: Error) => void;
+  onFirstFrame?: () => void;
 }
 
 export class VideoSink {
@@ -11,8 +12,10 @@ export class VideoSink {
   private readonly decoder: VideoDecoder;
   private readonly clock: () => number;
   private readonly frames: VideoFrame[] = [];
+  private readonly onFirstFrame: (() => void) | undefined;
   private rafHandle: number | null = null;
   private frameIntervalSec = 1 / 24;
+  private firstFrameDispatched = false;
 
   constructor(opts: VideoSinkOptions) {
     this.canvas = opts.canvas;
@@ -22,6 +25,7 @@ export class VideoSink {
     if (!ctx) throw new Error('canvas 2d context unavailable');
     this.ctx = ctx;
     this.clock = opts.clock;
+    this.onFirstFrame = opts.onFirstFrame;
     this.decoder = new VideoDecoder({
       output: (frame) => this.onFrame(frame),
       error: (e) => opts.onError(e as unknown as Error),
@@ -90,6 +94,12 @@ export class VideoSink {
     if (drawn) {
       this.ctx.drawImage(drawn, 0, 0, this.canvas.width, this.canvas.height);
       drawn.close();
+      if (!this.firstFrameDispatched) {
+        this.firstFrameDispatched = true;
+        if (this.onFirstFrame) {
+          try { this.onFirstFrame(); } catch { /* ignore */ }
+        }
+      }
     }
   }
 }

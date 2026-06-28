@@ -6,6 +6,10 @@ import { bootEngine, type EngineHandle } from '../player/engine';
 import { VideoSink } from '../player/video';
 import { AudioSink } from '../player/audio';
 import type { PlayResolution } from '../types';
+import Backdrop from '@mui/material/Backdrop';
+import Stack from '@mui/material/Stack';
+import CircularProgress from '@mui/material/CircularProgress';
+import Typography from '@mui/material/Typography';
 
 interface Props { source: string; id: string }
 
@@ -19,6 +23,7 @@ export function Player({ source, id }: Props) {
   const [duration, setDuration] = useState(0);
   const [status, setStatus] = useState('Loading…');
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [reseeking, setReseeking] = useState(false);
 
   const VOL_KEY = 'canvas.volume';
   const [volume, setVolume] = useState<number>(() => {
@@ -120,6 +125,7 @@ export function Player({ source, id }: Props) {
               config: info.videoConfig,
               clock: () => (audioRef.current ? audioRef.current.currentTime() : performance.now() / 1000),
               onError: (e) => setErrMsg(`video: ${e.message}`),
+              onFirstFrame: () => setReseeking(false),
             });
             videoRef.current = video;
             if (info.audioConfig) {
@@ -211,6 +217,7 @@ export function Player({ source, id }: Props) {
   async function reseek(targetSec: number): Promise<void> {
     if (errMsg) return;
     const target = Math.max(0, Math.min(targetSec, duration > 0 ? duration - 1 : targetSec));
+    setReseeking(true);
     const myToken = ++seekTokenRef.current;
     setPos(target);
     wasPlayingRef.current = startedRef.current && !paused;
@@ -298,6 +305,12 @@ export function Player({ source, id }: Props) {
         onMuteToggle={onMuteToggle}
         onFullscreenToggle={onFullscreenToggle}
       />
+      <Backdrop open={reseeking} sx={{ zIndex: 5, bgcolor: 'rgba(0,0,0,0.6)' }}>
+        <Stack alignItems="center" spacing={2}>
+          <CircularProgress />
+          <Typography color="common.white">Seeking…</Typography>
+        </Stack>
+      </Backdrop>
     </div>
   );
 }
