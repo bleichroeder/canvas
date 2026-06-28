@@ -8,7 +8,6 @@ export interface RangeFetcherOptions {
 
 export class RangeFetcher {
   private readonly url: string;
-  private readonly chunkSize: number;
   private readonly onChunk: RangeFetcherOptions['onChunk'];
   private readonly onError: RangeFetcherOptions['onError'];
   private readonly onDone: RangeFetcherOptions['onDone'];
@@ -20,7 +19,6 @@ export class RangeFetcher {
 
   constructor(opts: RangeFetcherOptions) {
     this.url = opts.url;
-    this.chunkSize = opts.chunkSize ?? 4 * 1024 * 1024;
     this.onChunk = opts.onChunk;
     this.onError = opts.onError;
     this.onDone = opts.onDone;

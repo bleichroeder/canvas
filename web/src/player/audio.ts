@@ -10,7 +10,6 @@ export class AudioSink {
   private decoder: AudioDecoder;
   private sampleRate: number;
   private channelCount: number;
-  private startedAt: number | null = null;
   private framesPlayed = 0;
   private currentVolume = 1;
   private muted = false;
@@ -48,7 +47,6 @@ export class AudioSink {
     this.worklet.connect(this.gain);
     this.gain.connect(this.ctx.destination);
     await this.ctx.resume();
-    this.startedAt = this.ctx.currentTime;
   }
 
   stop(): void {

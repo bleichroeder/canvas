@@ -104,3 +104,30 @@ export function getSourceLabel(srcKey: string): string | undefined {
   const s = getSources()[srcKey];
   return s?.label;
 }
+
+const ITEM_TITLES_KEY = 'canvas.itemTitles';
+
+export function getItemTitle(srcKey: string, itemId: string): string | undefined {
+  try {
+    const raw = localStorage.getItem(ITEM_TITLES_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return undefined;
+    const k = `${srcKey}:${itemId}`;
+    const v = (parsed as Record<string, unknown>)[k];
+    return typeof v === 'string' ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function setItemTitle(srcKey: string, itemId: string, title: string): void {
+  try {
+    const raw = localStorage.getItem(ITEM_TITLES_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (typeof parsed === 'object' && parsed !== null) {
+      (parsed as Record<string, string>)[`${srcKey}:${itemId}`] = title;
+      localStorage.setItem(ITEM_TITLES_KEY, JSON.stringify(parsed));
+    }
+  } catch { /* ignore */ }
+}
