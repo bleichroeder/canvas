@@ -3,7 +3,9 @@ import { parseXSources } from '../x-sources';
 import { isRfc1918Host } from '../lib/rfc1918';
 import type { Env } from '../index';
 
-const CACHE_TTL_SEC = 30;
+// Cloudflare KV requires expirationTtl >= 60s; using the minimum so status
+// stays reasonably fresh while still satisfying the constraint.
+const CACHE_TTL_SEC = 60;
 const PROBE_TIMEOUT_MS = 3000;
 
 interface StatusResponse {
@@ -74,7 +76,9 @@ export async function handleSourceStatus(req: Request, env: Env, url: URL): Prom
 
   const result = await probe(src.type, src.baseUrl, src.token);
   const payload = JSON.stringify(result);
-  await env.KV.put(cacheKey, payload, { expirationTtl: CACHE_TTL_SEC });
+  // Cache write is best-effort; never let a KV failure mask a real probe result.
+  try { await env.KV.put(cacheKey, payload, { expirationTtl: CACHE_TTL_SEC }); }
+  catch { /* ignore */ }
   return withCors(req, new Response(payload, {
     headers: { 'content-type': 'application/json' },
   }));
