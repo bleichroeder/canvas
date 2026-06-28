@@ -21,6 +21,7 @@ export function Rail({ title, items, cardWidth = 180, showSourceBadge = false }:
           gap: 1.5,
           overflowX: 'auto',
           px: 2.5,
+          scrollPaddingLeft: 20,
           scrollSnapType: 'x mandatory',
           '&::-webkit-scrollbar': { display: 'none' },
         }}
