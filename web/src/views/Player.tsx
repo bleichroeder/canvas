@@ -51,7 +51,7 @@ export function Player({ source, id }: Props) {
     const reset = () => {
       setControlsVisible(true);
       if (t) clearTimeout(t);
-      t = window.setTimeout(() => setControlsVisible(false), 3000);
+      t = window.setTimeout(() => setControlsVisible(false), 4500);
     };
     window.addEventListener('pointerdown', reset);
     window.addEventListener('keydown', reset);

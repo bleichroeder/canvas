@@ -52,6 +52,46 @@ function SpeakerIcon({ volume, muted }: { volume: number; muted: boolean }) {
   return <VolumeUpIcon />;
 }
 
+const scrubSliderSx = {
+  color: 'primary.main',
+  height: 6,
+  py: 1.5,
+  '& .MuiSlider-thumb': {
+    width: 18, height: 18,
+    transition: 'width 120ms ease, height 120ms ease, box-shadow 120ms ease',
+    '&:hover, &.Mui-focusVisible': {
+      boxShadow: '0 0 0 8px rgba(79, 142, 247, 0.16)',
+    },
+    '&.Mui-active': {
+      width: 24, height: 24,
+      boxShadow: '0 0 0 12px rgba(79, 142, 247, 0.24)',
+    },
+  },
+  '& .MuiSlider-rail': {
+    opacity: 0.28,
+    backgroundColor: 'common.white',
+  },
+  '& .MuiSlider-track': {
+    border: 'none',
+    height: 6,
+  },
+};
+
+const volumeSliderSx = {
+  width: 110,
+  color: 'primary.main',
+  '& .MuiSlider-thumb': {
+    width: 12, height: 12,
+    '&:hover, &.Mui-focusVisible, &.Mui-active': {
+      boxShadow: '0 0 0 6px rgba(79, 142, 247, 0.2)',
+    },
+  },
+  '& .MuiSlider-rail': {
+    opacity: 0.3,
+    backgroundColor: 'common.white',
+  },
+};
+
 export function PlayerControls(p: PlayerControlsProps) {
   const [previewPos, setPreviewPos] = useState<number | null>(null);
   const [previewBroken, setPreviewBroken] = useState(false);
@@ -78,7 +118,14 @@ export function PlayerControls(p: PlayerControlsProps) {
         <IconButton
           onClick={p.onClose}
           aria-label="close"
-          sx={{ position: 'fixed', top: 16, right: 16, zIndex: 10, color: 'text.primary' }}
+          sx={{
+            position: 'fixed', top: 20, right: 20, zIndex: 10,
+            color: 'text.primary',
+            width: 48, height: 48,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            backdropFilter: 'blur(8px)',
+            '&:hover': { backgroundColor: 'rgba(0,0,0,0.6)' },
+          }}
         >
           <CloseIcon />
         </IconButton>
@@ -92,12 +139,13 @@ export function PlayerControls(p: PlayerControlsProps) {
             alt=""
             onError={() => setPreviewBroken(true)}
             sx={{
-              position: 'fixed', bottom: 110, left: '50%',
+              position: 'fixed', bottom: 130, left: '50%',
               transform: `translateX(calc(-50% + ${
                 ((scrubPos / sliderMax) - 0.5) * Math.min(window.innerWidth - 40, 1400)
               }px))`,
-              width: 160, height: 90, objectFit: 'cover',
-              borderRadius: 1, boxShadow: 4,
+              width: 200, height: 112, objectFit: 'cover',
+              borderRadius: 1.5,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
               border: '2px solid', borderColor: 'common.white',
               pointerEvents: 'none', zIndex: 11,
             }}
@@ -109,8 +157,9 @@ export function PlayerControls(p: PlayerControlsProps) {
         <Box
           sx={{
             position: 'fixed', left: 0, right: 0, bottom: 0,
-            px: 2.5, pt: 3, pb: 2,
-            background: 'linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0))',
+            px: 3, pt: 4, pb: 2.5,
+            background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.65) 50%, transparent 100%)',
+            backdropFilter: 'blur(2px)',
             zIndex: 10,
           }}
         >
@@ -125,27 +174,37 @@ export function PlayerControls(p: PlayerControlsProps) {
               setPreviewPos(null);
               p.onSeek(value);
             }}
-            sx={{ color: 'primary.main', height: 4 }}
+            sx={scrubSliderSx}
             aria-label="Seek"
           />
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mt: 0.5 }}>
             <Tooltip title="Back 10 seconds">
-              <IconButton onClick={() => p.onSeekRelative(-10)} aria-label="back 10s">
-                <Replay10Icon />
+              <IconButton onClick={() => p.onSeekRelative(-10)} aria-label="back 10s" size="large">
+                <Replay10Icon sx={{ fontSize: 32 }} />
               </IconButton>
             </Tooltip>
             <Tooltip title={p.paused ? 'Play' : 'Pause'}>
-              <IconButton onClick={p.onPlayPause} aria-label="play pause">
-                {p.paused ? <PlayArrowIcon /> : <PauseIcon />}
+              <IconButton
+                onClick={p.onPlayPause}
+                aria-label="play pause"
+                sx={{
+                  width: 64, height: 64,
+                  color: 'common.white',
+                  backgroundColor: 'rgba(255,255,255,0.12)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
+                }}
+              >
+                {p.paused ? <PlayArrowIcon sx={{ fontSize: 38 }} /> : <PauseIcon sx={{ fontSize: 34 }} />}
               </IconButton>
             </Tooltip>
             <Tooltip title="Forward 10 seconds">
-              <IconButton onClick={() => p.onSeekRelative(+10)} aria-label="forward 10s">
-                <Forward10Icon />
+              <IconButton onClick={() => p.onSeekRelative(+10)} aria-label="forward 10s" size="large">
+                <Forward10Icon sx={{ fontSize: 32 }} />
               </IconButton>
             </Tooltip>
             <Tooltip title={p.muted ? 'Unmute' : 'Mute'}>
-              <IconButton onClick={p.onMuteToggle} aria-label="mute toggle" sx={{ ml: 2 }}>
+              <IconButton onClick={p.onMuteToggle} aria-label="mute toggle" sx={{ ml: 3 }}>
                 <SpeakerIcon volume={p.volume} muted={p.muted} />
               </IconButton>
             </Tooltip>
@@ -155,14 +214,24 @@ export function PlayerControls(p: PlayerControlsProps) {
               max={100}
               step={1}
               onChange={(_, v) => p.onVolumeChange((typeof v === 'number' ? v : (v[0] ?? 0)) / 100)}
-              sx={{ width: 100, color: 'primary.main' }}
+              sx={volumeSliderSx}
               aria-label="Volume"
             />
-            <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
-              {fmt(scrubPos)} / {fmt(p.durationSec)}
+            <Typography
+              variant="body2"
+              sx={{
+                ml: 'auto',
+                color: 'common.white',
+                fontFeatureSettings: '"tnum" 1',
+                fontWeight: 500,
+                letterSpacing: 0.5,
+                textShadow: '0 1px 3px rgba(0,0,0,0.6)',
+              }}
+            >
+              {fmt(scrubPos)} <Box component="span" sx={{ opacity: 0.6, mx: 0.5 }}>/</Box> {fmt(p.durationSec)}
             </Typography>
             <Tooltip title={p.fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
-              <IconButton onClick={p.onFullscreenToggle} aria-label="fullscreen toggle">
+              <IconButton onClick={p.onFullscreenToggle} aria-label="fullscreen toggle" sx={{ ml: 1.5 }}>
                 {p.fullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
               </IconButton>
             </Tooltip>
