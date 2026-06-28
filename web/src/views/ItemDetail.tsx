@@ -87,6 +87,7 @@ export function ItemDetailView({ source, id }: Props) {
     <AppShell>
       {item.backdrop && (
         <Box
+          className="canvas-hero"
           sx={{
             height: 320,
             backgroundImage: `url(${item.backdrop})`,

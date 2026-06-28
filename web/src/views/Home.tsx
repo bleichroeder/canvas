@@ -94,6 +94,7 @@ export function Home() {
           <>
             {heroItem && heroItem.source && (
               <Box
+                className="canvas-hero"
                 sx={{
                   height: 320,
                   mx: 2.5, mb: 3, borderRadius: 2,
