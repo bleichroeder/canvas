@@ -4,10 +4,8 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
+import TextField from '@mui/material/TextField';
 import AddIcon from '@mui/icons-material/Add';
 import { AppShell } from '../components/AppShell';
 import { SourceCard } from '../components/SourceCard';
@@ -87,38 +85,36 @@ export function Settings() {
             label="Skip intro automatically"
             sx={{ display: 'flex', mb: 1.5 }}
           />
-          <FormControl size="small" sx={{ minWidth: 200, mb: 1.5, display: 'block' }}>
-            <InputLabel id="default-sub-lang-label">Default subtitle language</InputLabel>
-            <Select
-              labelId="default-sub-lang-label"
-              id="default-sub-lang"
-              value={prefs.defaultSubLang}
-              label="Default subtitle language"
-              onChange={(e) => update('defaultSubLang', e.target.value)}
-            >
-              <MenuItem value="">None</MenuItem>
-              <MenuItem value="eng">English</MenuItem>
-              <MenuItem value="spa">Spanish</MenuItem>
-              <MenuItem value="fre">French</MenuItem>
-              <MenuItem value="deu">German</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 200, display: 'block' }}>
-            <InputLabel id="default-audio-lang-label">Default audio language</InputLabel>
-            <Select
-              labelId="default-audio-lang-label"
-              id="default-audio-lang"
-              value={prefs.defaultAudioLang}
-              label="Default audio language"
-              onChange={(e) => update('defaultAudioLang', e.target.value)}
-            >
-              <MenuItem value="">Original</MenuItem>
-              <MenuItem value="eng">English</MenuItem>
-              <MenuItem value="spa">Spanish</MenuItem>
-              <MenuItem value="fre">French</MenuItem>
-              <MenuItem value="deu">German</MenuItem>
-            </Select>
-          </FormControl>
+          <TextField
+            select
+            fullWidth
+            size="small"
+            label="Default subtitle language"
+            value={prefs.defaultSubLang}
+            onChange={(e) => update('defaultSubLang', e.target.value)}
+            sx={{ mb: 1.5, maxWidth: 360 }}
+          >
+            <MenuItem value="">None</MenuItem>
+            <MenuItem value="eng">English</MenuItem>
+            <MenuItem value="spa">Spanish</MenuItem>
+            <MenuItem value="fre">French</MenuItem>
+            <MenuItem value="deu">German</MenuItem>
+          </TextField>
+          <TextField
+            select
+            fullWidth
+            size="small"
+            label="Default audio language"
+            value={prefs.defaultAudioLang}
+            onChange={(e) => update('defaultAudioLang', e.target.value)}
+            sx={{ maxWidth: 360 }}
+          >
+            <MenuItem value="">Original</MenuItem>
+            <MenuItem value="eng">English</MenuItem>
+            <MenuItem value="spa">Spanish</MenuItem>
+            <MenuItem value="fre">French</MenuItem>
+            <MenuItem value="deu">German</MenuItem>
+          </TextField>
         </Box>
 
         <Typography variant="h3" sx={{ mt: 4, mb: 1 }}>About</Typography>
