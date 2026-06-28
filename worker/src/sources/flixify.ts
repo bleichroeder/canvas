@@ -288,16 +288,15 @@ export const flixifyAdapter: SourceAdapter = {
 
   async library(ctx: SourceContext, libraryId?: string, _path?: string, page?: { offset: number; limit: number }): Promise<BrowseResult> {
     const auth = parseFlixifyAuth(ctx.token);
-    // Canonical library sections (matches the Flixify sidebar). Each entry's
-    // url maps to a server endpoint; we encode it into the libraryId so the
-    // browse step can recover it without a second round-trip.
+    // Canonical library sections that map to verified Flixify API endpoints.
+    // /account/favorites and /account/playlist/wl from the user-facing sidebar
+    // are NOT API paths — the API surface for those uses different routes
+    // we haven't reverse-engineered yet, so they're excluded for now.
     const SECTIONS: Array<{ url: string; title: string; type: string }> = [
-      { url: '/movies',                  title: 'Movies',        type: 'movie' },
-      { url: '/shows',                   title: 'TV Series',     type: 'show' },
-      { url: '/latest/episodes',         title: 'New Episodes',  type: 'show' },
-      { url: '/collections',             title: 'Collections',   type: 'movie' },
-      { url: '/account/favorites',       title: 'Favorites',     type: 'movie' },
-      { url: '/account/playlist/wl',     title: 'Watch Later',   type: 'movie' },
+      { url: '/movies',           title: 'Movies',       type: 'movie' },
+      { url: '/shows',            title: 'TV Series',    type: 'show' },
+      { url: '/latest/episodes',  title: 'New Episodes', type: 'show' },
+      { url: '/collections',      title: 'Collections',  type: 'movie' },
     ];
     if (!libraryId) {
       const sections: Item[] = SECTIONS.map((s) => ({
