@@ -274,7 +274,13 @@ export function Player({ source, id }: Props) {
     if (a && startedRef.current) {
       await api.progress(source, id, sessionBaseRef.current + a.currentTime(), false).catch(() => {});
     }
-    navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
+    // Unwind to wherever the user came from rather than pushing a new entry
+    // (which would leave /play/ in the back-stack and trap the user there).
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
+    }
   }
 
   return (
