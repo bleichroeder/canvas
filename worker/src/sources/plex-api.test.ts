@@ -55,7 +55,7 @@ describe('mapMetadata', () => {
       type: 'movie',
       title: 'Hello',
       year: 2024,
-      poster: 'https://plex.example/library/metadata/123/thumb/456?X-Plex-Token=tok',
+      poster: 'https://plex.example/photo/:/transcode?width=400&height=400&minSize=1&upscale=1&url=%2Flibrary%2Fmetadata%2F123%2Fthumb%2F456&X-Plex-Token=tok',
       durationSec: 5400,
       viewOffsetSec: 120,
     });
