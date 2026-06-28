@@ -23,8 +23,8 @@ export const plexAdapter: SourceAdapter = {
 
   async home(ctx: SourceContext): Promise<HomeRow[]> {
     const [onDeck, recent] = await Promise.all([
-      plexFetch<MediaContainer<PlexMetadata>>(ctx, '/library/onDeck?X-Plex-Container-Size=20'),
-      plexFetch<MediaContainer<PlexMetadata>>(ctx, '/library/recentlyAdded?X-Plex-Container-Size=20'),
+      plexFetch<MediaContainer<PlexMetadata>>(ctx, '/library/onDeck?X-Plex-Container-Size=20&includeStreams=1'),
+      plexFetch<MediaContainer<PlexMetadata>>(ctx, '/library/recentlyAdded?X-Plex-Container-Size=20&includeStreams=1'),
     ]);
     const rows: HomeRow[] = [];
     const onDeckItems = (onDeck.MediaContainer.Metadata ?? []).map((m) => mapMetadata(ctx, m));
@@ -37,7 +37,7 @@ export const plexAdapter: SourceAdapter = {
   async search(ctx: SourceContext, query: string): Promise<Item[]> {
     const res = await plexFetch<MediaContainer<{ Metadata?: PlexMetadata[] } & PlexMetadata>>(
       ctx,
-      `/hubs/search?query=${encodeURIComponent(query)}&limit=20`,
+      `/hubs/search?query=${encodeURIComponent(query)}&limit=20&includeStreams=1`,
     );
     // hubs/search returns a Hub[] each containing Metadata. The shape: MediaContainer.Hub[].Metadata[]
     const hubs = (res.MediaContainer as unknown as { Hub?: { Metadata?: PlexMetadata[]; type?: string }[] }).Hub ?? [];
@@ -70,6 +70,7 @@ export const plexAdapter: SourceAdapter = {
     const params = new URLSearchParams({
       'X-Plex-Container-Start': String(offset),
       'X-Plex-Container-Size': String(limit),
+      includeStreams: '1',
     });
     const all = await plexFetch<MediaContainer<PlexMetadata & { librarySectionTitle?: string }> & {
       MediaContainer: { totalSize?: number };

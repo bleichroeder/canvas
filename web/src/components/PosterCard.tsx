@@ -72,6 +72,50 @@ export function PosterCard({ item, source, width = 180, showSourceBadge = false 
               {sourceGlyph(src.label)}
             </Box>
           )}
+          {item.hasCC && (
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 6, left: 6,
+                height: 20, px: 0.625,
+                borderRadius: 0.5,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                backdropFilter: 'blur(4px)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 700,
+                fontSize: 10,
+                letterSpacing: 0.5,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.5)',
+              }}
+            >
+              CC
+            </Box>
+          )}
+          {item.rating !== undefined && item.rating > 0 && (
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 6, right: 6,
+                height: 20, px: 0.75,
+                borderRadius: 0.5,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                backdropFilter: 'blur(4px)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.25,
+                fontWeight: 600,
+                fontSize: 10,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.5)',
+              }}
+            >
+              <Box component="span" sx={{ color: '#f5a623', fontSize: 11, lineHeight: 1 }}>★</Box>
+              {item.rating.toFixed(1)}
+            </Box>
+          )}
         </Box>
         <Typography
           variant="body2"

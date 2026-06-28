@@ -25,6 +25,18 @@ export async function plexFetch<T = unknown>(
   return res.json() as Promise<T>;
 }
 
+export interface PlexStream {
+  id?: number;
+  streamType?: number;
+  format?: string;
+  codec?: string;
+  language?: string;
+  languageTag?: string;
+  displayTitle?: string;
+  title?: string;
+  selected?: boolean;
+}
+
 export interface PlexMetadata {
   ratingKey: string;
   type: string;
@@ -37,6 +49,7 @@ export interface PlexMetadata {
   summary?: string;
   rating?: number;
   Genre?: { tag: string }[];
+  Media?: { duration?: number; Part?: { id?: number; key: string; Stream?: PlexStream[] }[] }[];
 }
 
 /**
@@ -70,6 +83,10 @@ export function mapMetadata(
   if (typeOverride) type = typeOverride;
   else if (m.type === 'movie' || m.type === 'show' || m.type === 'episode') type = m.type;
   else type = 'folder';
+  // Derive hasCC only when the bulk request was made with includeStreams=1
+  // (otherwise Stream entries are absent and we can't claim either way).
+  const streams = m.Media?.[0]?.Part?.[0]?.Stream;
+  const hasCC = streams ? streams.some((s) => s.streamType === 3) : undefined;
   return {
     id: m.ratingKey,
     type,
@@ -78,6 +95,8 @@ export function mapMetadata(
     poster: transcodeImage(ctx, m.thumb, POSTER_WIDTH),
     durationSec: m.duration ? Math.round(m.duration / 1000) : undefined,
     viewOffsetSec: m.viewOffset ? Math.round(m.viewOffset / 1000) : undefined,
+    ...(m.rating !== undefined ? { rating: m.rating } : {}),
+    ...(hasCC ? { hasCC: true } : {}),
   };
 }
 

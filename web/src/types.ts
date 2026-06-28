@@ -8,6 +8,10 @@ export interface Item {
   poster?: string;
   durationSec?: number;
   viewOffsetSec?: number;
+  /** Numeric 0-10 rating from the source's metadata agent. */
+  rating?: number;
+  /** True when the source advertises at least one embedded subtitle stream. */
+  hasCC?: boolean;
 }
 
 export interface Episode {
