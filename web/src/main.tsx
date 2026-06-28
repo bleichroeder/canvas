@@ -14,7 +14,10 @@ import { Settings } from './views/Settings';
 import { Pair } from './views/Pair';
 import { PhonePair } from './views/PhonePair';
 import { Player } from './views/Player';
+import { SignIn } from './views/SignIn';
 import { NowPlayingStrip } from './components/NowPlayingStrip';
+import { CloudSyncConflict } from './components/CloudSyncConflict';
+import { startCloudSync } from './lib/cloud-sync';
 
 function NotFound() {
   return <div style={{ padding: 20 }}><h1>Not found</h1></div>;
@@ -41,6 +44,7 @@ function App() {
     ['/settings', () => <Settings />],
     ['/settings/pair', () => <Pair />],
     ['/pair', () => <PhonePair />],
+    ['/sign-in', () => <SignIn />],
   ];
 
   let element: React.JSX.Element = <NotFound />;
@@ -55,9 +59,13 @@ function App() {
         <div>{element}</div>
       </Fade>
       <NowPlayingStrip />
+      <CloudSyncConflict />
     </>
   );
 }
+
+// Boot the cloud-sync coordinator once. No-op when Supabase env isn't set.
+startCloudSync();
 
 const root = document.getElementById('app');
 if (root) {

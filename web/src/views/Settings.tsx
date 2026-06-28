@@ -7,10 +7,14 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import AddIcon from '@mui/icons-material/Add';
+import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
+import CloudOffOutlinedIcon from '@mui/icons-material/CloudOffOutlined';
 import { AppShell } from '../components/AppShell';
 import { SourceCard } from '../components/SourceCard';
 import { navigate } from '../router';
-import { getSources, removeSource, renameSource, getPrefs, setPrefs } from '../storage';
+import { getSources, removeSource, renameSource, getPrefs, setPrefs, SOURCES_EVENT } from '../storage';
+import { useAuth } from '../lib/use-auth';
+import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import type { StoredSource, Prefs } from '../storage';
 
 export function Settings() {
@@ -19,6 +23,14 @@ export function Settings() {
 
   useEffect(() => {
     setLocalSources(getSources());
+    // Refresh when the cloud-sync layer (or another tab) rewrites sources.
+    const onChange = () => setLocalSources(getSources());
+    window.addEventListener(SOURCES_EVENT, onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+      window.removeEventListener(SOURCES_EVENT, onChange);
+      window.removeEventListener('storage', onChange);
+    };
   }, []);
 
   function unpair(key: string) {
@@ -40,10 +52,53 @@ export function Settings() {
   const entries = Object.entries(sources);
   const buildSha = import.meta.env.VITE_BUILD_SHA ?? 'dev';
 
+  const auth = useAuth();
+  const sb = getSupabase();
+  async function signOut() {
+    if (!sb) return;
+    await sb.auth.signOut();
+  }
+
   return (
     <AppShell>
       <Box sx={{ p: 2.5, maxWidth: 700 }}>
         <Typography variant="h1" sx={{ mb: 3 }}>Settings</Typography>
+
+        {isSupabaseConfigured() && (
+          <>
+            <Typography variant="h3" sx={{ mb: 2 }}>Account</Typography>
+            <Box sx={{
+              display: 'flex', alignItems: 'center', gap: 2, p: 2, mb: 3,
+              backgroundColor: 'background.paper',
+              border: '1px solid', borderColor: 'divider',
+              borderRadius: 1,
+            }}>
+              {auth.user ? (
+                <>
+                  <CloudOutlinedIcon sx={{ color: 'success.main' }} />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 500 }}>{auth.user.email ?? 'Signed in'}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Sources sync to your canvas account.
+                    </Typography>
+                  </Box>
+                  <Button variant="text" onClick={() => void signOut()}>Sign out</Button>
+                </>
+              ) : (
+                <>
+                  <CloudOffOutlinedIcon sx={{ color: 'text.secondary' }} />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 500 }}>Local-only</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Sign in to sync your sources across devices.
+                    </Typography>
+                  </Box>
+                  <Button variant="contained" onClick={() => navigate('/sign-in')}>Sign in</Button>
+                </>
+              )}
+            </Box>
+          </>
+        )}
 
         <Typography variant="h3" sx={{ mb: 2 }}>Sources</Typography>
         {entries.length === 0 && (
