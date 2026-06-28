@@ -166,11 +166,19 @@ The `<Source label>` crumb on `/lib/:src/:libId` and `/item/:src/:id` now links 
 
 ```http
 GET /api/source-status?key=<srcKey>
-→ 200 { "status": "ok" | "degraded" | "unreachable", "lastSeenAt": <ms-epoch> | null }
+→ 200 { "status": "ok" | "degraded" | "unreachable" | "lan-only", "lastSeenAt": <ms-epoch> | null }
    404 { "error": "unknown source key" }
 ```
 
 The status field always carries the verdict so the client always renders uniformly. Network failure of the upstream probe maps to `{ "status": "unreachable", "lastSeenAt": null }` still served as HTTP 200. Only an unknown `key` returns 404.
+
+**RFC1918 LAN-skip:** The CF Worker runs on Cloudflare's edge — it cannot reach RFC1918 addresses (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`). If the worker did try to probe, it would always return "unreachable" for LAN-only Plex servers that work fine from the user's Tesla on the same LAN. Detection logic:
+
+1. **`plex.direct` hostname pattern** (Plex's auto-issued TLS hostname): subdomain encodes the IP with dashes, e.g. `192-168-1-100.abc123.plex.direct` → `192.168.1.100`. Parse the first segment of the hostname, check against RFC1918 ranges.
+2. **Bare IP literal** (e.g. `http://192.168.1.5:32400`): parse `URL.hostname` and test directly.
+3. **Anything else** (regular domain names): proceed with the probe — they're presumed public.
+
+If RFC1918 detected, the worker short-circuits and returns `{ "status": "lan-only", "lastSeenAt": null }` without probing. Clients render this with a grey status dot + caption "LAN-only — health check unavailable" instead of the red unreachable badge.
 
 Implementation: per source-type, hit the lightweight endpoint with a 3-second timeout:
 - Plex: `${baseUrl}/identity?X-Plex-Token=${token}` (returns small JSON).
@@ -290,7 +298,7 @@ Idle state (q.length < 2): centered helper text. No-results state (q.length ≥ 
 ```
 
 `<SourceCard>` component:
-- 8 × 8 px status dot (green `#67d391` for ok, amber `#f5a623` for degraded, red `#ef5350` for unreachable).
+- 8 × 8 px status dot: green `#67d391` for ok, amber `#f5a623` for degraded, red `#ef5350` for unreachable, grey `#6b7280` for lan-only.
 - 40 × 40 avatar with the single-letter type glyph (same as picker cards).
 - Body: source label (body1 / 500) + base URL (caption) + last-seen line (caption).
 - Right side: "Unpair" `<Button variant="text" color="error">` opening a MUI `<Dialog>` confirmation.
@@ -535,7 +543,7 @@ web/package.json                   ← MOD: + qrcode
 
 1. **QR code reliability on Tesla.** The Tesla browser renders SVG correctly, but the camera-scan side is the user's phone — if QR contrast is too low against the dark theme, scanning fails. Mitigation: render the QR `<svg>` on a `<Paper>` background (white surface) so the QR's black-on-white default contrast is preserved.
 2. **Source-status request flood.** Settings reloads every time the user navigates back. The 30 s KV cache absorbs most repeats. If a user has 5 sources, that's still 5 sequential requests on every Settings mount. Acceptable for v1; cache TTL could grow later.
-3. **`/api/source-status` for sources behind LAN-only addresses.** Worker can't reach `192.168.x.x` from the CF edge. Plex direct-connect URLs hit `plex.direct` (resolves to the LAN IP, but the worker is outside the LAN). Status check will return "unreachable" for LAN-only Plex servers even when they work from the user's Tesla on the same LAN. Mitigation: document this in the SourceCard's tooltip ("Status check runs from the cloud; LAN-only servers will show unreachable even when they work from this device"). Or: skip the status check entirely for sources whose hostname resolves to RFC1918 space.
+3. **`/api/source-status` for sources behind LAN-only addresses.** Worker can't reach `192.168.x.x` from the CF edge. Resolved: worker detects RFC1918 hostnames (via `plex.direct` subdomain pattern or bare IP literal) and returns `status: 'lan-only'` without probing; SourceCard renders a grey dot instead of red unreachable. See Section 2's worker route description for the detection logic.
 4. **`cssVariables: true` ripple effects.** Flipping the theme flag changes how MUI emits styles. The bundle size delta should be minimal but build size could shift. Verify after T1.
 5. **Plex on-deck for Source mini-home.** Plex's `/library/onDeck` is already used. Need to verify it returns enough data for the per-source hero. If not, fall back to `/library/recentlyAdded[0]` for the hero.
 6. **Library counts on the source picker.** Requires the home API to know per-source library counts. Plex returns library count cheaply (`/library/sections` already returns the array; just `.length`). For Jellyfin / Flixify (when added), the count may not be a single call. Out of scope for now (those adapters aren't enabled).
