@@ -3,11 +3,12 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
-import AddIcon from '@mui/icons-material/Add';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import LibraryAddOutlinedIcon from '@mui/icons-material/LibraryAddOutlined';
 import { api } from '../api';
 import { getSources } from '../storage';
 import { AppShell } from '../components/AppShell';
+import { EmptyState } from '../components/EmptyState';
 import { Rail } from '../components/Rail';
 import { SourcePickerCard } from '../components/SourcePickerCard';
 import { navigate } from '../router';
@@ -63,16 +64,13 @@ export function Home() {
           <Typography color="text.secondary" sx={{ px: 2.5 }}>Loading…</Typography>
         )}
         {state.kind === 'empty' && (
-          <Box sx={{ p: 5, textAlign: 'center' }}>
-            <Typography variant="body1" sx={{ mb: 2 }}>No sources paired yet.</Typography>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => navigate('/settings/pair')}
-            >
-              Pair your first source
-            </Button>
-          </Box>
+          <EmptyState
+            icon={<LibraryAddOutlinedIcon />}
+            title="No sources paired yet"
+            body="Pair a Plex server to get started."
+            actionLabel="Pair your first source"
+            onAction={() => navigate('/settings/pair')}
+          />
         )}
         {state.kind === 'error' && (
           <Alert severity="error" sx={{ mx: 2.5 }}>Error: {state.message}</Alert>

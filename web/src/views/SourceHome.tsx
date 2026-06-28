@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
+import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
+import { EmptyState } from '../components/EmptyState';
 import { Rail } from '../components/Rail';
 import { LibraryCard } from '../components/LibraryCard';
 import { getSourceLabel } from '../storage';
@@ -66,6 +68,15 @@ export function SourceHome({ source }: Props) {
                   ))}
                 </Box>
               </Box>
+            )}
+            {state.data.continueWatching.length === 0 &&
+             state.data.recentlyAdded.length === 0 &&
+             state.data.libraries.length === 0 && (
+              <EmptyState
+                icon={<InboxOutlinedIcon />}
+                title="This source returned nothing"
+                body="The source is reachable but has no content to show right now."
+              />
             )}
           </>
         )}

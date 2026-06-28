@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
-import Button from '@mui/material/Button';
+import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import { api } from '../api';
 import { navigate } from '../router';
 import { AppShell } from '../components/AppShell';
+import { EmptyState } from '../components/EmptyState';
 import { PosterCard } from '../components/PosterCard';
 import { setLibraryName } from '../storage';
 import type { BrowseResult } from '../types';
@@ -70,10 +71,12 @@ export function Library({ source, libraryId }: Props) {
               ))}
             </Box>
             {state.data.items.length === 0 && (
-              <Box sx={{ py: 5, textAlign: 'center' }}>
-                <Typography variant="h3" sx={{ mb: 1 }}>This library is empty</Typography>
-                <Button onClick={() => navigate(`/source/${source}`)}>Back to source</Button>
-              </Box>
+              <EmptyState
+                icon={<InboxOutlinedIcon />}
+                title="This library is empty"
+                actionLabel="Back to source"
+                onAction={() => navigate(`/source/${source}`)}
+              />
             )}
           </>
         )}

@@ -4,8 +4,10 @@ import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
 import Typography from '@mui/material/Typography';
 import SearchIcon from '@mui/icons-material/Search';
+import SearchOffOutlinedIcon from '@mui/icons-material/SearchOffOutlined';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
+import { EmptyState } from '../components/EmptyState';
 import { PosterCard } from '../components/PosterCard';
 import { getSourceLabel } from '../storage';
 import type { Item } from '../types';
@@ -60,9 +62,10 @@ export function SearchView() {
           sx={{ opacity: loading ? 0.6 : 1, transition: 'opacity 100ms' }}
         />
         {!loading && results.length === 0 && q.trim().length >= 2 && (
-          <Typography color="text.secondary" sx={{ mt: 4, textAlign: 'center' }}>
-            No results for "{q}".
-          </Typography>
+          <EmptyState
+            icon={<SearchOffOutlinedIcon />}
+            title={`No results for "${q}"`}
+          />
         )}
         {q.trim().length < 2 && (
           <Typography color="text.secondary" sx={{ mt: 4, textAlign: 'center' }}>
