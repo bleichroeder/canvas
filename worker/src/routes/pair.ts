@@ -69,7 +69,7 @@ export async function handlePairPoll(req: Request, kv: KVNamespace): Promise<Res
   if (session.status === 'approved') {
     return json(req, { status: 'approved', source: session.source });
   }
-  return json(req, { status: 'pending' });
+  return json(req, { status: 'pending', sourceType: session.sourceType });
 }
 
 export async function handlePairApprove(req: Request, kv: KVNamespace): Promise<Response> {

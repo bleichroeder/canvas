@@ -166,10 +166,23 @@ export function PhonePair() {
               variant="contained"
               size="large"
               disabled={stripPin(code).length < 6}
-              onClick={() => {
+              onClick={async () => {
                 if (stripPin(code).length < 6) return;
                 if (isFlixifyFlow) { void startFlixify(); return; }
-                void startPlex();
+                if (isPlexFlow) { void startPlex(); return; }
+                // No type hint in URL — ask the worker what source this pair
+                // session is for, then dispatch.
+                try {
+                  const poll = await api.pairPoll(code);
+                  if (poll.status === 'expired') {
+                    setStage({ kind: 'error', message: 'Pair code expired. Try again on your Tesla.' });
+                    return;
+                  }
+                  if (poll.sourceType === 'flixify') { void startFlixify(); return; }
+                  void startPlex();
+                } catch (e) {
+                  setStage({ kind: 'error', message: (e as Error).message });
+                }
               }}
               sx={prefilled ? {
                 animation: 'canvas-pulse 1.4s ease-in-out infinite',

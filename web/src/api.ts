@@ -62,7 +62,7 @@ export const api = {
       body: JSON.stringify({ sourceType }),
     }),
   pairPoll: (code: string) =>
-    request<{ status: 'pending' | 'approved' | 'expired'; source?: StoredSource }>('/api/pair/poll', {
+    request<{ status: 'pending' | 'approved' | 'expired'; source?: StoredSource; sourceType?: StoredSource['type'] }>('/api/pair/poll', {
       method: 'POST',
       body: JSON.stringify({ code }),
     }),
