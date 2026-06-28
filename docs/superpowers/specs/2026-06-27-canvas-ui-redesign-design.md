@@ -585,3 +585,14 @@ This entire UI workstream is "done" when:
 7. The user can hand the URL to a friend and they figure out how to pair without help.
 8. The old `passenger-v2` infrastructure is fully decommissioned.
 9. Plex playback continues to work end-to-end on the Tesla after all three plans complete.
+
+## Plan 1 result (recorded 2026-06-27)
+
+- Pages deployed: https://canvas-8j0.pages.dev/ (CF auto-suffixed `canvas` → `canvas-8j0`; account-level name collision).
+- Worker deployed: canvas-api.<account>.workers.dev (KV id `02ec5cf0d1ac4825a040d35e5072bf46`).
+- Bundle: 628 KB JS / 184 KB gzip — within spec target.
+- Old infra still live: `passenger-api-v2.<account>.workers.dev`, `passenger-v2.pages.dev`. Decommission deferred to Plan 3 cutover.
+- Desktop smoke: pass (wordmark, AppBar icons, breadcrumbs, empty state, pair flow).
+- Tesla smoke: pending (production URL `canvas-8j0.pages.dev` confirmed reachable; full pair+play not yet exercised on Tesla).
+- Final-review fixes applied: dynamic pair-URL via `window.location.host` (catches CF name suffix), dead `Link` import in Home, internal worker pkg + worklet class renames.
+- Known limitation: per-commit preview URLs (e.g. `f12497a5.canvas-8j0.pages.dev`) hit `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` for some window after deploy — use the production alias.
