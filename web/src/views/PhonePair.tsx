@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -7,6 +7,7 @@ import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useRoute } from '../router';
 import { api } from '../api';
+import { stripPin, formatPin } from '../lib/pin-format';
 
 const PLEX_PRODUCT = 'Canvas';
 const CLIENT_ID_KEY = 'canvas.plex.clientId';
@@ -55,7 +56,7 @@ export function PhonePair() {
   const route = useRoute();
   const codeFromUrl = route.query.code ?? '';
   const typeFromUrl = route.query.type ?? '';
-  const [code, setCode] = useState(codeFromUrl);
+  const [code, setCode] = useState(formatPin(stripPin(codeFromUrl)));
   const [stage, setStage] = useState<
     | { kind: 'enter-code' }
     | { kind: 'plex-pin'; pin: PlexPin }
@@ -63,6 +64,15 @@ export function PhonePair() {
     | { kind: 'done' }
     | { kind: 'error'; message: string }
   >({ kind: 'enter-code' });
+
+  useEffect(() => {
+    if (stripPin(codeFromUrl).length === 6 && typeFromUrl === 'plex' && stage.kind === 'enter-code') {
+      // Auto-submit shortly after mount so the user sees the code briefly.
+      const t = setTimeout(() => startPlex(), 300);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codeFromUrl, typeFromUrl]);
 
   async function startPlex() {
     try {
@@ -111,7 +121,7 @@ export function PhonePair() {
           <TextField
             fullWidth
             value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            onChange={(e) => setCode(formatPin(stripPin(e.target.value)))}
             placeholder="XXX-XXX"
             inputProps={{ style: { fontSize: 24, textAlign: 'center', letterSpacing: 4 } }}
             sx={{ mb: 2 }}
@@ -121,7 +131,7 @@ export function PhonePair() {
               fullWidth
               variant="contained"
               size="large"
-              disabled={code.length < 7}
+              disabled={stripPin(code).length < 6}
               onClick={() => { if (typeFromUrl === 'plex' || code) startPlex(); }}
             >
               Sign in to Plex →
