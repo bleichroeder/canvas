@@ -12,6 +12,7 @@ import { AppShell } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { Rail } from '../components/Rail';
 import { SourcePickerCard } from '../components/SourcePickerCard';
+import { LibraryCard } from '../components/LibraryCard';
 import { navigate } from '../router';
 import type { HomeRow, Item } from '../types';
 
@@ -38,8 +39,13 @@ function formatPos(sec: number): string {
 
 export function Home() {
   const [state, setState] = useState<State>({ kind: 'loading' });
+  // Libraries from the single-source case — surfaces a libraries grid on Home
+  // so users with one paired source don't have to drill into /source/:src
+  // just to see the library list.
+  const [singleSourceLibraries, setSingleSourceLibraries] = useState<Item[]>([]);
   const sources = getSources();
   const sourceCount = Object.keys(sources).length;
+  const singleSourceKey = sourceCount === 1 ? Object.keys(sources)[0] : undefined;
 
   useEffect(() => {
     if (sourceCount === 0) {
@@ -52,6 +58,16 @@ export function Home() {
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!singleSourceKey) { setSingleSourceLibraries([]); return; }
+    let cancelled = false;
+    api.sourceHome(singleSourceKey).then(
+      (data) => { if (!cancelled) setSingleSourceLibraries(data.libraries); },
+      () => { /* libraries are nice-to-have; ignore failures */ },
+    );
+    return () => { cancelled = true; };
+  }, [singleSourceKey]);
 
   const continueRow = state.kind === 'ok'
     ? state.rows.find((r) => r.kind === 'continue')
@@ -186,6 +202,24 @@ export function Home() {
                 </>
               );
             })()}
+
+            {sourceCount === 1 && singleSourceKey && singleSourceLibraries.length > 0 && (
+              <Box component="section" sx={{ mt: 4 }}>
+                <Typography variant="h3" sx={{ px: 2.5, mb: 1.5 }}>Libraries</Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, 220px)',
+                    gap: 2.5,
+                    px: 2.5,
+                  }}
+                >
+                  {singleSourceLibraries.map((lib) => (
+                    <LibraryCard key={lib.id} library={lib} source={singleSourceKey} />
+                  ))}
+                </Box>
+              </Box>
+            )}
 
             {sourceCount > 1 && (() => {
               // Pick a backdrop per source: first recently-added item with a
