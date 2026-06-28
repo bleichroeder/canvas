@@ -39,12 +39,27 @@ export interface PlexMetadata {
   Genre?: { tag: string }[];
 }
 
-function imageUrl(ctx: SourceContext, path: string | undefined): string | undefined {
+/**
+ * Wrap a Plex relative image path through Plex's photo-transcoder endpoint to
+ * serve a width-bounded variant. Plex preserves aspect ratio. Reduces poster
+ * thumbnail bytes by an order of magnitude vs. the original 1000+ px source.
+ */
+export function transcodeImage(ctx: SourceContext, path: string | undefined, width: number): string | undefined {
   if (!path) return undefined;
-  // thumb/art are relative Plex paths; suffix with auth token.
-  const sep = path.includes('?') ? '&' : '?';
-  return `${ctx.baseUrl}${path}${sep}X-Plex-Token=${encodeURIComponent(ctx.token)}`;
+  const params = new URLSearchParams({
+    width: String(width),
+    height: String(width),
+    minSize: '1',
+    upscale: '1',
+    url: path,
+    'X-Plex-Token': ctx.token,
+  });
+  return `${ctx.baseUrl}/photo/:/transcode?${params.toString()}`;
 }
+
+// Default sizes that comfortably cover every poster surface we render.
+const POSTER_WIDTH = 400;
+const BACKDROP_WIDTH = 1280;
 
 export function mapMetadata(
   ctx: SourceContext,
@@ -60,11 +75,14 @@ export function mapMetadata(
     type,
     title: m.title,
     year: m.year,
-    poster: imageUrl(ctx, m.thumb),
+    poster: transcodeImage(ctx, m.thumb, POSTER_WIDTH),
     durationSec: m.duration ? Math.round(m.duration / 1000) : undefined,
     viewOffsetSec: m.viewOffset ? Math.round(m.viewOffset / 1000) : undefined,
   };
 }
+
+export const PLEX_BACKDROP_WIDTH = BACKDROP_WIDTH;
+export const PLEX_POSTER_WIDTH = POSTER_WIDTH;
 
 export interface PlexSection {
   key: string;

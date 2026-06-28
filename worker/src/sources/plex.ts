@@ -1,4 +1,4 @@
-import { plexFetch, mapMetadata, type PlexMetadata, type PlexSection } from './plex-api';
+import { plexFetch, mapMetadata, transcodeImage, PLEX_BACKDROP_WIDTH, PLEX_POSTER_WIDTH, type PlexMetadata, type PlexSection } from './plex-api';
 import type { SourceAdapter, SourceContext, HomeRow, Item, ItemDetail, BrowseResult, PlayResolution } from './types';
 
 const NOT_IMPLEMENTED = 'plex method not implemented yet';
@@ -100,7 +100,7 @@ export const plexAdapter: SourceAdapter = {
     const base = mapMetadata(ctx, m);
     const detail: ItemDetail = {
       ...base,
-      backdrop: m.art ? `${ctx.baseUrl}${m.art}?X-Plex-Token=${encodeURIComponent(ctx.token)}` : undefined,
+      backdrop: transcodeImage(ctx, m.art, PLEX_BACKDROP_WIDTH),
       synopsis: m.summary,
       rating: m.rating,
     };
@@ -116,9 +116,7 @@ export const plexAdapter: SourceAdapter = {
         durationSec: e.duration ? Math.round(e.duration / 1000) : undefined,
         viewOffsetSec: e.viewOffset ? Math.round(e.viewOffset / 1000) : undefined,
         synopsis: e.summary,
-        poster: e.thumb
-          ? `${ctx.baseUrl}${e.thumb}?X-Plex-Token=${encodeURIComponent(ctx.token)}`
-          : undefined,
+        poster: transcodeImage(ctx, e.thumb, PLEX_POSTER_WIDTH),
       }));
     }
     return detail;
