@@ -593,6 +593,6 @@ This entire UI workstream is "done" when:
 - Bundle: 628 KB JS / 184 KB gzip — within spec target.
 - Old infra still live: `passenger-api-v2.<account>.workers.dev`, `passenger-v2.pages.dev`. Decommission deferred to Plan 3 cutover.
 - Desktop smoke: pass (wordmark, AppBar icons, breadcrumbs, empty state, pair flow).
-- Tesla smoke: pending (production URL `canvas-8j0.pages.dev` confirmed reachable; full pair+play not yet exercised on Tesla).
+- Tesla smoke: pass — pair + browse + play confirmed on Tesla browser.
 - Final-review fixes applied: dynamic pair-URL via `window.location.host` (catches CF name suffix), dead `Link` import in Home, internal worker pkg + worklet class renames.
 - Known limitation: per-commit preview URLs (e.g. `f12497a5.canvas-8j0.pages.dev`) hit `ERR_SSL_VERSION_OR_CIPHER_MISMATCH` for some window after deploy — use the production alias.
