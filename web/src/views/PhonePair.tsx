@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -65,11 +65,16 @@ export function PhonePair() {
     | { kind: 'error'; message: string }
   >({ kind: 'enter-code' });
 
+  const signInBtnRef = useRef<HTMLButtonElement>(null);
+  const prefilled = stripPin(codeFromUrl).length === 6 && typeFromUrl === 'plex';
+
   useEffect(() => {
-    if (stripPin(codeFromUrl).length === 6 && typeFromUrl === 'plex' && stage.kind === 'enter-code') {
-      // Auto-submit shortly after mount so the user sees the code briefly.
-      const t = setTimeout(() => startPlex(), 300);
-      return () => clearTimeout(t);
+    // When arriving from a QR scan with a valid pre-filled code, draw attention
+    // to the sign-in button. We don't auto-click it — mobile browsers block
+    // window.open() that isn't triggered by a direct user gesture, which silently
+    // breaks the popup-based Plex OAuth flow. The user's tap is the gesture.
+    if (prefilled && stage.kind === 'enter-code') {
+      signInBtnRef.current?.focus();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codeFromUrl, typeFromUrl]);
@@ -126,13 +131,26 @@ export function PhonePair() {
             inputProps={{ style: { fontSize: 24, textAlign: 'center', letterSpacing: 4 } }}
             sx={{ mb: 2 }}
           />
+          {prefilled && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, textAlign: 'center' }}>
+              Tap below to continue to Plex sign-in.
+            </Typography>
+          )}
           {(typeFromUrl === 'plex' || code) && (
             <Button
+              ref={signInBtnRef}
               fullWidth
               variant="contained"
               size="large"
               disabled={stripPin(code).length < 6}
               onClick={() => { if (typeFromUrl === 'plex' || code) startPlex(); }}
+              sx={prefilled ? {
+                animation: 'canvas-pulse 1.4s ease-in-out infinite',
+                '@keyframes canvas-pulse': {
+                  '0%, 100%': { boxShadow: '0 0 0 0 rgba(79, 142, 247, 0.5)' },
+                  '50%':      { boxShadow: '0 0 0 10px rgba(79, 142, 247, 0)' },
+                },
+              } : undefined}
             >
               Sign in to Plex →
             </Button>
