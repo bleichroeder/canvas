@@ -4,8 +4,13 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Switch from '@mui/material/Switch';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
 import AddIcon from '@mui/icons-material/Add';
 import { AppShell } from '../components/AppShell';
+import { SourceCard } from '../components/SourceCard';
 import { navigate } from '../router';
 import { getSources, removeSource, getPrefs, setPrefs } from '../storage';
 import type { StoredSource, Prefs } from '../storage';
@@ -35,30 +40,21 @@ export function Settings() {
   return (
     <AppShell>
       <Box sx={{ p: 2.5, maxWidth: 700 }}>
+        <Typography variant="h1" sx={{ mb: 3 }}>Settings</Typography>
+
         <Typography variant="h3" sx={{ mb: 2 }}>Sources</Typography>
         {entries.length === 0 && (
-          <Typography color="text.secondary">No sources paired yet.</Typography>
+          <Typography color="text.secondary" sx={{ mb: 2 }}>No sources paired yet.</Typography>
         )}
         {entries.map(([key, src]) => (
-          <Box
+          <SourceCard
             key={key}
-            sx={{
-              display: 'flex', alignItems: 'center', p: 1.5,
-              backgroundColor: 'background.paper',
-              border: '1px solid', borderColor: 'divider',
-              borderRadius: 1, mb: 1,
-            }}
-          >
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontWeight: 600 }}>{src.label}</Typography>
-              <Typography variant="caption" color="text.secondary">
-                {src.type} · {src.baseUrl}
-              </Typography>
-            </Box>
-            <Button variant="text" color="error" onClick={() => unpair(key)}>
-              Unpair
-            </Button>
-          </Box>
+            srcKey={key}
+            label={src.label}
+            type={src.type}
+            baseUrl={src.baseUrl}
+            onUnpair={() => unpair(key)}
+          />
         ))}
         <Button
           variant="contained"
@@ -70,26 +66,56 @@ export function Settings() {
         </Button>
 
         <Typography variant="h3" sx={{ mt: 4, mb: 2 }}>Preferences</Typography>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={prefs.autoplayNext}
-              onChange={(e) => update('autoplayNext', e.target.checked)}
-            />
-          }
-          label="Autoplay next episode"
-          sx={{ display: 'block', mb: 1.5 }}
-        />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={prefs.skipIntro}
-              onChange={(e) => update('skipIntro', e.target.checked)}
-            />
-          }
-          label="Skip intro automatically"
-          sx={{ display: 'block', mb: 1.5 }}
-        />
+        <Box sx={{ p: 2, backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={prefs.autoplayNext}
+                onChange={(e) => update('autoplayNext', e.target.checked)}
+              />
+            }
+            label="Autoplay next episode"
+            sx={{ display: 'flex', mb: 1.5 }}
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={prefs.skipIntro}
+                onChange={(e) => update('skipIntro', e.target.checked)}
+              />
+            }
+            label="Skip intro automatically"
+            sx={{ display: 'flex', mb: 1.5 }}
+          />
+          <FormControl size="small" sx={{ minWidth: 200, mb: 1.5, display: 'block' }}>
+            <InputLabel>Default subtitle language</InputLabel>
+            <Select
+              value={prefs.defaultSubLang}
+              label="Default subtitle language"
+              onChange={(e) => update('defaultSubLang', e.target.value)}
+            >
+              <MenuItem value="">None</MenuItem>
+              <MenuItem value="eng">English</MenuItem>
+              <MenuItem value="spa">Spanish</MenuItem>
+              <MenuItem value="fre">French</MenuItem>
+              <MenuItem value="deu">German</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 200, display: 'block' }}>
+            <InputLabel>Default audio language</InputLabel>
+            <Select
+              value={prefs.defaultAudioLang}
+              label="Default audio language"
+              onChange={(e) => update('defaultAudioLang', e.target.value)}
+            >
+              <MenuItem value="">Original</MenuItem>
+              <MenuItem value="eng">English</MenuItem>
+              <MenuItem value="spa">Spanish</MenuItem>
+              <MenuItem value="fre">French</MenuItem>
+              <MenuItem value="deu">German</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
 
         <Typography variant="h3" sx={{ mt: 4, mb: 1 }}>About</Typography>
         <Typography variant="body2" color="text.secondary">

@@ -78,4 +78,8 @@ export const api = {
     }),
   sourceHome: (srcKey: string) =>
     request<SourceHomeResponse>(`/api/source-home?key=${encodeURIComponent(srcKey)}`),
+  sourceStatus: (srcKey: string) =>
+    request<{ status: 'ok' | 'degraded' | 'unreachable' | 'lan-only'; lastSeenAt: number | null }>(
+      `/api/source-status?key=${encodeURIComponent(srcKey)}`,
+    ),
 };
