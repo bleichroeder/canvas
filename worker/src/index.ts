@@ -3,6 +3,7 @@ import { handlePairStart, handlePairPoll, handlePairApprove, handlePairDelete } 
 import { handlePairPlexServers } from './routes/pair-plex-servers';
 import { handleHome } from './routes/home';
 import { handleSearch } from './routes/search';
+import { handleSourceStatus } from './routes/source-status';
 import { handleLibrary } from './routes/library';
 import { handleItem } from './routes/item';
 import { handlePlay } from './routes/play';
@@ -44,6 +45,7 @@ async function route(req: Request, env: Env): Promise<Response> {
   // Federated
   if (url.pathname === '/api/home' && req.method === 'GET') return handleHome(req);
   if (url.pathname === '/api/search' && req.method === 'GET') return handleSearch(req, url);
+  if (url.pathname === '/api/source-status' && req.method === 'GET') return handleSourceStatus(req, env, url);
 
   // Per-source
   const libMatch = url.pathname.match(/^\/api\/library\/([^/]+)(?:\/([^/]+))?$/);
