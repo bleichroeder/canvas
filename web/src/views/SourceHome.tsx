@@ -76,7 +76,7 @@ export function SourceHome({ source }: Props) {
                 <Box
                   sx={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, 200px)',
+                    gridTemplateColumns: 'repeat(auto-fill, 220px)',
                     gap: 2.5,
                     px: 2.5,
                   }}

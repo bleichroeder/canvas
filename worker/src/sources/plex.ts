@@ -61,6 +61,8 @@ export const plexAdapter: SourceAdapter = {
         id: s.key,
         type: 'folder',
         title: s.title,
+        poster: transcodeImage(ctx, s.composite, PLEX_POSTER_WIDTH),
+        librarySectionType: s.type,
       }));
       return { breadcrumbs: [{ name: 'Libraries' }], items, totalSize: items.length };
     }

@@ -122,4 +122,6 @@ export interface PlexSection {
   key: string;
   type: string;
   title: string;
+  art?: string;
+  composite?: string;
 }

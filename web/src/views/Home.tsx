@@ -187,29 +187,41 @@ export function Home() {
               );
             })()}
 
-            {sourceCount > 1 && (
-              <Box component="section" sx={{ mt: 4 }}>
-                <Typography variant="h3" sx={{ px: 2.5, mb: 1.5 }}>Your sources</Typography>
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, 200px)',
-                    gap: 2.5,
-                    px: 2.5,
-                  }}
-                >
-                  {Object.entries(sources).map(([key, src]) => (
-                    <SourcePickerCard
-                      key={key}
-                      srcKey={key}
-                      label={src.label}
-                      type={src.type}
-                      libraryCount={state.libraryCounts[key]}
-                    />
-                  ))}
+            {sourceCount > 1 && (() => {
+              // Pick a backdrop per source: first recently-added item with a
+              // poster from that source. Used as the SourcePickerCard background.
+              const backdrops: Record<string, string | undefined> = {};
+              for (const row of state.rows) {
+                if (row.kind !== 'recent') continue;
+                if (backdrops[row.source]) continue;
+                const firstWithPoster = row.items.find((i) => i.poster);
+                if (firstWithPoster?.poster) backdrops[row.source] = firstWithPoster.poster;
+              }
+              return (
+                <Box component="section" sx={{ mt: 4 }}>
+                  <Typography variant="h3" sx={{ px: 2.5, mb: 1.5 }}>Your sources</Typography>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, 220px)',
+                      gap: 2.5,
+                      px: 2.5,
+                    }}
+                  >
+                    {Object.entries(sources).map(([key, src]) => (
+                      <SourcePickerCard
+                        key={key}
+                        srcKey={key}
+                        label={src.label}
+                        type={src.type}
+                        libraryCount={state.libraryCounts[key]}
+                        backdropUrl={backdrops[key]}
+                      />
+                    ))}
+                  </Box>
                 </Box>
-              </Box>
-            )}
+              );
+            })()}
 
             {state.rows.length === 0 && state.errors.length === 0 && (
               <Typography color="text.secondary" sx={{ px: 2.5 }}>

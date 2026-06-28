@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import TextField from '@mui/material/TextField';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogActions from '@mui/material/DialogActions';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { api } from '../api';
 import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
 import type { StoredSource } from '../storage';
@@ -17,6 +20,7 @@ export interface SourceCardProps {
   type: StoredSource['type'];
   baseUrl: string;
   onUnpair(): void;
+  onRename(newLabel: string): void;
 }
 
 const DOT_COLOR: Record<string, string> = {
@@ -39,10 +43,12 @@ function timeAgo(ms: number | null): string {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
-export function SourceCard({ srcKey, label, type, baseUrl, onUnpair }: SourceCardProps) {
+export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onRename }: SourceCardProps) {
   const [status, setStatus] = useState<'loading' | 'ok' | 'degraded' | 'unreachable' | 'lan-only'>('loading');
   const [lastSeenAt, setLastSeenAt] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(label);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,7 +101,17 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair }: SourceCar
           {sourceGlyph(label)}
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="body1" sx={{ fontWeight: 500 }}>{label}</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="body1" sx={{ fontWeight: 500 }}>{label}</Typography>
+            <IconButton
+              size="small"
+              onClick={() => { setRenameDraft(label); setRenameOpen(true); }}
+              aria-label="rename source"
+              sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+            >
+              <EditOutlinedIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {type} · {baseUrl}
           </Typography>
@@ -103,6 +119,39 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair }: SourceCar
         </Box>
         <Button variant="text" color="error" onClick={() => setConfirmOpen(true)}>Unpair</Button>
       </Box>
+
+      <Dialog open={renameOpen} onClose={() => setRenameOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Rename source</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Pick a name that helps you tell sources apart. Original server name is unchanged on Plex itself.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            fullWidth
+            size="small"
+            label="Display name"
+            value={renameDraft}
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && renameDraft.trim()) {
+                setRenameOpen(false);
+                onRename(renameDraft.trim());
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={!renameDraft.trim() || renameDraft.trim() === label}
+            onClick={() => { setRenameOpen(false); onRename(renameDraft.trim()); }}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <DialogTitle>Unpair {label}?</DialogTitle>

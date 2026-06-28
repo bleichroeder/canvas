@@ -9,6 +9,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useRoute, navigate } from '../router';
 import { RouteBreadcrumbs } from './Breadcrumbs';
+import { useNowPlaying } from './NowPlayingStrip';
 
 interface AppShellProps {
   children: ReactNode;
@@ -17,6 +18,10 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const route = useRoute();
   const isHome = route.path === '/';
+  const nowPlaying = useNowPlaying();
+  // Reserve space at the bottom when the now-playing strip is mounted so
+  // content can scroll past it instead of being clipped underneath.
+  const mainPaddingBottom = nowPlaying ? '108px' : 0;
 
   const onBack = () => {
     if (window.history.length > 1) window.history.back();
@@ -63,7 +68,7 @@ export function AppShell({ children }: AppShellProps) {
         </Toolbar>
       </AppBar>
       <RouteBreadcrumbs />
-      <Box component="main">{children}</Box>
+      <Box component="main" sx={{ pb: mainPaddingBottom }}>{children}</Box>
     </Box>
   );
 }

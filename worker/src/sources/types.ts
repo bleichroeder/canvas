@@ -23,6 +23,8 @@ export interface Item {
   season?: number;
   /** Episode-only: episode number within the season. */
   episode?: number;
+  /** Section type for library-list entries (e.g. 'movie', 'show', 'artist', 'photo'). */
+  librarySectionType?: string;
 }
 
 export interface Episode {

@@ -18,7 +18,7 @@ import {
 import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
 import type { NowPlaying } from '../storage';
 
-function useNowPlaying(): NowPlaying | undefined {
+export function useNowPlaying(): NowPlaying | undefined {
   const [np, setNp] = useState<NowPlaying | undefined>(getNowPlaying);
   useEffect(() => {
     const onUpdate = () => setNp(getNowPlaying());

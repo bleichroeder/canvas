@@ -10,7 +10,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { AppShell } from '../components/AppShell';
 import { SourceCard } from '../components/SourceCard';
 import { navigate } from '../router';
-import { getSources, removeSource, getPrefs, setPrefs } from '../storage';
+import { getSources, removeSource, renameSource, getPrefs, setPrefs } from '../storage';
 import type { StoredSource, Prefs } from '../storage';
 
 export function Settings() {
@@ -23,6 +23,11 @@ export function Settings() {
 
   function unpair(key: string) {
     removeSource(key);
+    setLocalSources({ ...getSources() });
+  }
+
+  function rename(key: string, newLabel: string) {
+    renameSource(key, newLabel);
     setLocalSources({ ...getSources() });
   }
 
@@ -52,6 +57,7 @@ export function Settings() {
             type={src.type}
             baseUrl={src.baseUrl}
             onUnpair={() => unpair(key)}
+            onRename={(newLabel) => rename(key, newLabel)}
           />
         ))}
         <Button

@@ -49,6 +49,14 @@ export function removeSource(key: string): void {
   setSources(cur);
 }
 
+export function renameSource(key: string, newLabel: string): void {
+  const cur = getSources();
+  const s = cur[key];
+  if (!s) return;
+  cur[key] = { ...s, label: newLabel };
+  setSources(cur);
+}
+
 export function getPrefs(): Prefs {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
