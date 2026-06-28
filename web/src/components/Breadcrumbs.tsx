@@ -3,7 +3,7 @@ import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useRoute, navigate } from '../router';
-import { getSourceLabel, getLibraryName } from '../storage';
+import { getSourceLabel, getLibraryName, getItemTitle } from '../storage';
 
 interface Crumb {
   label: string;
@@ -15,14 +15,18 @@ function deriveCrumbs(path: string): Crumb[] {
   if (parts.length === 0) return [];
   const crumbs: Crumb[] = [{ label: 'Home', href: '/' }];
 
-  // /lib/:src
-  // /lib/:src/:libId
+  // /source/:src
+  if (parts[0] === 'source' && parts[1]) {
+    crumbs.push({ label: getSourceLabel(parts[1]) ?? parts[1] });
+    return crumbs;
+  }
+  // /lib/:src/:libId — bare /lib/:src is deprecated (T7 redirects it)
   if (parts[0] === 'lib') {
     const src = parts[1];
     if (src) {
       crumbs.push({
         label: getSourceLabel(src) ?? src,
-        href: parts.length > 2 ? `/lib/${src}` : undefined,
+        href: parts.length > 2 ? `/source/${src}` : undefined,
       });
     }
     if (parts[2]) {
@@ -33,9 +37,8 @@ function deriveCrumbs(path: string): Crumb[] {
   }
   // /item/:src/:id
   if (parts[0] === 'item' && parts[1] && parts[2]) {
-    crumbs.push({ label: getSourceLabel(parts[1]) ?? parts[1], href: `/lib/${parts[1]}` });
-    // item title isn't known at this layer — view sets document.title or could push state.
-    crumbs.push({ label: 'Item' });
+    crumbs.push({ label: getSourceLabel(parts[1]) ?? parts[1], href: `/source/${parts[1]}` });
+    crumbs.push({ label: getItemTitle(parts[1], parts[2]) ?? 'Item' });
     return crumbs;
   }
   // /search

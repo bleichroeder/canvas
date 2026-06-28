@@ -7,6 +7,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
 import { navigate, Link } from '../router';
+import { setItemTitle } from '../storage';
 import type { ItemDetail } from '../types';
 
 interface Props { source: string; id: string }
@@ -34,7 +35,10 @@ export function ItemDetailView({ source, id }: Props) {
   useEffect(() => {
     setState({ kind: 'loading' });
     api.item(source, id).then(
-      (item) => setState({ kind: 'ok', item }),
+      (item) => {
+        setItemTitle(source, id, item.title);
+        setState({ kind: 'ok', item });
+      },
       (e: Error) => setState({ kind: 'error', message: e.message }),
     );
   }, [source, id]);
