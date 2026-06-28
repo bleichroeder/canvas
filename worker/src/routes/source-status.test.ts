@@ -95,4 +95,28 @@ describe('handleSourceStatus', () => {
     expect(body.status).toBe('unreachable');
     expect(body.lastSeenAt).toBeNull();
   });
+
+  it('returns 400 when key query param is missing', async () => {
+    const url = new URL('https://api.test/api/source-status');
+    const req = makeReq({});
+    const res = await handleSourceStatus(req, { KV: fakeKV() } as never, url);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'missing key' });
+  });
+
+  it('returns degraded when probe resolves with non-ok status', async () => {
+    const url = new URL('https://api.test/api/source-status?key=plex1');
+    const req = makeReq({
+      plex1: { type: 'plex', baseUrl: 'https://public.example.com', token: 't' },
+    });
+    const kv = fakeKV();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('', { status: 503 }),
+    );
+    const res = await handleSourceStatus(req, { KV: kv } as never, url);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { status: string; lastSeenAt: unknown };
+    expect(body.status).toBe('degraded');
+    expect(typeof body.lastSeenAt).toBe('number');
+  });
 });
