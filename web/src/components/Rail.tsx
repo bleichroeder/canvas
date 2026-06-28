@@ -7,9 +7,10 @@ export interface RailProps {
   title: string;
   items: (Item & { source: string })[];
   cardWidth?: number;
+  showSourceBadge?: boolean;
 }
 
-export function Rail({ title, items, cardWidth = 180 }: RailProps) {
+export function Rail({ title, items, cardWidth = 180, showSourceBadge = false }: RailProps) {
   if (items.length === 0) return null;
   return (
     <Box component="section" sx={{ mb: 4 }}>
@@ -26,7 +27,7 @@ export function Rail({ title, items, cardWidth = 180 }: RailProps) {
       >
         {items.map((it) => (
           <Box key={`${it.source}:${it.id}`} sx={{ scrollSnapAlign: 'start' }}>
-            <PosterCard item={it} source={it.source} width={cardWidth} />
+            <PosterCard item={it} source={it.source} width={cardWidth} showSourceBadge={showSourceBadge} />
           </Box>
         ))}
       </Box>

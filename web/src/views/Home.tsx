@@ -155,14 +155,36 @@ export function Home() {
               </Box>
             )}
 
-            {state.rows.map((row) => (
-              <Rail
-                key={`${row.source}:${row.kind}:${row.title}`}
-                title={row.title}
-                items={row.items.map((i: Item) => ({ ...i, source: row.source }))}
-                cardWidth={row.items[0]?.type === 'episode' ? 260 : 180}
-              />
-            ))}
+            {(() => {
+              // Aggregate rows by kind across sources.
+              const continueItems: (Item & { source: string })[] = [];
+              const recentItems: (Item & { source: string })[] = [];
+              for (const row of state.rows) {
+                const tagged = row.items.map((i: Item) => ({ ...i, source: row.source }));
+                if (row.kind === 'continue') continueItems.push(...tagged);
+                else if (row.kind === 'recent') recentItems.push(...tagged);
+              }
+              return (
+                <>
+                  {continueItems.length > 0 && (
+                    <Rail
+                      title="Continue Watching"
+                      items={continueItems}
+                      cardWidth={continueItems[0]?.type === 'episode' ? 260 : 180}
+                      showSourceBadge
+                    />
+                  )}
+                  {recentItems.length > 0 && (
+                    <Rail
+                      title="Recently Added"
+                      items={recentItems}
+                      cardWidth={recentItems[0]?.type === 'episode' ? 260 : 180}
+                      showSourceBadge
+                    />
+                  )}
+                </>
+              );
+            })()}
 
             {sourceCount > 1 && (
               <Box component="section" sx={{ mt: 4 }}>

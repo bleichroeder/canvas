@@ -88,8 +88,10 @@ export function Settings() {
             sx={{ display: 'flex', mb: 1.5 }}
           />
           <FormControl size="small" sx={{ minWidth: 200, mb: 1.5, display: 'block' }}>
-            <InputLabel>Default subtitle language</InputLabel>
+            <InputLabel id="default-sub-lang-label">Default subtitle language</InputLabel>
             <Select
+              labelId="default-sub-lang-label"
+              id="default-sub-lang"
               value={prefs.defaultSubLang}
               label="Default subtitle language"
               onChange={(e) => update('defaultSubLang', e.target.value)}
@@ -102,8 +104,10 @@ export function Settings() {
             </Select>
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 200, display: 'block' }}>
-            <InputLabel>Default audio language</InputLabel>
+            <InputLabel id="default-audio-lang-label">Default audio language</InputLabel>
             <Select
+              labelId="default-audio-lang-label"
+              id="default-audio-lang"
               value={prefs.defaultAudioLang}
               label="Default audio language"
               onChange={(e) => update('defaultAudioLang', e.target.value)}
