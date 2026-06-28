@@ -1,24 +1,27 @@
 import { withCors } from '../cors';
 import { parseXSources } from '../x-sources';
+import { parseFlixifyAuth } from '../sources/flixify';
 
 /**
- * Proxy fetch a Plex subtitle stream as WebVTT. Plex's subtitle endpoint
- * doesn't emit CORS headers, and the canvas player has no `<video>` element
- * to attach a `<track>` to, so we fetch text via the worker and serve it
- * with our normal CORS surface.
+ * Proxy fetch a subtitle file as WebVTT. Two source-type modes:
  *
- * Query: ?src=<srcKey>&partId=<N>&streamId=<N>
+ *   - Plex:     ?src=<srcKey>&partId=<N>&streamId=<N>
+ *               worker fetches `${baseUrl}/library/parts/{partId}/{streamId}/subtitles.vtt?X-Plex-Token=...`
+ *
+ *   - Flixify:  ?src=<srcKey>&path=<encoded-subtitle-path>
+ *               worker fetches `https://${asset_host}${path}` with the source's session cookies
+ *
+ * The canvas player has no `<video>` to attach a `<track>` to and most
+ * upstream subtitle endpoints don't emit CORS headers, so all subtitle bytes
+ * flow through the worker.
  */
 export async function handleSubtitles(req: Request, url: URL): Promise<Response> {
   const srcKey = url.searchParams.get('src');
-  const partId = url.searchParams.get('partId');
-  const streamId = url.searchParams.get('streamId');
-  if (!srcKey || !partId || !streamId) {
-    return withCors(req, new Response(JSON.stringify({ error: 'missing src/partId/streamId' }), {
+  if (!srcKey) {
+    return withCors(req, new Response(JSON.stringify({ error: 'missing src' }), {
       status: 400, headers: { 'content-type': 'application/json' },
     }));
   }
-
   const sources = parseXSources(req);
   const src = sources[srcKey];
   if (!src) {
@@ -26,21 +29,49 @@ export async function handleSubtitles(req: Request, url: URL): Promise<Response>
       status: 404, headers: { 'content-type': 'application/json' },
     }));
   }
-  if (src.type !== 'plex') {
-    return withCors(req, new Response(JSON.stringify({ error: 'subtitles only supported for plex sources' }), {
+
+  let upstreamUrl: string;
+  const headers: Record<string, string> = { Accept: 'text/vtt' };
+
+  if (src.type === 'plex') {
+    const partId = url.searchParams.get('partId');
+    const streamId = url.searchParams.get('streamId');
+    if (!partId || !streamId) {
+      return withCors(req, new Response(JSON.stringify({ error: 'missing partId/streamId for plex source' }), {
+        status: 400, headers: { 'content-type': 'application/json' },
+      }));
+    }
+    upstreamUrl = `${src.baseUrl}/library/parts/${encodeURIComponent(partId)}/${encodeURIComponent(streamId)}/subtitles.vtt?X-Plex-Token=${encodeURIComponent(src.token)}`;
+  } else if (src.type === 'flixify') {
+    const path = url.searchParams.get('path');
+    if (!path) {
+      return withCors(req, new Response(JSON.stringify({ error: 'missing path for flixify source' }), {
+        status: 400, headers: { 'content-type': 'application/json' },
+      }));
+    }
+    const auth = parseFlixifyAuth(src.token);
+    if (!auth.asset_host) {
+      return withCors(req, new Response(JSON.stringify({ error: 'flixify source has no asset_host' }), {
+        status: 500, headers: { 'content-type': 'application/json' },
+      }));
+    }
+    upstreamUrl = `https://${auth.asset_host}${path}`;
+    const cookieParts: string[] = [];
+    if (auth.pip) cookieParts.push(`pip=${auth.pip}`);
+    if (auth.session) cookieParts.push(`session=${auth.session}`);
+    if (auth.profile_id) cookieParts.push(`profile_id=${auth.profile_id}`);
+    if (cookieParts.length) headers.Cookie = cookieParts.join('; ');
+  } else {
+    return withCors(req, new Response(JSON.stringify({ error: `subtitles not supported for source type ${src.type}` }), {
       status: 501, headers: { 'content-type': 'application/json' },
     }));
   }
 
-  // Plex serves VTT directly from this endpoint; for non-VTT originals it
-  // converts on the fly.
-  const plexUrl = `${src.baseUrl}/library/parts/${encodeURIComponent(partId)}/${encodeURIComponent(streamId)}/subtitles.vtt?X-Plex-Token=${encodeURIComponent(src.token)}`;
-
   try {
-    const res = await fetch(plexUrl, { headers: { Accept: 'text/vtt' } });
+    const res = await fetch(upstreamUrl, { headers });
     if (!res.ok) {
       return withCors(req, new Response(JSON.stringify({
-        error: `plex returned ${res.status} for subtitle ${streamId}`,
+        error: `upstream returned ${res.status}`,
       }), { status: 502, headers: { 'content-type': 'application/json' } }));
     }
     const body = await res.text();

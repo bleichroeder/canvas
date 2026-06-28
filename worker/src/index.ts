@@ -1,6 +1,7 @@
 import { corsHeaders, withCors } from './cors';
 import { handlePairStart, handlePairPoll, handlePairApprove, handlePairDelete } from './routes/pair';
 import { handlePairPlexServers } from './routes/pair-plex-servers';
+import { handleFlixifyPairStart, handleFlixifyPairPoll } from './routes/pair-flixify';
 import { handleHome } from './routes/home';
 import { handleSourceHome } from './routes/source-home';
 import { handleSearch } from './routes/search';
@@ -12,8 +13,10 @@ import { handlePlay } from './routes/play';
 import { handleProgress } from './routes/progress';
 import { registerAdapter } from './sources/registry';
 import { plexAdapter } from './sources/plex';
+import { flixifyAdapter } from './sources/flixify';
 
 registerAdapter(plexAdapter);
+registerAdapter(flixifyAdapter);
 
 export interface Env {
   KV: KVNamespace;
@@ -41,6 +44,8 @@ async function route(req: Request, env: Env): Promise<Response> {
   if (url.pathname === '/api/pair/poll' && req.method === 'POST') return handlePairPoll(req, env.KV);
   if (url.pathname === '/api/pair/approve' && req.method === 'POST') return handlePairApprove(req, env.KV);
   if (url.pathname === '/api/pair/plex-servers' && req.method === 'POST') return handlePairPlexServers(req);
+  if (url.pathname === '/api/pair/flixify-start' && req.method === 'POST') return handleFlixifyPairStart(req, env.KV);
+  if (url.pathname === '/api/pair/flixify-poll' && req.method === 'POST') return handleFlixifyPairPoll(req, env.KV);
   const delMatch = url.pathname.match(/^\/api\/pair\/([A-Z0-9-]+)$/);
   if (delMatch && req.method === 'DELETE') return handlePairDelete(req, env.KV, delMatch[1]!);
 
