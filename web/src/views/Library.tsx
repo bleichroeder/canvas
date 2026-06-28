@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import { api } from '../api';
+import { navigate } from '../router';
 import { AppShell } from '../components/AppShell';
 import { PosterCard } from '../components/PosterCard';
 import { setLibraryName } from '../storage';
@@ -21,6 +22,10 @@ export function Library({ source, libraryId }: Props) {
   >({ kind: 'loading' });
 
   useEffect(() => {
+    if (!libraryId) {
+      navigate(`/source/${source}`);
+      return;
+    }
     setState({ kind: 'loading' });
     api.library(source, libraryId).then(
       (data) => {
@@ -34,6 +39,8 @@ export function Library({ source, libraryId }: Props) {
       (e: Error) => setState({ kind: 'error', message: e.message }),
     );
   }, [source, libraryId]);
+
+  if (!libraryId) return null;
 
   return (
     <AppShell>
