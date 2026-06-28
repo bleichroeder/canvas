@@ -5,6 +5,7 @@ import { handleHome } from './routes/home';
 import { handleSourceHome } from './routes/source-home';
 import { handleSearch } from './routes/search';
 import { handleSourceStatus } from './routes/source-status';
+import { handleSubtitles } from './routes/subtitles';
 import { handleLibrary } from './routes/library';
 import { handleItem } from './routes/item';
 import { handlePlay } from './routes/play';
@@ -47,6 +48,7 @@ async function route(req: Request, env: Env): Promise<Response> {
   if (url.pathname === '/api/home' && req.method === 'GET') return handleHome(req);
   if (url.pathname === '/api/search' && req.method === 'GET') return handleSearch(req, url);
   if (url.pathname === '/api/source-status' && req.method === 'GET') return handleSourceStatus(req, env, url);
+  if (url.pathname === '/api/subtitles' && req.method === 'GET') return handleSubtitles(req, url);
 
   // Source home
   const srcHomeMatch = url.pathname === '/api/source-home';

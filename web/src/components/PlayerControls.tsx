@@ -5,6 +5,11 @@ import Slider from '@mui/material/Slider';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import Fade from '@mui/material/Fade';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import Divider from '@mui/material/Divider';
 import CloseIcon from '@mui/icons-material/Close';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
@@ -16,6 +21,15 @@ import VolumeDownIcon from '@mui/icons-material/VolumeDown';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
+import ClosedCaptionOutlinedIcon from '@mui/icons-material/ClosedCaptionOutlined';
+import ClosedCaptionIcon from '@mui/icons-material/ClosedCaption';
+import CheckIcon from '@mui/icons-material/Check';
+
+export interface SubtitleTrackOption {
+  id: string;
+  label?: string;
+  language?: string;
+}
 
 interface PlayerControlsProps {
   paused: boolean;
@@ -26,6 +40,9 @@ interface PlayerControlsProps {
   volume: number;
   muted: boolean;
   fullscreen: boolean;
+  subtitleTracks: SubtitleTrackOption[];
+  selectedSubtitleId: string | null;
+  captionsOffsetMs: number;
   onPlayPause(): void;
   onSeek(sec: number): void;
   onSeekRelative(deltaSec: number): void;
@@ -33,6 +50,8 @@ interface PlayerControlsProps {
   onVolumeChange(v: number): void;
   onMuteToggle(): void;
   onFullscreenToggle(): void;
+  onSubtitleChange(id: string | null): void;
+  onCaptionsOffsetChange(ms: number): void;
 }
 
 function fmt(sec: number): string {
@@ -95,6 +114,9 @@ const volumeSliderSx = {
 export function PlayerControls(p: PlayerControlsProps) {
   const [previewPos, setPreviewPos] = useState<number | null>(null);
   const [previewBroken, setPreviewBroken] = useState(false);
+  const [ccAnchor, setCcAnchor] = useState<HTMLElement | null>(null);
+  const hasTracks = p.subtitleTracks.length > 0;
+  const captionsOn = p.selectedSubtitleId !== null;
 
   useEffect(() => {
     if (!p.visible) setPreviewPos(null);
@@ -230,6 +252,17 @@ export function PlayerControls(p: PlayerControlsProps) {
             >
               {fmt(scrubPos)} <Box component="span" sx={{ opacity: 0.6, mx: 0.5 }}>/</Box> {fmt(p.durationSec)}
             </Typography>
+            {hasTracks && (
+              <Tooltip title="Subtitles">
+                <IconButton
+                  onClick={(e) => setCcAnchor(e.currentTarget)}
+                  aria-label="subtitles"
+                  sx={{ ml: 1, color: captionsOn ? 'primary.main' : 'inherit' }}
+                >
+                  {captionsOn ? <ClosedCaptionIcon /> : <ClosedCaptionOutlinedIcon />}
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title={p.fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
               <IconButton onClick={p.onFullscreenToggle} aria-label="fullscreen toggle" sx={{ ml: 1.5 }}>
                 {p.fullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
@@ -238,6 +271,59 @@ export function PlayerControls(p: PlayerControlsProps) {
           </Box>
         </Box>
       </Fade>
+
+      <Menu
+        anchorEl={ccAnchor}
+        open={Boolean(ccAnchor)}
+        onClose={() => setCcAnchor(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        slotProps={{ paper: { sx: { minWidth: 300, mb: 1 } } }}
+      >
+        <MenuItem
+          onClick={() => { p.onSubtitleChange(null); setCcAnchor(null); }}
+          selected={!captionsOn}
+        >
+          <ListItemIcon sx={{ minWidth: 36 }}>
+            {!captionsOn ? <CheckIcon fontSize="small" /> : null}
+          </ListItemIcon>
+          <ListItemText primary="Off" />
+        </MenuItem>
+        {p.subtitleTracks.map((t) => (
+          <MenuItem
+            key={t.id}
+            onClick={() => { p.onSubtitleChange(t.id); setCcAnchor(null); }}
+            selected={p.selectedSubtitleId === t.id}
+          >
+            <ListItemIcon sx={{ minWidth: 36 }}>
+              {p.selectedSubtitleId === t.id ? <CheckIcon fontSize="small" /> : null}
+            </ListItemIcon>
+            <ListItemText primary={t.label ?? t.language ?? t.id} />
+          </MenuItem>
+        ))}
+        <Divider sx={{ my: 0.5 }} />
+        <Box sx={{ px: 2, py: 1.5 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Timing offset</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontFeatureSettings: '"tnum" 1' }}>
+              {p.captionsOffsetMs === 0 ? '0' : (p.captionsOffsetMs > 0 ? '+' : '') + (p.captionsOffsetMs / 1000).toFixed(1)}s
+            </Typography>
+          </Box>
+          <Slider
+            value={p.captionsOffsetMs}
+            min={-5000}
+            max={5000}
+            step={100}
+            marks={[
+              { value: -5000, label: '-5s' },
+              { value: 0, label: '0' },
+              { value: 5000, label: '+5s' },
+            ]}
+            onChange={(_, v) => p.onCaptionsOffsetChange(typeof v === 'number' ? v : (v[0] ?? 0))}
+            sx={{ color: 'primary.main' }}
+          />
+        </Box>
+      </Menu>
     </Box>
   );
 }

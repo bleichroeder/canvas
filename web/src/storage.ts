@@ -180,3 +180,24 @@ export function clearNowPlaying(): void {
     window.dispatchEvent(new Event(NOW_PLAYING_EVENT));
   } catch { /* ignore */ }
 }
+
+// Caption timing offset — global pref persisted across sessions. Range
+// roughly ±5000ms covers typical Plex-transcoder drift.
+const CAPTIONS_OFFSET_KEY = 'canvas.captionsOffsetMs';
+
+export function getCaptionsOffsetMs(): number {
+  try {
+    const raw = localStorage.getItem(CAPTIONS_OFFSET_KEY);
+    if (raw === null) return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function setCaptionsOffsetMs(ms: number): void {
+  try {
+    localStorage.setItem(CAPTIONS_OFFSET_KEY, String(Math.round(ms)));
+  } catch { /* ignore */ }
+}

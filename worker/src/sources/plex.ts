@@ -127,12 +127,40 @@ export const plexAdapter: SourceAdapter = {
     // arbitrary codecs (HEVC, AC3, DTS). The canvas pipeline only handles
     // H.264 + AAC|MP3. Route through Plex's transcoder forcing those codecs.
     const meta = await plexFetch<MediaContainer<PlexMetadata & {
-      Media?: { duration?: number; Part?: { id?: number; key: string }[] }[];
+      Media?: { duration?: number; Part?: {
+        id?: number;
+        key: string;
+        Stream?: {
+          id?: number;
+          streamType?: number;
+          format?: string;
+          codec?: string;
+          language?: string;
+          languageTag?: string;
+          displayTitle?: string;
+          title?: string;
+          selected?: boolean;
+        }[];
+      }[] }[];
     }>>(ctx, `/library/metadata/${encodeURIComponent(id)}`);
     const m = meta.MediaContainer.Metadata?.[0];
     if (!m) throw new Error(`Plex item ${id} not found`);
     const durationMs = m.duration ?? m.Media?.[0]?.duration ?? 0;
     const partId = m.Media?.[0]?.Part?.[0]?.id;
+    const streams = m.Media?.[0]?.Part?.[0]?.Stream ?? [];
+    const subtitleTracks = partId !== undefined
+      ? streams
+          .filter((s) => s.streamType === 3 && s.id !== undefined)
+          .map((s) => ({
+            id: String(s.id),
+            language: s.languageTag ?? s.language,
+            label: s.displayTitle ?? s.title ?? s.language ?? `Subtitle ${s.id}`,
+            // Relative path; frontend prefixes with API_BASE. Worker proxies
+            // the actual Plex VTT fetch (Plex doesn't send CORS headers).
+            url: `/api/subtitles?partId=${partId}&streamId=${s.id}`,
+            format: 'vtt' as const,
+          }))
+      : [];
 
     const session = crypto.randomUUID();
     const params = new URLSearchParams({

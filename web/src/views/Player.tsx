@@ -2,10 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { navigate, useRoute } from '../router';
 import { PlayerControls } from '../components/PlayerControls';
+import { CaptionsLayer } from '../components/CaptionsLayer';
 import { bootEngine, type EngineHandle } from '../player/engine';
 import { VideoSink } from '../player/video';
 import { AudioSink } from '../player/audio';
-import { updateNowPlayingProgress } from '../storage';
+import { parseVtt, type Cue } from '../lib/vtt-parser';
+import {
+  updateNowPlayingProgress,
+  getCaptionsOffsetMs,
+  setCaptionsOffsetMs,
+} from '../storage';
 import type { PlayResolution } from '../types';
 import Backdrop from '@mui/material/Backdrop';
 import Stack from '@mui/material/Stack';
@@ -41,6 +47,11 @@ export function Player({ source, id }: Props) {
   });
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+
+  const [subtitleTracks, setSubtitleTracks] = useState<PlayResolution['subtitleTracks']>([]);
+  const [selectedSubtitleId, setSelectedSubtitleId] = useState<string | null>(null);
+  const [captionCues, setCaptionCues] = useState<Cue[]>([]);
+  const [captionsOffsetMs, setCaptionsOffsetMsState] = useState<number>(getCaptionsOffsetMs);
 
   const videoRef = useRef<VideoSink | null>(null);
   const audioRef = useRef<AudioSink | null>(null);
@@ -95,6 +106,36 @@ export function Player({ source, id }: Props) {
     audioRef.current?.setMuted(muted);
   }, [muted]);
 
+  // Fetch and parse VTT for the currently-selected subtitle track. Depends on
+  // the resolved track URL (a primitive string), so reseek-induced re-fetches
+  // of the same track don't trigger redundant subtitle requests.
+  const selectedTrackUrl =
+    selectedSubtitleId && subtitleTracks
+      ? subtitleTracks.find((t) => t.id === selectedSubtitleId)?.url
+      : undefined;
+  useEffect(() => {
+    if (!selectedTrackUrl) { setCaptionCues([]); return; }
+    let cancelled = false;
+    api.fetchSubtitlesText(selectedTrackUrl).then(
+      (text) => { if (!cancelled) setCaptionCues(parseVtt(text)); },
+      (e: Error) => {
+        if (!cancelled) {
+          console.warn('subtitles fetch failed:', e.message);
+          setCaptionCues([]);
+        }
+      },
+    );
+    return () => { cancelled = true; };
+  }, [selectedTrackUrl]);
+
+  function onSubtitleChange(id: string | null): void {
+    setSelectedSubtitleId(id);
+  }
+  function onCaptionsOffsetChange(ms: number): void {
+    setCaptionsOffsetMsState(ms);
+    setCaptionsOffsetMs(ms);
+  }
+
   useEffect(() => {
     const onChange = () => setFullscreen(document.fullscreenElement !== null);
     document.addEventListener('fullscreenchange', onChange);
@@ -122,6 +163,7 @@ export function Player({ source, id }: Props) {
         if (cancelled) return;
         resolutionRef.current = resolution;
         setDuration(resolution.durationSec);
+        setSubtitleTracks(resolution.subtitleTracks ?? []);
         setStatus('Loading…');
         const canvas = canvasRef.current!;
         engineRef.current = bootEngine({
@@ -316,6 +358,9 @@ export function Player({ source, id }: Props) {
         volume={volume}
         muted={muted}
         fullscreen={fullscreen}
+        subtitleTracks={subtitleTracks ?? []}
+        selectedSubtitleId={selectedSubtitleId}
+        captionsOffsetMs={captionsOffsetMs}
         onPlayPause={onPlayPause}
         onSeek={onSeek}
         onSeekRelative={onSeekRelative}
@@ -323,6 +368,14 @@ export function Player({ source, id }: Props) {
         onVolumeChange={onVolumeChange}
         onMuteToggle={onMuteToggle}
         onFullscreenToggle={onFullscreenToggle}
+        onSubtitleChange={onSubtitleChange}
+        onCaptionsOffsetChange={onCaptionsOffsetChange}
+      />
+      <CaptionsLayer
+        cues={captionCues}
+        posSec={pos}
+        offsetMs={captionsOffsetMs}
+        controlsVisible={controlsVisible}
       />
       <Backdrop open={reseeking} sx={{ zIndex: 5, bgcolor: 'rgba(0,0,0,0.6)' }}>
         <Stack alignItems="center" spacing={2}>

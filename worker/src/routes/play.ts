@@ -19,6 +19,17 @@ export async function handlePlay(req: Request, srcKey: string, id: string): Prom
       const adapter = getAdapter(src.type);
       return adapter.resolveStream({ baseUrl: src.baseUrl, token: src.token }, id, fromSec);
     });
+    // Adapter-emitted subtitle URLs are relative and source-agnostic; tag
+    // them with the resolved srcKey so the subtitle proxy knows which source
+    // to fetch from.
+    if (result.subtitleTracks) {
+      result.subtitleTracks = result.subtitleTracks.map((t) => ({
+        ...t,
+        url: t.url.includes('?')
+          ? `${t.url}&src=${encodeURIComponent(srcKey)}`
+          : `${t.url}?src=${encodeURIComponent(srcKey)}`,
+      }));
+    }
     return withCors(req, new Response(JSON.stringify(result), {
       headers: { 'content-type': 'application/json' },
     }));

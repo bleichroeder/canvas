@@ -88,4 +88,18 @@ export const api = {
     request<{ status: 'ok' | 'degraded' | 'unreachable' | 'lan-only'; lastSeenAt: number | null }>(
       `/api/source-status?key=${encodeURIComponent(srcKey)}`,
     ),
+
+  // Fetch a VTT subtitle file by relative worker path. The subtitle proxy
+  // route needs the x-sources header to look up the source's token, so we
+  // can't fetch directly from the URL the worker hands back.
+  fetchSubtitlesText: async (relativeUrl: string): Promise<string> => {
+    const headers = new Headers();
+    for (const [k, v] of Object.entries(sourcesHeader())) headers.set(k, v);
+    const res = await fetch(`${API_BASE}${relativeUrl}`, { headers });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status} — ${text.slice(0, 200)}`);
+    }
+    return res.text();
+  },
 };
