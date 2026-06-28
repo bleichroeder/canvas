@@ -50,6 +50,11 @@ export interface PlexMetadata {
   rating?: number;
   Genre?: { tag: string }[];
   Media?: { duration?: number; Part?: { id?: number; key: string; Stream?: PlexStream[] }[] }[];
+  // Episode-only fields:
+  grandparentTitle?: string;  // show name
+  grandparentThumb?: string;  // show 2:3 poster
+  parentIndex?: number;       // season number
+  index?: number;             // episode number
 }
 
 /**
@@ -87,16 +92,26 @@ export function mapMetadata(
   // (otherwise Stream entries are absent and we can't claim either way).
   const streams = m.Media?.[0]?.Part?.[0]?.Stream;
   const hasCC = streams ? streams.some((s) => s.streamType === 3) : undefined;
+
+  // For episodes, render in mixed rails using the show's 2:3 poster (so it's
+  // visually uniform with movies/shows) and surface season/episode details so
+  // the card subtitle can show "S2·E5 · {episode title}" while the title is
+  // the show name.
+  const isEpisode = type === 'episode';
+  const posterPath = isEpisode && m.grandparentThumb ? m.grandparentThumb : m.thumb;
   return {
     id: m.ratingKey,
     type,
     title: m.title,
     year: m.year,
-    poster: transcodeImage(ctx, m.thumb, POSTER_WIDTH),
+    poster: transcodeImage(ctx, posterPath, POSTER_WIDTH),
     durationSec: m.duration ? Math.round(m.duration / 1000) : undefined,
     viewOffsetSec: m.viewOffset ? Math.round(m.viewOffset / 1000) : undefined,
     ...(m.rating !== undefined ? { rating: m.rating } : {}),
     ...(hasCC ? { hasCC: true } : {}),
+    ...(isEpisode && m.grandparentTitle ? { showTitle: m.grandparentTitle } : {}),
+    ...(isEpisode && m.parentIndex !== undefined ? { season: m.parentIndex } : {}),
+    ...(isEpisode && m.index !== undefined ? { episode: m.index } : {}),
   };
 }
 

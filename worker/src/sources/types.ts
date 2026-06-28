@@ -17,6 +17,12 @@ export interface Item {
   rating?: number;
   /** True when the source advertises at least one embedded subtitle stream. */
   hasCC?: boolean;
+  /** Episode-only: parent show name. */
+  showTitle?: string;
+  /** Episode-only: season number. */
+  season?: number;
+  /** Episode-only: episode number within the season. */
+  episode?: number;
 }
 
 export interface Episode {

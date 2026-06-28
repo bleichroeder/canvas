@@ -171,7 +171,7 @@ export function Home() {
                     <Rail
                       title="Continue Watching"
                       items={continueItems}
-                      cardWidth={continueItems[0]?.type === 'episode' ? 260 : 180}
+                      cardWidth={180}
                       showSourceBadge
                     />
                   )}
@@ -179,7 +179,7 @@ export function Home() {
                     <Rail
                       title="Recently Added"
                       items={recentItems}
-                      cardWidth={recentItems[0]?.type === 'episode' ? 260 : 180}
+                      cardWidth={180}
                       showSourceBadge
                     />
                   )}

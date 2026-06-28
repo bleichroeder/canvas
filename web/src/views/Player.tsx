@@ -12,11 +12,15 @@ import {
   getCaptionsOffsetMs,
   setCaptionsOffsetMs,
 } from '../storage';
-import type { PlayResolution } from '../types';
+import type { PlayResolution, ItemDetail } from '../types';
 import Backdrop from '@mui/material/Backdrop';
 import Stack from '@mui/material/Stack';
 import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import Box from '@mui/material/Box';
+import Fade from '@mui/material/Fade';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
 interface Props { source: string; id: string }
 
@@ -52,6 +56,10 @@ export function Player({ source, id }: Props) {
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string | null>(null);
   const [captionCues, setCaptionCues] = useState<Cue[]>([]);
   const [captionsOffsetMs, setCaptionsOffsetMsState] = useState<number>(getCaptionsOffsetMs);
+
+  // Item metadata for the splash overlay (backdrop + title shown before first play).
+  const [itemMeta, setItemMeta] = useState<ItemDetail | null>(null);
+  const [hasEverStarted, setHasEverStarted] = useState(false);
 
   const videoRef = useRef<VideoSink | null>(null);
   const audioRef = useRef<AudioSink | null>(null);
@@ -106,6 +114,17 @@ export function Player({ source, id }: Props) {
     audioRef.current?.setMuted(muted);
   }, [muted]);
 
+  // Fetch item metadata (backdrop + title) for the splash overlay. Independent
+  // of the stream-resolve path so the splash can paint as soon as possible.
+  useEffect(() => {
+    let cancelled = false;
+    api.item(source, id).then(
+      (item) => { if (!cancelled) setItemMeta(item); },
+      () => { /* splash falls back to no-backdrop */ },
+    );
+    return () => { cancelled = true; };
+  }, [source, id]);
+
   // Fetch and parse VTT for the currently-selected subtitle track. Depends on
   // the resolved track URL (a primitive string), so reseek-induced re-fetches
   // of the same track don't trigger redundant subtitle requests.
@@ -151,6 +170,7 @@ export function Player({ source, id }: Props) {
     pendingAudioRef.current = [];
     startedRef.current = true;
     setPaused(false);
+    setHasEverStarted(true);
   }
 
   const bootSession = (fromSec: number): { cancel: () => void } => {
@@ -192,9 +212,9 @@ export function Player({ source, id }: Props) {
             setStatus('');
             if (wasPlayingRef.current) {
               void autoStartPlayback();
-            } else {
-              setStatus('Ready — tap to play');
             }
+            // No status hint here — the splash overlay (with its big play
+            // button) IS the affordance for first play.
           },
           onVideoSample: (chunk) => {
             if (startedRef.current && videoRef.current) videoRef.current.feed(chunk);
@@ -325,10 +345,18 @@ export function Player({ source, id }: Props) {
     }
   }
 
+  const splashVisible = !hasEverStarted && !errMsg && !reseeking;
+  const engineReady = status === '';
+
   return (
     <div
       onClick={() => {
-        if (!errMsg && controlsVisible) void onPlayPause();
+        if (errMsg) return;
+        // Before first play, any tap on the canvas starts playback (with or
+        // without controls visible). Once running, the standard rule applies:
+        // taps only toggle pause when controls were already visible.
+        if (!hasEverStarted) { void onPlayPause(); return; }
+        if (controlsVisible) void onPlayPause();
       }}
       style={{
         position: 'fixed', inset: 0, background: '#000',
@@ -340,13 +368,74 @@ export function Player({ source, id }: Props) {
         ref={canvasRef}
         style={{ maxWidth: '100vw', maxHeight: '100vh', display: 'block' }}
       />
-      {(status || errMsg) && (
+      <Fade in={splashVisible} timeout={300} unmountOnExit>
+        <Box
+          sx={{
+            position: 'fixed', inset: 0,
+            backgroundColor: '#0e0f12',
+            backgroundImage: itemMeta?.backdrop ? `url(${itemMeta.backdrop})` : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            zIndex: 6,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Box sx={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(to bottom, rgba(14,15,18,0.4) 0%, rgba(14,15,18,0.75) 70%, rgba(14,15,18,0.9) 100%)',
+          }} />
+          <Stack alignItems="center" spacing={4} sx={{ position: 'relative', textAlign: 'center', maxWidth: 800, px: 4 }}>
+            {itemMeta?.title && (
+              <Typography
+                variant="h1"
+                sx={{
+                  color: 'common.white',
+                  fontSize: { xs: 28, sm: 40 },
+                  fontWeight: 600,
+                  textShadow: '0 2px 12px rgba(0,0,0,0.7)',
+                  letterSpacing: 0.5,
+                }}
+              >
+                {itemMeta.title}
+              </Typography>
+            )}
+            <IconButton
+              onClick={(e) => { e.stopPropagation(); void onPlayPause(); }}
+              disabled={!engineReady}
+              aria-label="play"
+              sx={{
+                width: 104, height: 104,
+                color: 'common.white',
+                backgroundColor: 'rgba(255,255,255,0.15)',
+                border: '2px solid rgba(255,255,255,0.5)',
+                backdropFilter: 'blur(8px)',
+                transition: 'transform 150ms ease, background-color 150ms ease',
+                '&:hover': {
+                  backgroundColor: 'rgba(255,255,255,0.25)',
+                  transform: 'scale(1.04)',
+                },
+                '&.Mui-disabled': {
+                  color: 'rgba(255,255,255,0.6)',
+                  borderColor: 'rgba(255,255,255,0.2)',
+                  backgroundColor: 'rgba(255,255,255,0.05)',
+                },
+              }}
+            >
+              {engineReady
+                ? <PlayArrowIcon sx={{ fontSize: 60, ml: 0.5 }} />
+                : <CircularProgress size={42} sx={{ color: 'common.white' }} />}
+            </IconButton>
+          </Stack>
+        </Box>
+      </Fade>
+      {errMsg && (
         <div style={{
           position: 'fixed', top: 12, left: 12,
-          color: errMsg ? '#f88' : '#ccc',
+          color: '#f88',
           background: 'rgba(0,0,0,0.5)', padding: '6px 10px', borderRadius: 4, fontSize: 13,
+          zIndex: 12,
         }}>
-          {errMsg ?? status}
+          {errMsg}
         </div>
       )}
       <PlayerControls

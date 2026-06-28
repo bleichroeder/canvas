@@ -63,12 +63,12 @@ export function SourceHome({ source }: Props) {
             <Rail
               title="Continue Watching"
               items={state.data.continueWatching.map((i) => ({ ...i, source }))}
-              cardWidth={state.data.continueWatching[0]?.type === 'episode' ? 260 : 180}
+              cardWidth={180}
             />
             <Rail
               title="Recently Added"
               items={state.data.recentlyAdded.map((i) => ({ ...i, source }))}
-              cardWidth={state.data.recentlyAdded[0]?.type === 'episode' ? 260 : 180}
+              cardWidth={180}
             />
             {state.data.libraries.length > 0 && (
               <Box component="section" sx={{ mb: 4 }}>

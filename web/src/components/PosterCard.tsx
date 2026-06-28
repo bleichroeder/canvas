@@ -14,13 +14,28 @@ export interface PosterCardProps {
   showSourceBadge?: boolean;
 }
 
+function formatEpisodeSubtitle(item: Item): string | undefined {
+  if (item.type !== 'episode') return undefined;
+  if (item.season !== undefined && item.episode !== undefined) {
+    const tag = `S${item.season}·E${item.episode}`;
+    return item.title ? `${tag} · ${item.title}` : tag;
+  }
+  return item.title;
+}
+
 export function PosterCard({ item, source, width = 180, showSourceBadge = false }: PosterCardProps) {
   const isFolder = item.type === 'folder';
   const href = isFolder
     ? `/lib/${source}/${item.id}`
     : `/item/${source}/${item.id}`;
-  const aspectRatio = item.type === 'episode' ? 16 / 9 : 2 / 3;
+  // Uniform 2:3 poster aspect across all item types. Episodes carry the
+  // show's poster (set worker-side) so this works visually.
+  const aspectRatio = 2 / 3;
   const src = showSourceBadge ? getSources()[source] : undefined;
+  const displayTitle = item.type === 'episode' && item.showTitle ? item.showTitle : item.title;
+  const subtitle = item.type === 'episode'
+    ? formatEpisodeSubtitle(item)
+    : (item.year ? String(item.year) : undefined);
   return (
     <Card sx={{ flexShrink: 0, width, backgroundColor: 'transparent', border: 'none' }}>
       <CardActionArea onClick={() => navigate(href)} sx={{ borderRadius: 1 }}>
@@ -117,22 +132,37 @@ export function PosterCard({ item, source, width = 180, showSourceBadge = false 
             </Box>
           )}
         </Box>
-        <Typography
-          variant="body2"
-          sx={{
-            mt: 1,
-            fontWeight: 500,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            color: 'text.primary',
-          }}
-        >
-          {item.title}
-        </Typography>
-        {item.year ? (
-          <Typography variant="caption" color="text.secondary">{item.year}</Typography>
-        ) : null}
+        <Box sx={{ mt: 1.25 }}>
+          <Typography
+            sx={{
+              fontWeight: 600,
+              fontSize: 14,
+              lineHeight: 1.3,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: 'text.primary',
+            }}
+          >
+            {displayTitle}
+          </Typography>
+          {subtitle && (
+            <Typography
+              sx={{
+                mt: 0.25,
+                fontSize: 12,
+                fontWeight: 500,
+                lineHeight: 1.3,
+                color: 'text.secondary',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {subtitle}
+            </Typography>
+          )}
+        </Box>
       </CardActionArea>
     </Card>
   );
