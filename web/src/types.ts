@@ -49,3 +49,9 @@ export interface PlayResolution {
   subtitleTracks?: { id: string; language?: string; label?: string; url: string; format: 'vtt' | 'srt' }[];
   thumbnailUrlTemplate?: string;
 }
+
+export interface SourceHomeResponse {
+  continueWatching: Item[];
+  recentlyAdded: Item[];
+  libraries: Item[];
+}

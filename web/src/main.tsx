@@ -5,6 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { theme } from './theme';
 import { useRoute, matchRoute } from './router';
 import { Home } from './views/Home';
+import { SourceHome } from './views/SourceHome';
 import { Library } from './views/Library';
 import { ItemDetailView } from './views/ItemDetail';
 import { SearchView } from './views/Search';
@@ -22,6 +23,7 @@ function App() {
   const routes: Array<[string, (params: Record<string, string>) => React.JSX.Element]> = [
     ['/', () => <Home />],
     ['/search', () => <SearchView />],
+    ['/source/:src', (p) => <SourceHome source={p.src!} />],
     ['/lib/:src', (p) => <Library source={p.src!} />],
     ['/lib/:src/:libId', (p) => <Library source={p.src!} libraryId={p.libId} />],
     ['/item/:src/:id', (p) => <ItemDetailView source={p.src!} id={p.id!} />],

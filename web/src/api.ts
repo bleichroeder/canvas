@@ -26,10 +26,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
-import type { HomeRow, Item, ItemDetail, BrowseResult, PlayResolution } from './types';
+import type { HomeRow, Item, ItemDetail, BrowseResult, PlayResolution, SourceHomeResponse } from './types';
 
 export const api = {
-  home: () => request<{ rows: (HomeRow & { source: string })[]; errors: { source: string; status: number; message: string }[] }>('/api/home'),
+  home: () => request<{ rows: (HomeRow & { source: string })[]; errors: { source: string; status: number; message: string }[]; libraryCounts: Record<string, number> }>('/api/home'),
   search: (q: string) => request<{ hits: (Item & { source: string })[]; errors: unknown[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   library: (srcKey: string, libId?: string, path?: string) => {
     const qs = path ? `?path=${encodeURIComponent(path)}` : '';
@@ -76,4 +76,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ authToken, clientId }),
     }),
+  sourceHome: (srcKey: string) =>
+    request<SourceHomeResponse>(`/api/source-home?key=${encodeURIComponent(srcKey)}`),
 };
