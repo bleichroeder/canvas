@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
 import { api } from '../api';
 import { navigate } from '../router';
 import { AppShell } from '../components/AppShell';
@@ -48,17 +49,33 @@ export function Library({ source, libraryId }: Props) {
         {state.kind === 'loading' && <Typography color="text.secondary">Loading…</Typography>}
         {state.kind === 'error' && <Alert severity="error">Error: {state.message}</Alert>}
         {state.kind === 'ok' && (
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, 180px)',
-              gap: 2.5,
-            }}
-          >
-            {state.data.items.map((it) => (
-              <PosterCard key={it.id} item={it} source={source} />
-            ))}
-          </Box>
+          <>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h1">
+                {state.data.breadcrumbs[state.data.breadcrumbs.length - 1]?.name ?? 'Library'}
+                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1.5 }}>
+                  · {state.data.items.length} {state.data.items.length === 1 ? 'item' : 'items'}
+                </Typography>
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, 180px)',
+                gap: 2.5,
+              }}
+            >
+              {state.data.items.map((it) => (
+                <PosterCard key={it.id} item={it} source={source} />
+              ))}
+            </Box>
+            {state.data.items.length === 0 && (
+              <Box sx={{ py: 5, textAlign: 'center' }}>
+                <Typography variant="h3" sx={{ mb: 1 }}>This library is empty</Typography>
+                <Button onClick={() => navigate(`/source/${source}`)}>Back to source</Button>
+              </Box>
+            )}
+          </>
         )}
       </Box>
     </AppShell>
