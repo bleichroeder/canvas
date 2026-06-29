@@ -25,6 +25,18 @@ export interface Item {
   episode?: number;
   /** Section type for library-list entries (e.g. 'movie', 'show', 'artist', 'photo'). */
   librarySectionType?: string;
+  /**
+   * Music-content hint. Tells the frontend to use a 1:1 square cover instead
+   * of the 2:3 poster aspect, and (for tracks) to render as a list row in the
+   * album-detail view rather than a grid card.
+   */
+  kind?: 'music-artist' | 'music-album' | 'music-track';
+  /** Music: album title (set on tracks). */
+  albumTitle?: string;
+  /** Music: artist name (set on tracks and albums). */
+  artistName?: string;
+  /** Music: 1-indexed track number within the album. */
+  trackNumber?: number;
 }
 
 export interface Episode {
@@ -57,6 +69,17 @@ export interface BrowseResult {
   breadcrumbs: { name: string; libraryId?: string; path?: string }[];
   items: Item[];
   totalSize?: number;
+  /**
+   * Present when the items being browsed are tracks of a single album.
+   * Lets the frontend render an album-detail view (large cover + track
+   * list) instead of a grid of identical thumbnails.
+   */
+  albumDetail?: {
+    title: string;
+    artist?: string;
+    cover?: string;
+    year?: number;
+  };
 }
 
 export interface BrowsePage {

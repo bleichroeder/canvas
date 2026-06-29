@@ -10,8 +10,9 @@ import { navigate } from '../router';
 import { AppShell } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { PosterCard } from '../components/PosterCard';
+import { AlbumDetail } from '../components/AlbumDetail';
 import { setLibraryName } from '../storage';
-import type { Item } from '../types';
+import type { Item, BrowseResult } from '../types';
 
 interface Props {
   source: string;
@@ -27,6 +28,7 @@ type State =
       items: Item[];
       totalSize: number;
       breadcrumbs: { name: string; libraryId?: string; path?: string }[];
+      albumDetail?: BrowseResult['albumDetail'];
       loadingMore: boolean;
     }
   | { kind: 'error'; message: string };
@@ -54,6 +56,7 @@ export function Library({ source, libraryId }: Props) {
           items: data.items,
           totalSize: data.totalSize ?? data.items.length,
           breadcrumbs: data.breadcrumbs,
+          albumDetail: data.albumDetail,
           loadingMore: false,
         });
       },
@@ -125,7 +128,10 @@ export function Library({ source, libraryId }: Props) {
           </>
         )}
         {state.kind === 'error' && <Alert severity="error">Error: {state.message}</Alert>}
-        {state.kind === 'ok' && (
+        {state.kind === 'ok' && state.albumDetail && (
+          <AlbumDetail source={source} album={state.albumDetail} tracks={state.items} />
+        )}
+        {state.kind === 'ok' && !state.albumDetail && (
           <>
             <Box sx={{ mb: 3 }}>
               <Typography variant="h1">

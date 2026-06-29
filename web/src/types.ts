@@ -20,6 +20,18 @@ export interface Item {
   episode?: number;
   /** Section type for library-list entries (e.g. 'movie', 'show', 'artist', 'photo'). */
   librarySectionType?: string;
+  /**
+   * Music-content hint. PosterCard renders 1:1 square covers for these; the
+   * Library view switches to an album-detail layout when it sees a page of
+   * music-track items together with a `BrowseResult.albumDetail`.
+   */
+  kind?: 'music-artist' | 'music-album' | 'music-track';
+  /** Music: album title (set on tracks). */
+  albumTitle?: string;
+  /** Music: artist name (set on tracks and albums). */
+  artistName?: string;
+  /** Music: 1-indexed track number within the album. */
+  trackNumber?: number;
 }
 
 export interface Episode {
@@ -52,6 +64,17 @@ export interface BrowseResult {
   breadcrumbs: { name: string; libraryId?: string; path?: string }[];
   items: Item[];
   totalSize?: number;
+  /**
+   * Present when the items being browsed are tracks of a single album. The
+   * Library view uses this to switch from a grid to an album-detail layout
+   * (cover + title + artist at top, vertical track list below).
+   */
+  albumDetail?: {
+    title: string;
+    artist?: string;
+    cover?: string;
+    year?: number;
+  };
 }
 
 export interface PlayResolution {

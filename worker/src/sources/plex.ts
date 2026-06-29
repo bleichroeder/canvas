@@ -137,6 +137,21 @@ export const plexAdapter: SourceAdapter = {
     const items = (all.MediaContainer.Metadata ?? []).map((m) => mapMetadata(ctx, m));
     const sectionTitle = all.MediaContainer.Metadata?.[0]?.librarySectionTitle ?? 'Library';
     const totalSize = all.MediaContainer.totalSize ?? items.length;
+    // Album-detail: every item is a track and they all share the same album.
+    // Pull album-level metadata from the first track (parentTitle/parentThumb/
+    // grandparentTitle live on each track per Plex's children response).
+    let albumDetail: BrowseResult['albumDetail'] | undefined;
+    if (items.length > 0 && items.every((it) => it.kind === 'music-track')) {
+      const first = (all.MediaContainer.Metadata ?? [])[0];
+      if (first) {
+        albumDetail = {
+          title: first.parentTitle ?? 'Album',
+          ...(first.grandparentTitle ? { artist: first.grandparentTitle } : {}),
+          ...(first.parentThumb ? { cover: transcodeImage(ctx, first.parentThumb, PLEX_BACKDROP_WIDTH) } : {}),
+          ...(first.parentYear !== undefined ? { year: first.parentYear } : {}),
+        };
+      }
+    }
     return {
       breadcrumbs: [
         { name: 'Libraries' },
@@ -144,6 +159,7 @@ export const plexAdapter: SourceAdapter = {
       ],
       items,
       totalSize,
+      ...(albumDetail ? { albumDetail } : {}),
     };
   },
 

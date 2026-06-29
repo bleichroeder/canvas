@@ -51,10 +51,14 @@ export interface PlexMetadata {
   Genre?: { tag: string }[];
   Media?: { duration?: number; Part?: { id?: number; key: string; Stream?: PlexStream[] }[] }[];
   // Episode-only fields:
-  grandparentTitle?: string;  // show name
-  grandparentThumb?: string;  // show 2:3 poster
-  parentIndex?: number;       // season number
-  index?: number;             // episode number
+  grandparentTitle?: string;  // show name (also: artist name for music tracks)
+  grandparentThumb?: string;  // show 2:3 poster (also: artist image for music)
+  parentIndex?: number;       // season number (also: disc number for music)
+  index?: number;             // episode number (also: track number for music)
+  // Music-only / shared fields:
+  parentTitle?: string;       // album title (for tracks) / artist name (for albums)
+  parentThumb?: string;       // album cover (for tracks) / artist image (for albums)
+  parentYear?: number;
 }
 
 /**
@@ -102,12 +106,22 @@ export function mapMetadata(
   // the card subtitle can show "S2·E5 · {episode title}" while the title is
   // the show name.
   const isEpisode = type === 'episode';
-  const posterPath = isEpisode && m.grandparentThumb ? m.grandparentThumb : m.thumb;
+  // Music covers come from the album thumb (or, for tracks, the parent
+  // album's thumb). Plex serves them at 1:1 aspect.
+  let posterPath: string | undefined;
+  if (isEpisode && m.grandparentThumb) posterPath = m.grandparentThumb;
+  else if (m.type === 'track' && m.parentThumb) posterPath = m.parentThumb;
+  else posterPath = m.thumb;
+  const kind: Item['kind'] | undefined =
+    m.type === 'artist' ? 'music-artist'
+    : m.type === 'album' ? 'music-album'
+    : m.type === 'track' ? 'music-track'
+    : undefined;
   return {
     id: m.ratingKey,
     type,
     title: m.title,
-    year: m.year,
+    year: m.year ?? (m.type === 'album' ? m.parentYear : undefined),
     poster: transcodeImage(ctx, posterPath, POSTER_WIDTH),
     durationSec: m.duration ? Math.round(m.duration / 1000) : undefined,
     viewOffsetSec: m.viewOffset ? Math.round(m.viewOffset / 1000) : undefined,
@@ -116,6 +130,11 @@ export function mapMetadata(
     ...(isEpisode && m.grandparentTitle ? { showTitle: m.grandparentTitle } : {}),
     ...(isEpisode && m.parentIndex !== undefined ? { season: m.parentIndex } : {}),
     ...(isEpisode && m.index !== undefined ? { episode: m.index } : {}),
+    ...(kind ? { kind } : {}),
+    ...(m.type === 'track' && m.parentTitle ? { albumTitle: m.parentTitle } : {}),
+    ...(m.type === 'album' && m.parentTitle ? { artistName: m.parentTitle } : {}),
+    ...(m.type === 'track' && m.grandparentTitle ? { artistName: m.grandparentTitle } : {}),
+    ...(m.type === 'track' && m.index !== undefined ? { trackNumber: m.index } : {}),
   };
 }
 

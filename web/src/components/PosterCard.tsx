@@ -27,13 +27,18 @@ export function PosterCard({ item, source, width = 220, showSourceBadge = false 
   const href = isFolder
     ? `/lib/${source}/${item.id}`
     : `/item/${source}/${item.id}`;
-  // Uniform 2:3 poster aspect across all item types. Episodes carry the
-  // show's poster (set worker-side) so this works visually.
-  const aspectRatio = 2 / 3;
+  // Music items use 1:1 (album covers are square); everything else is 2:3
+  // poster. Episodes carry the show's poster, so they're visually uniform
+  // with movies/shows.
+  const isMusic = item.kind === 'music-artist' || item.kind === 'music-album' || item.kind === 'music-track';
+  const aspectRatio = isMusic ? 1 : 2 / 3;
   const src = showSourceBadge ? getSources()[source] : undefined;
   const displayTitle = item.type === 'episode' && item.showTitle ? item.showTitle : item.title;
-  const subtitle = item.type === 'episode'
-    ? formatEpisodeSubtitle(item)
+  const subtitle =
+    item.type === 'episode' ? formatEpisodeSubtitle(item)
+    : item.kind === 'music-album' ? item.artistName
+    : item.kind === 'music-artist' ? (item.year ? String(item.year) : undefined)
+    : item.kind === 'music-track' ? item.albumTitle
     : (item.year ? String(item.year) : undefined);
   return (
     // MUI Card defaults to overflow:hidden which clips the CardActionArea's
