@@ -6,6 +6,14 @@ export interface VideoSinkOptions {
   onFirstFrame?: () => void;
 }
 
+// Hard cap on decoded frames held in memory between decoder output and canvas
+// paint. Each 1080p VideoFrame is ~6 MB; without a cap, any RAF stall (page
+// backgrounded, GPU throttled, decoder running ahead of playback) blows the
+// renderer's memory budget and Chromium kills the tab. ~12 frames is ~0.5 sec
+// of 24fps content — plenty of headroom for the render loop to catch up,
+// nowhere near OOM territory.
+const MAX_QUEUED_FRAMES = 12;
+
 export class VideoSink {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
@@ -16,6 +24,7 @@ export class VideoSink {
   private rafHandle: number | null = null;
   private frameIntervalSec = 1 / 24;
   private firstFrameDispatched = false;
+  private droppedFrames = 0;
 
   constructor(opts: VideoSinkOptions) {
     this.canvas = opts.canvas;
@@ -71,10 +80,20 @@ export class VideoSink {
   }
 
   get queuedFrames(): number { return this.frames.length; }
+  get droppedFrameCount(): number { return this.droppedFrames; }
 
   private onFrame(frame: VideoFrame): void {
     if (frame.duration) {
       this.frameIntervalSec = frame.duration / 1_000_000;
+    }
+    // Drop the oldest queued frame if we're at capacity. Older frames are
+    // already past the clock by definition (drawDue runs every RAF and
+    // evicts everything <= clock), so dropping them costs nothing visually
+    // — and prevents the unbounded-queue OOM that crashed the renderer.
+    if (this.frames.length >= MAX_QUEUED_FRAMES) {
+      const oldest = this.frames.shift();
+      if (oldest) oldest.close();
+      this.droppedFrames++;
     }
     this.frames.push(frame);
     this.frames.sort((a, b) => a.timestamp - b.timestamp);
