@@ -69,17 +69,27 @@ export const plexAdapter: SourceAdapter = {
     // Browse one section, paged.
     const offset = page?.offset ?? 0;
     const limit = page?.limit ?? 60;
-    const params = new URLSearchParams({
+    const baseParams: Record<string, string> = {
       'X-Plex-Container-Start': String(offset),
       'X-Plex-Container-Size': String(limit),
-      includeStreams: '1',
-    });
-    const all = await plexFetch<MediaContainer<PlexMetadata & { librarySectionTitle?: string }> & {
+    };
+    const sectionPath = `/library/sections/${encodeURIComponent(libraryId)}/all`;
+    type AllResponse = MediaContainer<PlexMetadata & { librarySectionTitle?: string }> & {
       MediaContainer: { totalSize?: number };
-    }>(
-      ctx,
-      `/library/sections/${encodeURIComponent(libraryId)}/all?${params.toString()}`,
-    );
+    };
+    // Try with includeStreams=1 first — required so video posters can show
+    // a CC badge. Some Plex builds 404 this for music sections, so fall back
+    // to the bare path without that param.
+    let all: AllResponse;
+    try {
+      const params = new URLSearchParams({ ...baseParams, includeStreams: '1' });
+      all = await plexFetch<AllResponse>(ctx, `${sectionPath}?${params.toString()}`);
+    } catch (e) {
+      const msg = (e as Error).message;
+      if (!msg.includes(' 404 ')) throw e;
+      const params = new URLSearchParams(baseParams);
+      all = await plexFetch<AllResponse>(ctx, `${sectionPath}?${params.toString()}`);
+    }
     const items = (all.MediaContainer.Metadata ?? []).map((m) => mapMetadata(ctx, m));
     const sectionTitle = all.MediaContainer.Metadata?.[0]?.librarySectionTitle ?? 'Library';
     const totalSize = all.MediaContainer.totalSize ?? items.length;
