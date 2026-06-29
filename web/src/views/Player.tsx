@@ -84,7 +84,12 @@ export function Player({ source, id }: Props) {
   const startedRef = useRef(false);
   const reportRef = useRef(0);
   const resolutionRef = useRef<PlayResolution | null>(null);
-  const wasPlayingRef = useRef(false);
+  // Start as true so the first onReady auto-plays. The user already gestured
+  // (clicked Play/Resume on Home or ItemDetail) which navigated them here —
+  // AudioContext.resume() inherits that user-activation. If it rejects anyway
+  // (e.g. cold deep-link), autoStartPlayback throws and the splash overlay's
+  // Play button stays the manual fallback.
+  const wasPlayingRef = useRef(true);
   const seekTokenRef = useRef(0);
   const sessionBaseRef = useRef(0);
 
@@ -238,7 +243,9 @@ export function Player({ source, id }: Props) {
             sessionBaseRef.current = fromSec;
             setStatus('');
             if (wasPlayingRef.current) {
-              void autoStartPlayback();
+              autoStartPlayback().catch((e) => {
+                console.warn('auto-play failed (likely no user gesture):', e);
+              });
             }
             // No status hint here — the splash overlay (with its big play
             // button) IS the affordance for first play.
