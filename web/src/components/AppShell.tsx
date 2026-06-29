@@ -56,9 +56,12 @@ export function AppShell({ children, heroHeight }: AppShellProps) {
         color="default"
         elevation={0}
         sx={(theme) => ({
-          backgroundColor: pastHero ? 'rgba(14,15,18,0.92)' : 'rgba(14,15,18,0)',
-          borderBottom: pastHero ? '1px solid' : '1px solid transparent',
-          borderColor: 'divider',
+          // Over a hero we keep a "smoked glass" background so the chrome
+          // stays visibly anchored — full transparency reads as broken when
+          // the hero artwork is busy. Past the hero we go to near-opaque.
+          backgroundColor: pastHero ? 'rgba(14,15,18,0.92)' : 'rgba(14,15,18,0.55)',
+          borderBottom: '1px solid',
+          borderColor: pastHero ? 'divider' : 'transparent',
           transition: `background-color ${theme.canvasMotion.med} ${theme.canvasMotion.easing}, border-color ${theme.canvasMotion.med} ${theme.canvasMotion.easing}`,
           backgroundImage: 'none',
         })}

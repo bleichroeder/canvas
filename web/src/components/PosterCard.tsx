@@ -1,4 +1,3 @@
-import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -37,7 +36,11 @@ export function PosterCard({ item, source, width = 220, showSourceBadge = false 
     ? formatEpisodeSubtitle(item)
     : (item.year ? String(item.year) : undefined);
   return (
-    <Card sx={{ flexShrink: 0, width, backgroundColor: 'transparent', border: 'none' }}>
+    // MUI Card defaults to overflow:hidden which clips the CardActionArea's
+    // scale(1.03) hover at the card bounds. Use a plain Box so the scaled
+    // content stays visible — the inner poster wrapper keeps its own
+    // overflow:hidden for rounded-corner clipping of the image.
+    <Box sx={{ flexShrink: 0, width }}>
       <CardActionArea onClick={() => navigate(href)} sx={{ borderRadius: 1 }}>
         <Box
           sx={{
@@ -162,6 +165,6 @@ export function PosterCard({ item, source, width = 220, showSourceBadge = false 
           )}
         </Box>
       </CardActionArea>
-    </Card>
+    </Box>
   );
 }
