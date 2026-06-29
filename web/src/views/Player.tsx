@@ -12,6 +12,12 @@ import {
   getCaptionsOffsetMs,
   setCaptionsOffsetMs,
 } from '../storage';
+import {
+  startSession,
+  updateSession,
+  endSession,
+  currentHeapMB,
+} from '../lib/crash-telemetry';
 import type { PlayResolution, ItemDetail } from '../types';
 import Backdrop from '@mui/material/Backdrop';
 import Stack from '@mui/material/Stack';
@@ -110,6 +116,16 @@ export function Player({ source, id }: Props) {
         const cur = a ? sessionBaseRef.current + a.currentTime() : 0;
         void api.progress(source, id, cur, false).catch(() => {});
         updateNowPlayingProgress(source, id, cur);
+      }
+      // Refresh the crash-telemetry session marker. A renderer kill leaves
+      // this stale; checkForPreviousCrash() on next cold load surfaces it.
+      if (startedRef.current) {
+        const cur = a ? sessionBaseRef.current + a.currentTime() : 0;
+        updateSession({
+          posSec: Math.round(cur),
+          heapMB: currentHeapMB(),
+          droppedFrames: videoRef.current?.droppedFrameCount,
+        });
       }
     }, 250);
     return () => clearInterval(t);
@@ -259,6 +275,13 @@ export function Player({ source, id }: Props) {
   };
 
   useEffect(() => {
+    startSession({
+      source,
+      id,
+      startedAt: Date.now(),
+      posSec: fromQuery,
+      heapMB: currentHeapMB(),
+    });
     const handle = bootSession(fromQuery);
     return () => {
       handle.cancel();
@@ -268,6 +291,10 @@ export function Player({ source, id }: Props) {
       videoRef.current = null;
       audioRef.current?.stop();
       audioRef.current = null;
+      // Clean unmount — clear the session marker. If we crashed before
+      // reaching here, the marker survives and checkForPreviousCrash() on
+      // the next cold load logs it.
+      endSession();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, id]);

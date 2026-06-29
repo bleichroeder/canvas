@@ -20,6 +20,14 @@ import { SignIn } from './views/SignIn';
 import { NowPlayingStrip } from './components/NowPlayingStrip';
 import { CloudSyncConflict } from './components/CloudSyncConflict';
 import { startCloudSync } from './lib/cloud-sync';
+import { checkForPreviousCrash } from './lib/crash-telemetry';
+
+// Detect renderer-killed-mid-playback once at cold load. Logs to console and
+// appends to canvas.crashLog (surfaced in Settings → About → Diagnostics).
+const previousCrash = checkForPreviousCrash();
+if (previousCrash) {
+  console.warn('[canvas] previous player session crashed:', previousCrash);
+}
 
 function NotFound() {
   return <div style={{ padding: 20 }}><h1>Not found</h1></div>;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
@@ -9,10 +10,36 @@ import { ElevatedCard } from '../../components/ElevatedCard';
 import { SettingRow } from '../../components/SettingRow';
 import { useAuth } from '../../lib/use-auth';
 import { isSupabaseConfigured } from '../../lib/supabase';
+import { getCrashLog, clearCrashLog } from '../../lib/crash-telemetry';
+import type { CrashRecord } from '../../lib/crash-telemetry';
+
+function formatTimestamp(ms: number): string {
+  try { return new Date(ms).toLocaleString(); } catch { return String(ms); }
+}
+
+function CrashRow({ record }: { record: CrashRecord }) {
+  const durationSec = Math.max(0, Math.round((record.crashedAt - record.startedAt) / 1000));
+  const durationMin = Math.floor(durationSec / 60);
+  const durationLabel = durationMin > 0 ? `${durationMin}m ${durationSec % 60}s` : `${durationSec}s`;
+  return (
+    <Box sx={{ py: 1, borderBottom: '1px solid rgba(255,255,255,0.06)', '&:last-child': { borderBottom: 'none' } }}>
+      <Typography sx={{ fontSize: 13, fontWeight: 500 }}>
+        {record.source} / {record.id}
+      </Typography>
+      <Typography sx={{ fontSize: 11, color: 'text.secondary', fontFamily: 'monospace' }}>
+        {formatTimestamp(record.crashedAt)} · played {durationLabel}
+        {` · pos ${record.posSec}s`}
+        {record.heapMB !== undefined && ` · heap ${record.heapMB} MB`}
+        {record.droppedFrames !== undefined && record.droppedFrames > 0 && ` · ${record.droppedFrames} frames dropped`}
+      </Typography>
+    </Box>
+  );
+}
 
 export function AboutTab() {
   const auth = useAuth();
   const [diagOpen, setDiagOpen] = useState(false);
+  const [crashes, setCrashes] = useState<CrashRecord[]>(() => getCrashLog());
   const buildSha = import.meta.env.VITE_BUILD_SHA ?? 'dev';
   const cloudConnected = isSupabaseConfigured() && !!auth.user;
 
@@ -37,6 +64,31 @@ export function AboutTab() {
           }
         />
       </ElevatedCard>
+
+      {crashes.length > 0 && (
+        <ElevatedCard>
+          <Box sx={{ p: 2.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+              <Box>
+                <Typography sx={{ fontWeight: 500 }}>Recent player crashes</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  The renderer was killed mid-playback. Most often caused by memory pressure on the Tesla browser.
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => { clearCrashLog(); setCrashes([]); }}
+              >
+                Clear
+              </Button>
+            </Box>
+            <Box>
+              {crashes.map((c, i) => <CrashRow key={`${c.crashedAt}-${i}`} record={c} />)}
+            </Box>
+          </Box>
+        </ElevatedCard>
+      )}
 
       <Accordion
         expanded={diagOpen}
