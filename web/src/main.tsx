@@ -19,6 +19,8 @@ import { Player } from './views/Player';
 import { SignIn } from './views/SignIn';
 import { NowPlayingStrip } from './components/NowPlayingStrip';
 import { CloudSyncConflict } from './components/CloudSyncConflict';
+import { DrivingDisclaimer } from './components/DrivingDisclaimer';
+import { SourceAddedSnackbar } from './components/SourceAddedSnackbar';
 import { startCloudSync } from './lib/cloud-sync';
 
 function NotFound() {
@@ -83,6 +85,8 @@ function App() {
     if (params) { element = renderFn(params); break; }
   }
 
+  const isPublicRoute = PUBLIC_ROUTES.has(route.path);
+
   return (
     <>
       <Fade in key={route.path} timeout={250}>
@@ -90,6 +94,8 @@ function App() {
       </Fade>
       <NowPlayingStrip />
       <CloudSyncConflict />
+      <DrivingDisclaimer isPublicRoute={isPublicRoute} />
+      <SourceAddedSnackbar />
     </>
   );
 }
