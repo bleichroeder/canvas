@@ -104,7 +104,9 @@ export function SignIn() {
             color: 'text.primary',
           }}
         >
-          {'<canvas>'}
+          <Box component="span" sx={{ color: 'primary.main' }}>&lt;</Box>
+          canvas
+          <Box component="span" sx={{ color: 'primary.main' }}>&gt;</Box>
         </Typography>
 
         <Button

@@ -52,12 +52,14 @@ export function AppShell({ children }: AppShellProps) {
             href="#/"
             onClick={(e) => { e.preventDefault(); navigate('/'); }}
             sx={{
-              fontSize: 24, fontWeight: 500, letterSpacing: '1px',
+              fontSize: 24, fontWeight: 500, letterSpacing: '1.5px',
               color: 'text.primary', textDecoration: 'none', cursor: 'pointer',
               mr: 'auto',
             }}
           >
-            {'<canvas>'}
+            <Box component="span" sx={{ color: 'primary.main' }}>&lt;</Box>
+            canvas
+            <Box component="span" sx={{ color: 'primary.main' }}>&gt;</Box>
           </Typography>
           <IconButton onClick={() => navigate('/search')} aria-label="search">
             <SearchIcon />
