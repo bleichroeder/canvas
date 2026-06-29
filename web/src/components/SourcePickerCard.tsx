@@ -1,9 +1,8 @@
-import Card from '@mui/material/Card';
-import CardActionArea from '@mui/material/CardActionArea';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { navigate } from '../router';
 import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
+import { ElevatedCard } from './ElevatedCard';
 import type { StoredSource } from '../storage';
 
 export interface SourcePickerCardProps {
@@ -17,83 +16,82 @@ export interface SourcePickerCardProps {
 export function SourcePickerCard({ srcKey, label, type, libraryCount, backdropUrl }: SourcePickerCardProps) {
   const color = SOURCE_TYPE_COLOR[type];
   return (
-    <Card sx={{ width: 220, height: 130 }}>
-      <CardActionArea
-        onClick={() => navigate(`/source/${srcKey}`)}
-        sx={{ position: 'relative', width: '100%', height: '100%', p: 0 }}
-      >
-        {/* Backdrop: a recently-added item's poster from this source, blurred
-            and darkened. Falls back to a source-type-color tinted gradient
-            when no recent content is known. */}
-        <Box sx={{
-          position: 'absolute', inset: 0,
-          backgroundColor: 'background.paper',
-          backgroundImage: backdropUrl
-            ? `url(${backdropUrl})`
-            : `linear-gradient(135deg, ${color}33 0%, #181a1f 75%)`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          filter: backdropUrl ? 'blur(2px) brightness(0.6)' : 'none',
-          transform: backdropUrl ? 'scale(1.04)' : 'none',
-        }} />
-        <Box sx={{
-          position: 'absolute', inset: 0,
-          background: backdropUrl
-            ? 'linear-gradient(135deg, rgba(14,15,18,0.55) 0%, rgba(14,15,18,0.8) 100%)'
-            : 'none',
-        }} />
-        {/* Foreground: glyph + label + count, vertically stacked. */}
-        <Box sx={{
-          position: 'relative', zIndex: 1,
-          width: '100%', height: '100%',
-          display: 'flex', alignItems: 'center', gap: 2,
-          p: 2,
-        }}>
-          <Box
+    <ElevatedCard
+      variant="interactive"
+      onClick={() => navigate(`/source/${srcKey}`)}
+      sx={{ width: 220, height: 130, position: 'relative', overflow: 'hidden' }}
+    >
+      {/* Backdrop: a recently-added item's poster from this source, blurred
+          and darkened. Falls back to a source-type-color tinted gradient
+          when no recent content is known. */}
+      <Box sx={{
+        position: 'absolute', inset: 0,
+        backgroundColor: 'background.paper',
+        backgroundImage: backdropUrl
+          ? `url(${backdropUrl})`
+          : `linear-gradient(135deg, ${color}33 0%, #181a1f 75%)`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        filter: backdropUrl ? 'blur(2px) brightness(0.6)' : 'none',
+        transform: backdropUrl ? 'scale(1.04)' : 'none',
+      }} />
+      <Box sx={{
+        position: 'absolute', inset: 0,
+        background: backdropUrl
+          ? 'linear-gradient(135deg, rgba(14,15,18,0.55) 0%, rgba(14,15,18,0.8) 100%)'
+          : 'none',
+      }} />
+      {/* Foreground: glyph + label + count. */}
+      <Box sx={{
+        position: 'relative', zIndex: 1,
+        width: '100%', height: '100%',
+        display: 'flex', alignItems: 'center', gap: 2,
+        p: 2,
+      }}>
+        <Box
+          sx={{
+            width: 56, height: 56, borderRadius: 1.5,
+            backgroundColor: color,
+            color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 700, fontSize: 22,
+            letterSpacing: 1,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            flexShrink: 0,
+          }}
+        >
+          {sourceGlyph(label)}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
             sx={{
-              width: 56, height: 56, borderRadius: 1.5,
-              backgroundColor: color,
               color: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 700, fontSize: 22,
-              letterSpacing: 1,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-              flexShrink: 0,
+              fontWeight: 600,
+              fontSize: 16,
+              lineHeight: 1.2,
+              textShadow: backdropUrl ? '0 1px 3px rgba(0,0,0,0.8)' : 'none',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
-            {sourceGlyph(label)}
-          </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography
-              sx={{
-                color: '#fff',
-                fontWeight: 600,
-                fontSize: 16,
-                lineHeight: 1.2,
-                textShadow: backdropUrl ? '0 1px 3px rgba(0,0,0,0.8)' : 'none',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {label}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{
-                display: 'block',
-                color: 'rgba(255,255,255,0.75)',
-                textShadow: backdropUrl ? '0 1px 2px rgba(0,0,0,0.7)' : 'none',
-                mt: 0.25,
-              }}
-            >
-              {libraryCount === undefined
-                ? ' '
-                : `${libraryCount} ${libraryCount === 1 ? 'library' : 'libraries'}`}
-            </Typography>
-          </Box>
+            {label}
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'block',
+              color: 'rgba(255,255,255,0.75)',
+              textShadow: backdropUrl ? '0 1px 2px rgba(0,0,0,0.7)' : 'none',
+              mt: 0.25,
+            }}
+          >
+            {libraryCount === undefined
+              ? ' '
+              : `${libraryCount} ${libraryCount === 1 ? 'library' : 'libraries'}`}
+          </Typography>
         </Box>
-      </CardActionArea>
-    </Card>
+      </Box>
+    </ElevatedCard>
   );
 }

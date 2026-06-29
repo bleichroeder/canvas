@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import Skeleton from '@mui/material/Skeleton';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import LibraryAddOutlinedIcon from '@mui/icons-material/LibraryAddOutlined';
+import { useTheme } from '@mui/material/styles';
 import { api } from '../api';
 import { getSources } from '../storage';
 import { AppShell } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
+import { Hero } from '../components/Hero';
 import { Rail } from '../components/Rail';
+import { SectionHeading } from '../components/SectionHeading';
 import { SourcePickerCard } from '../components/SourcePickerCard';
 import { LibraryCard } from '../components/LibraryCard';
 import { navigate } from '../router';
@@ -38,11 +39,10 @@ function formatPos(sec: number): string {
 }
 
 export function Home() {
+  const theme = useTheme();
   const [state, setState] = useState<State>({ kind: 'loading' });
-  // Libraries from the single-source case — surfaces a libraries grid on Home
-  // so users with one paired source don't have to drill into /source/:src
-  // just to see the library list.
   const [singleSourceLibraries, setSingleSourceLibraries] = useState<Item[]>([]);
+  const [heroH, setHeroH] = useState<number | undefined>(undefined);
   const sources = getSources();
   const sourceCount = Object.keys(sources).length;
   const singleSourceKey = sourceCount === 1 ? Object.keys(sources)[0] : undefined;
@@ -69,97 +69,94 @@ export function Home() {
     return () => { cancelled = true; };
   }, [singleSourceKey]);
 
-  const continueRow = state.kind === 'ok'
-    ? state.rows.find((r) => r.kind === 'continue')
-    : undefined;
-  const heroItem = continueRow?.items[0] as (Item & { backdrop?: string; source?: string }) | undefined;
+  // Hero source ladder: first Continue Watching with a backdrop, else first
+  // Recently Added with a backdrop, else brand hero.
+  const heroPick = (() => {
+    if (state.kind !== 'ok') return undefined;
+    for (const row of state.rows) {
+      if (row.kind !== 'continue') continue;
+      const it = row.items.find((i) => i.poster);
+      if (it) return { item: { ...it, source: row.source }, eyebrow: 'Continue Watching' };
+    }
+    for (const row of state.rows) {
+      if (row.kind !== 'recent') continue;
+      const it = row.items.find((i) => i.poster);
+      if (it) return { item: { ...it, source: row.source }, eyebrow: 'Recently Added' };
+    }
+    return undefined;
+  })();
 
   return (
-    <AppShell>
-      <Box sx={{ py: 2.5 }}>
+    <AppShell heroHeight={heroH}>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          backgroundImage: theme.canvasAmbient,
+          // Pull content up so the hero extends beneath the (transparent) top bar.
+          mt: '-56px',
+          pt: '56px',
+        }}
+      >
         {state.kind === 'loading' && (
-          <>
+          <Box sx={{ pt: 2.5 }}>
             <Box sx={{ mx: 2.5, mb: 3 }}>
-              <Skeleton variant="rounded" height={320} />
+              <Skeleton variant="rounded" sx={{ height: 'min(55vh, 720px)', minHeight: 360 }} />
             </Box>
             {[1, 2].map((i) => (
               <Box key={i} sx={{ mb: 4 }}>
-                <Skeleton variant="text" width={180} height={28} sx={{ ml: 2.5, mb: 1.5 }} />
-                <Box sx={{ display: 'flex', gap: 1.5, px: 2.5, overflow: 'hidden' }}>
+                <Skeleton variant="text" width={220} height={36} sx={{ ml: 2.5, mb: 1.5 }} />
+                <Box sx={{ display: 'flex', gap: 2.5, px: 2.5, overflow: 'hidden' }}>
                   {[1, 2, 3, 4, 5].map((j) => (
-                    <Skeleton key={j} variant="rectangular" width={180} height={270} sx={{ flexShrink: 0, borderRadius: 1 }} />
+                    <Skeleton key={j} variant="rectangular" width={220} height={330} sx={{ flexShrink: 0, borderRadius: 1 }} />
                   ))}
                 </Box>
               </Box>
             ))}
-          </>
+          </Box>
         )}
+
         {state.kind === 'empty' && (
-          <EmptyState
-            icon={<LibraryAddOutlinedIcon />}
-            title="No sources paired yet"
-            body="Pair a Plex server to get started."
-            actionLabel="Pair your first source"
-            onAction={() => navigate('/settings/pair')}
-          />
+          <Box sx={{ pt: 8 }}>
+            <EmptyState
+              icon={<LibraryAddOutlinedIcon />}
+              title="No sources paired yet"
+              body="Pair a Plex server to get started."
+              actionLabel="Pair your first source"
+              onAction={() => navigate('/settings/pair')}
+            />
+          </Box>
         )}
+
         {state.kind === 'error' && (
-          <Alert severity="error" sx={{ mx: 2.5 }}>Error: {state.message}</Alert>
+          <Alert severity="error" sx={{ mx: 2.5, mt: 10 }}>Error: {state.message}</Alert>
         )}
+
         {state.kind === 'ok' && (
           <>
-            {heroItem && heroItem.source && (
-              <Box
-                className="canvas-hero"
-                sx={{
-                  height: 320,
-                  mx: 2.5, mb: 3, borderRadius: 2,
-                  position: 'relative', overflow: 'hidden',
-                  backgroundImage: heroItem.poster ? `url(${heroItem.poster})` : 'linear-gradient(135deg, #1a2030, #0e0f12)',
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
+            {heroPick ? (
+              <Hero
+                backdropUrl={heroPick.item.poster}
+                eyebrow={heroPick.eyebrow}
+                title={heroPick.item.title}
+                meta={[heroPick.item.year, formatRuntime(heroPick.item.durationSec)].filter(Boolean).join(' · ') || undefined}
+                primaryAction={{
+                  label: heroPick.item.viewOffsetSec && heroPick.item.viewOffsetSec > 60
+                    ? `Resume ${formatPos(heroPick.item.viewOffsetSec)}`
+                    : 'Play',
+                  onClick: () => navigate(`/play/${heroPick.item.source}/${heroPick.item.id}`),
                 }}
-              >
-                <Box
-                  sx={{
-                    position: 'absolute', inset: 0,
-                    background: 'linear-gradient(to right, rgba(14,15,18,0.95) 0%, rgba(14,15,18,0.6) 50%, transparent 100%)',
-                  }}
-                />
-                <Box
-                  sx={{
-                    position: 'absolute', left: 32, top: 0, bottom: 0,
-                    display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                    maxWidth: 480,
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary">Continue Watching</Typography>
-                  <Typography variant="h1" sx={{ mt: 0.5, mb: 1 }}>{heroItem.title}</Typography>
-                  <Typography color="text.secondary" sx={{ mb: 2 }}>
-                    {[heroItem.year, formatRuntime(heroItem.durationSec)].filter(Boolean).join(' · ')}
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1.5 }}>
-                    <Button
-                      variant="contained"
-                      size="large"
-                      startIcon={<PlayArrowIcon />}
-                      onClick={() => navigate(`/play/${heroItem.source}/${heroItem.id}`)}
-                    >
-                      {heroItem.viewOffsetSec && heroItem.viewOffsetSec > 60
-                        ? `Resume ${formatPos(heroItem.viewOffsetSec)}`
-                        : 'Play'}
-                    </Button>
-                    {heroItem.viewOffsetSec && heroItem.viewOffsetSec > 60 && (
-                      <Button
-                        variant="text"
-                        onClick={() => navigate(`/play/${heroItem.source}/${heroItem.id}?from=0`)}
-                      >
-                        Start over
-                      </Button>
-                    )}
-                  </Box>
-                </Box>
-              </Box>
+                secondaryAction={heroPick.item.viewOffsetSec && heroPick.item.viewOffsetSec > 60
+                  ? { label: 'Start over', onClick: () => navigate(`/play/${heroPick.item.source}/${heroPick.item.id}?from=0`) }
+                  : undefined}
+                onHeightChange={setHeroH}
+              />
+            ) : (
+              <Hero
+                eyebrow="canvas"
+                title="Your library, on every screen."
+                primaryAction={{ label: 'Pair a source', onClick: () => navigate('/settings/pair') }}
+                onHeightChange={setHeroH}
+              />
             )}
 
             {state.errors.length > 0 && (
@@ -173,7 +170,6 @@ export function Home() {
             )}
 
             {(() => {
-              // Aggregate rows by kind across sources.
               const continueItems: (Item & { source: string })[] = [];
               const recentItems: (Item & { source: string })[] = [];
               for (const row of state.rows) {
@@ -184,34 +180,25 @@ export function Home() {
               return (
                 <>
                   {continueItems.length > 0 && (
-                    <Rail
-                      title="Continue Watching"
-                      items={continueItems}
-                      cardWidth={180}
-                      showSourceBadge
-                    />
+                    <Rail title="Continue Watching" items={continueItems} showSourceBadge />
                   )}
                   {recentItems.length > 0 && (
-                    <Rail
-                      title="Recently Added"
-                      items={recentItems}
-                      cardWidth={180}
-                      showSourceBadge
-                    />
+                    <Rail title="Recently Added" items={recentItems} showSourceBadge />
                   )}
                 </>
               );
             })()}
 
             {sourceCount === 1 && singleSourceKey && singleSourceLibraries.length > 0 && (
-              <Box component="section" sx={{ mt: 4 }}>
-                <Typography variant="h3" sx={{ px: 2.5, mb: 1.5 }}>Libraries</Typography>
+              <Box component="section">
+                <SectionHeading title="Libraries" />
                 <Box
                   sx={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, 220px)',
-                    gap: 2.5,
+                    gridTemplateColumns: 'repeat(auto-fill, 240px)',
+                    gap: 3,
                     px: 2.5,
+                    pb: 4,
                   }}
                 >
                   {singleSourceLibraries.map((lib) => (
@@ -222,8 +209,6 @@ export function Home() {
             )}
 
             {sourceCount > 1 && (() => {
-              // Pick a backdrop per source: first recently-added item with a
-              // poster from that source. Used as the SourcePickerCard background.
               const backdrops: Record<string, string | undefined> = {};
               for (const row of state.rows) {
                 if (row.kind !== 'recent') continue;
@@ -232,14 +217,15 @@ export function Home() {
                 if (firstWithPoster?.poster) backdrops[row.source] = firstWithPoster.poster;
               }
               return (
-                <Box component="section" sx={{ mt: 4 }}>
-                  <Typography variant="h3" sx={{ px: 2.5, mb: 1.5 }}>Your sources</Typography>
+                <Box component="section">
+                  <SectionHeading title="Your sources" />
                   <Box
                     sx={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, 220px)',
-                      gap: 2.5,
+                      gridTemplateColumns: 'repeat(auto-fill, 240px)',
+                      gap: 3,
                       px: 2.5,
+                      pb: 4,
                     }}
                   >
                     {Object.entries(sources).map(([key, src]) => (
