@@ -1,7 +1,10 @@
+import { useEffect, useRef, useState } from 'react';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import type { Item } from '../types';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { SectionHeading } from './SectionHeading';
 import { PosterCard } from './PosterCard';
+import { RailNavButton } from './RailNavButton';
+import type { Item } from '../types';
 
 export interface RailProps {
   title: string;
@@ -10,28 +13,76 @@ export interface RailProps {
   showSourceBadge?: boolean;
 }
 
-export function Rail({ title, items, cardWidth = 180, showSourceBadge = false }: RailProps) {
+const GAP_PX = 20; // matches sx gap: 2.5 (8 * 2.5)
+
+export function Rail({ title, items, cardWidth = 220, showSourceBadge = false }: RailProps) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const hasFineHover = useMediaQuery('(hover: hover) and (pointer: fine)');
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    let frame = 0;
+    const update = () => {
+      setCanScrollLeft(el.scrollLeft > 0);
+      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    };
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        update();
+      });
+    };
+    update();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', update);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [items.length]);
+
   if (items.length === 0) return null;
+
+  const scrollBy = (dir: 1 | -1) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * (cardWidth + GAP_PX) * 3, behavior: 'smooth' });
+  };
+
   return (
     <Box component="section" sx={{ mb: 4 }}>
-      <Typography variant="h3" sx={{ px: 2.5, mb: 1.5 }}>{title}</Typography>
-      <Box
-        sx={{
-          display: 'flex',
-          gap: 1.5,
-          overflowX: 'auto',
-          px: 2.5,
-          py: 1,
-          scrollPaddingLeft: 20,
-          scrollSnapType: 'x mandatory',
-          '&::-webkit-scrollbar': { display: 'none' },
-        }}
-      >
-        {items.map((it) => (
-          <Box key={`${it.source}:${it.id}`} sx={{ scrollSnapAlign: 'start' }}>
-            <PosterCard item={it} source={it.source} width={cardWidth} showSourceBadge={showSourceBadge} />
-          </Box>
-        ))}
+      <SectionHeading title={title} sx={{ mt: 4, mb: 1.5 }} />
+      <Box sx={{ position: 'relative' }}>
+        <Box
+          ref={scrollerRef}
+          sx={{
+            display: 'flex',
+            gap: 2.5,
+            overflowX: 'auto',
+            px: 2.5,
+            py: 1,
+            scrollPaddingLeft: 20,
+            scrollSnapType: 'x mandatory',
+            '&::-webkit-scrollbar': { display: 'none' },
+          }}
+        >
+          {items.map((it) => (
+            <Box key={`${it.source}:${it.id}`} sx={{ scrollSnapAlign: 'start', contain: 'layout style' }}>
+              <PosterCard item={it} source={it.source} width={cardWidth} showSourceBadge={showSourceBadge} />
+            </Box>
+          ))}
+        </Box>
+        {hasFineHover && (
+          <>
+            <RailNavButton direction="left" onClick={() => scrollBy(-1)} disabled={!canScrollLeft} />
+            <RailNavButton direction="right" onClick={() => scrollBy(1)} disabled={!canScrollRight} />
+          </>
+        )}
       </Box>
     </Box>
   );
