@@ -6,7 +6,8 @@ import Skeleton from '@mui/material/Skeleton';
 import LibraryAddOutlinedIcon from '@mui/icons-material/LibraryAddOutlined';
 import { useTheme } from '@mui/material/styles';
 import { api } from '../api';
-import { getSources } from '../storage';
+import { getSources, SOURCES_EVENT } from '../storage';
+import type { StoredSource } from '../storage';
 import { AppShell } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { Hero } from '../components/Hero';
@@ -43,7 +44,22 @@ export function Home() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [singleSourceLibraries, setSingleSourceLibraries] = useState<Item[]>([]);
   const [heroH, setHeroH] = useState<number | undefined>(undefined);
-  const sources = getSources();
+  // Track sources in state so cloud-sync hydration after sign-in (which fires
+  // SOURCES_EVENT) triggers a re-render and re-fetch. Without this, the very
+  // first visit after sign-in renders "empty" because Home mounts before
+  // cloud-sync has finished pulling the user's sources from Supabase.
+  const [sources, setSourcesState] = useState<Record<string, StoredSource>>(() => getSources());
+
+  useEffect(() => {
+    const onChange = () => setSourcesState(getSources());
+    window.addEventListener(SOURCES_EVENT, onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+      window.removeEventListener(SOURCES_EVENT, onChange);
+      window.removeEventListener('storage', onChange);
+    };
+  }, []);
+
   const sourceCount = Object.keys(sources).length;
   const singleSourceKey = sourceCount === 1 ? Object.keys(sources)[0] : undefined;
 
@@ -52,12 +68,14 @@ export function Home() {
       setState({ kind: 'empty' });
       return;
     }
+    let cancelled = false;
+    setState({ kind: 'loading' });
     api.home().then(
-      ({ rows, errors, libraryCounts }) => setState({ kind: 'ok', rows, errors, libraryCounts }),
-      (e: Error) => setState({ kind: 'error', message: e.message }),
+      ({ rows, errors, libraryCounts }) => { if (!cancelled) setState({ kind: 'ok', rows, errors, libraryCounts }); },
+      (e: Error) => { if (!cancelled) setState({ kind: 'error', message: e.message }); },
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => { cancelled = true; };
+  }, [sourceCount]);
 
   useEffect(() => {
     if (!singleSourceKey) { setSingleSourceLibraries([]); return; }
