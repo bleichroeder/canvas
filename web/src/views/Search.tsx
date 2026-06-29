@@ -84,8 +84,8 @@ export function SearchView() {
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, 180px)',
-                  gap: 2.5,
+                  gridTemplateColumns: 'repeat(auto-fill, 220px)',
+                  gap: 3,
                 }}
               >
                 {hits.map((it) => (

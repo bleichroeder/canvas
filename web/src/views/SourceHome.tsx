@@ -47,7 +47,7 @@ export function SourceHome({ source }: Props) {
                 </Box>
               </Box>
             ))}
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 200px)', gap: 2.5, px: 2.5 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 240px)', gap: 3, px: 2.5 }}>
               {[1, 2, 3, 4].map((j) => (
                 <Skeleton key={j} variant="rectangular" height={120} sx={{ borderRadius: 1 }} />
               ))}

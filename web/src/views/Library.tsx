@@ -114,12 +114,12 @@ export function Library({ source, libraryId }: Props) {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, 180px)',
-                gap: 2.5,
+                gridTemplateColumns: 'repeat(auto-fill, 220px)',
+                gap: 3,
               }}
             >
               {[...Array(12)].map((_, i) => (
-                <Skeleton key={i} variant="rectangular" width={180} height={270} sx={{ borderRadius: 1 }} />
+                <Skeleton key={i} variant="rectangular" width={220} height={330} sx={{ borderRadius: 1 }} />
               ))}
             </Box>
           </>
@@ -138,8 +138,8 @@ export function Library({ source, libraryId }: Props) {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, 180px)',
-                gap: 2.5,
+                gridTemplateColumns: 'repeat(auto-fill, 220px)',
+                gap: 3,
               }}
             >
               {state.items.map((it) => (

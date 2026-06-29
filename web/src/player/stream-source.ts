@@ -5,6 +5,7 @@
  */
 import { Demuxer } from './demux';
 import { MkvSource } from './mkv-source';
+import { Mp3Source } from './mp3-source';
 
 export interface StreamInfo {
   duration: number;
@@ -29,7 +30,7 @@ export interface StreamSource {
  *   - 0x1A 0x45 0xDF 0xA3 → EBML/Matroska (MKV / WebM)
  *   - bytes 4..8 == 'ftyp' → ISOBMFF (MP4)
  */
-export type StreamFormat = 'mp4' | 'mkv' | 'unknown';
+export type StreamFormat = 'mp4' | 'mkv' | 'mp3' | 'unknown';
 
 export function sniffFormat(head: Uint8Array): StreamFormat {
   if (head.length >= 4 && head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) {
@@ -37,6 +38,13 @@ export function sniffFormat(head: Uint8Array): StreamFormat {
   }
   if (head.length >= 8 && head[4] === 0x66 && head[5] === 0x74 && head[6] === 0x79 && head[7] === 0x70) {
     return 'mp4';
+  }
+  // Raw MP3 — either an ID3v2 tag ('ID3') or a direct MPEG sync (0xFF 0xEx).
+  if (head.length >= 3 && head[0] === 0x49 && head[1] === 0x44 && head[2] === 0x33) {
+    return 'mp3';
+  }
+  if (head.length >= 2 && head[0] === 0xff && ((head[1]! & 0xe0) === 0xe0)) {
+    return 'mp3';
   }
   return 'unknown';
 }
@@ -77,6 +85,8 @@ export class AutoSource implements StreamSource {
         this.inner = new MkvSourceAdapter(this.opts);
       } else if (format === 'mp4') {
         this.inner = new Mp4SourceAdapter(this.opts);
+      } else if (format === 'mp3') {
+        this.inner = new Mp3SourceAdapter(this.opts);
       } else {
         this.opts.onError(new Error(`Unrecognised container; first bytes: ${[...this.head].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join(' ')}`));
         return;
@@ -125,4 +135,18 @@ class MkvSourceAdapter implements StreamSource {
   }
   appendChunk(offset: number, bytes: Uint8Array): void { this.mkv.appendChunk(offset, bytes); }
   flush(): void { this.mkv.flush(); }
+}
+
+/** Adapter so the raw-MP3 path implements the common StreamSource shape. */
+class Mp3SourceAdapter implements StreamSource {
+  private readonly mp3: Mp3Source;
+  constructor(opts: StreamSourceCallbacks) {
+    this.mp3 = new Mp3Source({
+      onReady: opts.onReady,
+      onAudioSample: opts.onAudioSample,
+      onError: opts.onError,
+    });
+  }
+  appendChunk(offset: number, bytes: Uint8Array): void { this.mp3.appendChunk(offset, bytes); }
+  flush(): void { this.mp3.flush(); }
 }
