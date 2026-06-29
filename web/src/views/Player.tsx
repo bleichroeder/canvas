@@ -207,10 +207,6 @@ export function Player({ source, id }: Props) {
     startedRef.current = true;
     setPaused(false);
     setHasEverStarted(true);
-    // VideoSink's onFirstFrame normally clears the reseek loading state; for
-    // audio-only sessions there's no first-frame callback, so clear it here
-    // once audio has started.
-    if (!videoRef.current) setReseeking(false);
     // Drained the pending buffers — let the fetcher run free again.
     engineRef.current?.resume();
   }
@@ -260,6 +256,12 @@ export function Player({ source, id }: Props) {
             }
             sessionBaseRef.current = fromSec;
             setStatus('');
+            // VideoSink's onFirstFrame is what normally clears the reseek
+            // loading state — for audio-only sessions there's no first-frame
+            // callback, so clear it as soon as the audio sink is constructed
+            // (independent of whether auto-play succeeds; a stalled autoplay
+            // shouldn't trap the splash in a "loading" state on a reseek).
+            if (audioOnly) setReseeking(false);
             if (wasPlayingRef.current) {
               autoStartPlayback().catch((e) => {
                 console.warn('auto-play failed (likely no user gesture):', e);
@@ -344,7 +346,15 @@ export function Player({ source, id }: Props) {
     if (errMsg) return;
     if (!startedRef.current) {
       wasPlayingRef.current = true;
-      await autoStartPlayback();
+      try {
+        await autoStartPlayback();
+      } catch (e) {
+        // AudioContext.resume() rejected — likely no user gesture (cold
+        // deep-link) or audio device unavailable. Log and bail; the splash
+        // stays visible with its Play button so the user can retry.
+        console.warn('start failed:', e);
+        wasPlayingRef.current = false;
+      }
       setStatus('');
       return;
     }

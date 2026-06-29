@@ -72,6 +72,10 @@ async function reconcileOnSignIn(userId: string): Promise<void> {
   emitState();
   try {
     const cloud = await pullCloud(userId);
+    // Sign-out + different sign-in can race between the pull and the
+    // setSources/pushCloud below. Abort if the active user changed
+    // mid-flight so we don't write user A's sources into user B's session.
+    if (currentUserId !== userId) return;
     const cloudKeys = cloud ? Object.keys(cloud) : [];
     if (cloudKeys.length > 0) {
       setSources(cloud!);

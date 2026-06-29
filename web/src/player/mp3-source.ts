@@ -130,7 +130,11 @@ export class Mp3Source {
           ((head[7]! & 0x7f) << 14) |
           ((head[8]! & 0x7f) << 7) |
           (head[9]! & 0x7f);
-        this.bytesToSkip = 10 + size;
+        let total = 10 + size;
+        // Footer-present flag (byte 5, bit 4) adds a 10-byte trailing
+        // footer that synchsafe-size doesn't include.
+        if (head[5]! & 0x10) total += 10;
+        this.bytesToSkip = total;
       }
     }
     if (this.bytesToSkip > 0) {
