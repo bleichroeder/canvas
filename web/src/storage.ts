@@ -34,10 +34,6 @@ export function getSources(): Record<string, StoredSource> {
 }
 
 export const SOURCES_EVENT = 'canvas:sourcesChanged';
-// Distinct from SOURCES_EVENT: only fires when a new source is ADDED
-// (not on rename, unpair, or full-set rewrites from cloud sync). Used by
-// the post-pair Snackbar that tells users they can remove sources later.
-export const SOURCE_ADDED_EVENT = 'canvas:sourceAdded';
 
 export function setSources(s: Record<string, StoredSource>): void {
   localStorage.setItem(SOURCES_KEY, JSON.stringify(s));
@@ -48,12 +44,8 @@ export function setSources(s: Record<string, StoredSource>): void {
 
 export function addSource(key: string, source: StoredSource): void {
   const cur = getSources();
-  const isNew = !cur[key];
   cur[key] = source;
   setSources(cur);
-  if (isNew) {
-    window.dispatchEvent(new CustomEvent(SOURCE_ADDED_EVENT, { detail: { key, source } }));
-  }
 }
 
 export function removeSource(key: string): void {
