@@ -27,6 +27,8 @@ import IconButton from '@mui/material/IconButton';
 import Box from '@mui/material/Box';
 import Fade from '@mui/material/Fade';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
+import MusicNoteIcon from '@mui/icons-material/MusicNote';
 
 interface Props { source: string; id: string }
 
@@ -75,6 +77,10 @@ export function Player({ source, id }: Props) {
   // Item metadata for the splash overlay (backdrop + title shown before first play).
   const [itemMeta, setItemMeta] = useState<ItemDetail | null>(null);
   const [hasEverStarted, setHasEverStarted] = useState(false);
+  // Audio-only sources (Plex music, etc) have no video track. We keep the
+  // splash overlay visible the entire session and let it act as the
+  // now-playing view (album art + title + center play/pause).
+  const [isAudioOnly, setIsAudioOnly] = useState(false);
 
   const videoRef = useRef<VideoSink | null>(null);
   const audioRef = useRef<AudioSink | null>(null);
@@ -201,6 +207,10 @@ export function Player({ source, id }: Props) {
     startedRef.current = true;
     setPaused(false);
     setHasEverStarted(true);
+    // VideoSink's onFirstFrame normally clears the reseek loading state; for
+    // audio-only sessions there's no first-frame callback, so clear it here
+    // once audio has started.
+    if (!videoRef.current) setReseeking(false);
     // Drained the pending buffers — let the fetcher run free again.
     engineRef.current?.resume();
   }
@@ -222,15 +232,23 @@ export function Player({ source, id }: Props) {
           url: resolution.url,
           onReady: (info) => {
             if (cancelled) return;
-            if (!info.videoConfig) { setErrMsg('No video track'); setReseeking(false); return; }
-            const video = new VideoSink({
-              canvas,
-              config: info.videoConfig,
-              clock: () => (audioRef.current ? audioRef.current.currentTime() : performance.now() / 1000),
-              onError: (e) => setErrMsg(`video: ${e.message}`),
-              onFirstFrame: () => setReseeking(false),
-            });
-            videoRef.current = video;
+            if (!info.videoConfig && !info.audioConfig) {
+              setErrMsg('No playable tracks');
+              setReseeking(false);
+              return;
+            }
+            const audioOnly = !info.videoConfig;
+            setIsAudioOnly(audioOnly);
+            if (info.videoConfig) {
+              const video = new VideoSink({
+                canvas,
+                config: info.videoConfig,
+                clock: () => (audioRef.current ? audioRef.current.currentTime() : performance.now() / 1000),
+                onError: (e) => setErrMsg(`video: ${e.message}`),
+                onFirstFrame: () => setReseeking(false),
+              });
+              videoRef.current = video;
+            }
             if (info.audioConfig) {
               const audio = new AudioSink({
                 config: info.audioConfig,
@@ -400,8 +418,14 @@ export function Player({ source, id }: Props) {
     }
   }
 
-  const splashVisible = !hasEverStarted && !errMsg && !reseeking;
+  // Audio-only keeps the splash on screen the entire session as the
+  // now-playing surface (album art + title); audio+video hides it once
+  // playback starts.
+  const splashVisible = !errMsg && !reseeking && (isAudioOnly || !hasEverStarted);
   const engineReady = status === '';
+  // Center button icon: spinner while engine is warming up, Pause if we're
+  // playing (audio-only's persistent splash needs to flip), Play otherwise.
+  const splashShowingPause = isAudioOnly && startedRef.current && !paused;
 
   return (
     <div
@@ -476,10 +500,20 @@ export function Player({ source, id }: Props) {
                 },
               }}
             >
-              {engineReady
-                ? <PlayArrowIcon sx={{ fontSize: 60, ml: 0.5 }} />
-                : <CircularProgress size={42} sx={{ color: 'common.white' }} />}
+              {!engineReady
+                ? <CircularProgress size={42} sx={{ color: 'common.white' }} />
+                : splashShowingPause
+                ? <PauseIcon sx={{ fontSize: 60 }} />
+                : <PlayArrowIcon sx={{ fontSize: 60, ml: 0.5 }} />}
             </IconButton>
+            {isAudioOnly && (
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                <MusicNoteIcon sx={{ fontSize: 18 }} />
+                <Typography variant="caption" sx={{ letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+                  Audio only
+                </Typography>
+              </Stack>
+            )}
           </Stack>
         </Box>
       </Fade>
