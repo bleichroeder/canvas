@@ -75,9 +75,6 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onRename }:
       <Box
         sx={{
           display: 'flex', alignItems: 'center', gap: 2, p: 2,
-          backgroundColor: 'background.paper',
-          border: '1px solid', borderColor: 'divider',
-          borderRadius: 1, mb: 1,
         }}
       >
         <Box
