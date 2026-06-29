@@ -4,13 +4,41 @@ import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import '@fontsource/inter/700.css';
 
+declare module '@mui/material/styles' {
+  interface Palette {
+    surface: { elevated: string };
+  }
+  interface PaletteOptions {
+    surface?: { elevated: string };
+  }
+  interface Theme {
+    canvasMotion: { fast: string; med: string; slow: string; easing: string };
+    canvasAmbient: string;
+  }
+  interface ThemeOptions {
+    canvasMotion?: { fast: string; med: string; slow: string; easing: string };
+    canvasAmbient?: string;
+  }
+}
+
 export const theme = createTheme({
   cssVariables: true,
+  canvasMotion: {
+    fast: '150ms',
+    med: '220ms',
+    slow: '320ms',
+    easing: 'cubic-bezier(0.2, 0, 0, 1)',
+  },
+  canvasAmbient:
+    'radial-gradient(ellipse 80% 50% at 20% 0%, rgba(79, 142, 247, 0.06), transparent 60%)',
   palette: {
     mode: 'dark',
     background: {
       default: '#0e0f12',
-      paper: '#181a1f',
+      paper: '#1c1f25',
+    },
+    surface: {
+      elevated: '#22252d',
     },
     primary: {
       main: '#4f8ef7',
@@ -35,7 +63,7 @@ export const theme = createTheme({
   typography: {
     fontFamily: '"Inter", system-ui, -apple-system, sans-serif',
     h1: { fontSize: 40, fontWeight: 600, letterSpacing: '0.5px' },
-    h2: { fontSize: 32, fontWeight: 600, letterSpacing: '0.5px' },
+    h2: { fontSize: 28, fontWeight: 600, letterSpacing: '0.5px' },
     h3: { fontSize: 20, fontWeight: 600, letterSpacing: '0.5px' },
     body1: { fontSize: 16, fontWeight: 400 },
     body2: { fontSize: 14, fontWeight: 400 },
@@ -54,29 +82,32 @@ export const theme = createTheme({
     MuiButton: {
       defaultProps: { disableElevation: true },
       styleOverrides: {
-        root: { textTransform: 'none' },
+        root: {
+          textTransform: 'none',
+          transition: 'transform 150ms cubic-bezier(0.2,0,0,1)',
+          '&:active': {
+            transform: 'scale(0.97)',
+          },
+        },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          transition: 'transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease',
-          '&:has(.MuiCardActionArea-root:hover)': {
-            borderColor: 'rgba(79, 142, 247, 0.35)',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-          },
+          transition: 'border-color 220ms cubic-bezier(0.2,0,0,1), box-shadow 220ms cubic-bezier(0.2,0,0,1)',
         },
       },
     },
     MuiCardActionArea: {
       styleOverrides: {
         root: {
-          transition: 'transform 200ms ease, box-shadow 200ms ease',
+          transition: 'transform 220ms cubic-bezier(0.2,0,0,1), box-shadow 220ms cubic-bezier(0.2,0,0,1)',
           '&:hover': {
-            transform: 'translateY(-2px)',
+            transform: 'scale(1.03)',
           },
           '&:active': {
-            transform: 'translateY(0)',
+            transform: 'scale(0.97)',
+            transition: 'transform 150ms cubic-bezier(0.2,0,0,1)',
           },
           '&.Mui-focusVisible': {
             outline: '2px solid #4f8ef7',
