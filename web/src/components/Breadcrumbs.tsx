@@ -67,7 +67,7 @@ export function RouteBreadcrumbs() {
   return (
     <Breadcrumbs
       separator={<ChevronRightIcon fontSize="small" />}
-      sx={{ px: 2.5, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}
+      sx={{ py: 0.5 }}
       aria-label="breadcrumb"
     >
       {crumbs.map((c, i) => {
