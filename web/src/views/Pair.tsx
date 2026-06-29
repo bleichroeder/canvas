@@ -86,8 +86,11 @@ export function Pair() {
         {state.kind === 'choose' && (
           <>
             <Typography variant="h1" sx={{ mb: 1 }}>Pair a new source</Typography>
-            <Typography color="text.secondary" sx={{ mb: 3 }}>
+            <Typography color="text.secondary" sx={{ mb: 1 }}>
               Choose what kind of source you want to add.
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
+              You can unpair any source later in Settings → Sources.
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               {SOURCE_TYPES.map((s) => (
