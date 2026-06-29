@@ -26,6 +26,15 @@ interface Props { source: string; id: string }
 
 const PROGRESS_INTERVAL_MS = 15_000;
 
+// Pre-gesture pending-sample caps. The engine fetches at line rate as soon as
+// it boots; if the user takes a while to tap Play, encoded chunks pile up in
+// these arrays and can swallow hundreds of MB of heap. When either exceeds
+// its cap, we pause the fetcher. Once the user starts playback, the arrays
+// drain into the decoders and the fetcher resumes.
+// 240 video chunks ≈ 10 sec @ 24fps; 480 audio chunks ≈ 10 sec @ 47 packets/sec (AAC).
+const MAX_PENDING_VIDEO_CHUNKS = 240;
+const MAX_PENDING_AUDIO_CHUNKS = 480;
+
 export function Player({ source, id }: Props) {
   const route = useRoute();
   const fromQuery = (() => {
@@ -171,6 +180,8 @@ export function Player({ source, id }: Props) {
     startedRef.current = true;
     setPaused(false);
     setHasEverStarted(true);
+    // Drained the pending buffers — let the fetcher run free again.
+    engineRef.current?.resume();
   }
 
   const bootSession = (fromSec: number): { cancel: () => void } => {
@@ -218,11 +229,21 @@ export function Player({ source, id }: Props) {
           },
           onVideoSample: (chunk) => {
             if (startedRef.current && videoRef.current) videoRef.current.feed(chunk);
-            else pendingVideoRef.current.push(chunk);
+            else {
+              pendingVideoRef.current.push(chunk);
+              if (pendingVideoRef.current.length >= MAX_PENDING_VIDEO_CHUNKS) {
+                engineRef.current?.pause();
+              }
+            }
           },
           onAudioSample: (chunk) => {
             if (startedRef.current && audioRef.current) audioRef.current.feed(chunk);
-            else pendingAudioRef.current.push(chunk);
+            else {
+              pendingAudioRef.current.push(chunk);
+              if (pendingAudioRef.current.length >= MAX_PENDING_AUDIO_CHUNKS) {
+                engineRef.current?.pause();
+              }
+            }
           },
           onFatal: (e) => { setErrMsg(e.message); setReseeking(false); },
           onDone: () => { videoRef.current?.flush().catch(() => {}); },

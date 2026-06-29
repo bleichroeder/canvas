@@ -14,6 +14,10 @@ export interface BootEngineOptions {
 export interface EngineHandle {
   /** Stop fetching and detach callbacks. Safe to call multiple times. */
   dispose(): void;
+  /** Pause network fetching. Buffered samples already in flight still arrive. */
+  pause(): void;
+  /** Resume network fetching after pause(). No-op if not paused. */
+  resume(): void;
 }
 
 /**
@@ -47,6 +51,14 @@ export function bootEngine(opts: BootEngineOptions): EngineHandle {
       if (disposed) return;
       disposed = true;
       fetcher.abort();
+    },
+    pause(): void {
+      if (disposed) return;
+      fetcher.pause();
+    },
+    resume(): void {
+      if (disposed) return;
+      fetcher.resume();
     },
   };
 }
