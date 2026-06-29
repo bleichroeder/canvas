@@ -73,22 +73,53 @@ export const plexAdapter: SourceAdapter = {
       'X-Plex-Container-Start': String(offset),
       'X-Plex-Container-Size': String(limit),
     };
-    const sectionPath = `/library/sections/${encodeURIComponent(libraryId)}/all`;
     type AllResponse = MediaContainer<PlexMetadata & { librarySectionTitle?: string }> & {
       MediaContainer: { totalSize?: number };
     };
-    // Try with includeStreams=1 first — required so video posters can show
-    // a CC badge. Some Plex builds 404 this for music sections, so fall back
-    // to the bare path without that param.
+    const tryFetch = async (subpath: string, extra?: Record<string, string>): Promise<AllResponse> => {
+      const params = new URLSearchParams(extra ? { ...baseParams, ...extra } : baseParams);
+      return plexFetch<AllResponse>(
+        ctx,
+        `/library/sections/${encodeURIComponent(libraryId)}/${subpath}?${params.toString()}`,
+      );
+    };
+    // Try /all with includeStreams=1 first (powers CC badges on video posters).
+    // On 404, retry without includeStreams. Still 404 → diagnose the section:
+    // verify it exists in the user's section list, and for music sections
+    // try /albums as a known music-specific fallback.
     let all: AllResponse;
     try {
-      const params = new URLSearchParams({ ...baseParams, includeStreams: '1' });
-      all = await plexFetch<AllResponse>(ctx, `${sectionPath}?${params.toString()}`);
+      all = await tryFetch('all', { includeStreams: '1' });
     } catch (e) {
       const msg = (e as Error).message;
       if (!msg.includes(' 404 ')) throw e;
-      const params = new URLSearchParams(baseParams);
-      all = await plexFetch<AllResponse>(ctx, `${sectionPath}?${params.toString()}`);
+      try {
+        all = await tryFetch('all');
+      } catch (e2) {
+        const msg2 = (e2 as Error).message;
+        if (!msg2.includes(' 404 ')) throw e2;
+        // /all keeps 404ing — figure out why.
+        const sections = await plexFetch<MediaContainer<PlexSection>>(ctx, '/library/sections').catch(() => null);
+        const directory = sections?.MediaContainer.Directory ?? [];
+        const target = directory.find((s) => s.key === libraryId);
+        if (!target) {
+          const availableList = directory.map((s) => `${s.key} (${s.title})`).join(', ') || '(none)';
+          throw new Error(
+            `Plex section "${libraryId}" not found on this server. ` +
+            `It may have been deleted or belong to a different Plex server. ` +
+            `Available sections: ${availableList}`,
+          );
+        }
+        // Section exists. For music sections try /albums; otherwise rethrow.
+        if (target.type === 'artist' || target.type === 'music' || target.type === 'audio') {
+          all = await tryFetch('albums');
+        } else {
+          throw new Error(
+            `Plex section "${target.title}" (id ${libraryId}, type ${target.type}) ` +
+            `returns 404 on /all. May be a Plex Cloud or shared section the local server can't serve.`,
+          );
+        }
+      }
     }
     const items = (all.MediaContainer.Metadata ?? []).map((m) => mapMetadata(ctx, m));
     const sectionTitle = all.MediaContainer.Metadata?.[0]?.librarySectionTitle ?? 'Library';
