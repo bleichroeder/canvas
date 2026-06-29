@@ -3,7 +3,11 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Alert from '@mui/material/Alert';
 import Skeleton from '@mui/material/Skeleton';
+import Fab from '@mui/material/Fab';
+import Badge from '@mui/material/Badge';
+import Tooltip from '@mui/material/Tooltip';
 import LibraryAddOutlinedIcon from '@mui/icons-material/LibraryAddOutlined';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useTheme } from '@mui/material/styles';
 import { api } from '../api';
 import { getSources, SOURCES_EVENT } from '../storage';
@@ -15,6 +19,7 @@ import { Rail } from '../components/Rail';
 import { SectionHeading } from '../components/SectionHeading';
 import { SourcePickerCard } from '../components/SourcePickerCard';
 import { LibraryCard } from '../components/LibraryCard';
+import { useNowPlaying } from '../components/NowPlayingStrip';
 import { navigate } from '../router';
 import type { HomeRow, Item } from '../types';
 
@@ -86,6 +91,8 @@ export function Home() {
     );
     return () => { cancelled = true; };
   }, [singleSourceKey]);
+
+  const nowPlaying = useNowPlaying();
 
   // Hero source ladder: first Continue Watching with a backdrop, else first
   // Recently Added with a backdrop, else brand hero.
@@ -177,15 +184,9 @@ export function Home() {
               />
             )}
 
-            {state.errors.length > 0 && (
-              <Box sx={{ px: 2.5, pb: 2 }}>
-                {state.errors.map((err) => (
-                  <Alert key={err.source} severity="warning" sx={{ my: 0.5 }}>
-                    {err.source}: {err.message}
-                  </Alert>
-                ))}
-              </Box>
-            )}
+            {/* Inline alerts removed in favour of the floating warning FAB at
+                the bottom-right. Errors don't elbow into the layout below
+                the hero; the FAB taps through to Settings → Sources. */}
 
             {(() => {
               const continueItems: (Item & { source: string })[] = [];
@@ -269,6 +270,47 @@ export function Home() {
           </>
         )}
       </Box>
+      {state.kind === 'ok' && state.errors.length > 0 && (
+        <Tooltip
+          title={
+            state.errors.length === 1
+              ? `${state.errors[0]!.source} unavailable — tap for Settings`
+              : `${state.errors.length} sources unavailable — tap for Settings`
+          }
+          placement="left"
+          arrow
+        >
+          <Fab
+            size="medium"
+            onClick={() => navigate('/settings?tab=sources')}
+            aria-label={`${state.errors.length} source${state.errors.length > 1 ? 's' : ''} unavailable`}
+            sx={{
+              position: 'fixed',
+              right: 24,
+              bottom: nowPlaying ? 124 : 24,
+              backgroundColor: 'rgba(14,15,18,0.92)',
+              color: 'secondary.main',
+              border: '1px solid rgba(245,166,35,0.4)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+              transition: 'background-color 220ms cubic-bezier(0.2,0,0,1), transform 220ms cubic-bezier(0.2,0,0,1), bottom 220ms cubic-bezier(0.2,0,0,1)',
+              '&:hover': {
+                backgroundColor: 'rgba(14,15,18,0.98)',
+                transform: 'scale(1.05)',
+              },
+              zIndex: 9,
+            }}
+          >
+            <Badge
+              badgeContent={state.errors.length}
+              color="error"
+              max={9}
+              invisible={state.errors.length <= 1}
+            >
+              <WarningAmberIcon />
+            </Badge>
+          </Fab>
+        </Tooltip>
+      )}
     </AppShell>
   );
 }

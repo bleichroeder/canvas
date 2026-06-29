@@ -5,16 +5,23 @@ import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import { useTheme } from '@mui/material/styles';
 import { AppShell } from '../components/AppShell';
+import { useRoute } from '../router';
 import { AccountTab } from './settings/AccountTab';
 import { SourcesTab } from './settings/SourcesTab';
 import { PlaybackTab } from './settings/PlaybackTab';
 import { AboutTab } from './settings/AboutTab';
 
 type TabId = 'account' | 'sources' | 'playback' | 'about';
+const TAB_IDS: readonly TabId[] = ['account', 'sources', 'playback', 'about'] as const;
 
 export function Settings() {
   const theme = useTheme();
-  const [tab, setTab] = useState<TabId>('account');
+  const route = useRoute();
+  // Allow deep-links to a specific tab via /settings?tab=sources (e.g. from
+  // Home's unavailable-source FAB). Unknown values fall back to 'account'.
+  const initialTab: TabId =
+    TAB_IDS.includes(route.query.tab as TabId) ? (route.query.tab as TabId) : 'account';
+  const [tab, setTab] = useState<TabId>(initialTab);
 
   return (
     <AppShell>
