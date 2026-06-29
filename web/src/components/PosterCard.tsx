@@ -23,7 +23,7 @@ function formatEpisodeSubtitle(item: Item): string | undefined {
   return item.title;
 }
 
-export function PosterCard({ item, source, width = 180, showSourceBadge = false }: PosterCardProps) {
+export function PosterCard({ item, source, width = 220, showSourceBadge = false }: PosterCardProps) {
   const isFolder = item.type === 'folder';
   const href = isFolder
     ? `/lib/${source}/${item.id}`
@@ -94,8 +94,7 @@ export function PosterCard({ item, source, width = 180, showSourceBadge = false 
                 bottom: 6, left: 6,
                 height: 20, px: 0.625,
                 borderRadius: 0.5,
-                backgroundColor: 'rgba(0,0,0,0.7)',
-                backdropFilter: 'blur(4px)',
+                backgroundColor: 'rgba(0,0,0,0.78)',
                 color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
@@ -116,8 +115,7 @@ export function PosterCard({ item, source, width = 180, showSourceBadge = false 
                 bottom: 6, right: 6,
                 height: 20, px: 0.75,
                 borderRadius: 0.5,
-                backgroundColor: 'rgba(0,0,0,0.7)',
-                backdropFilter: 'blur(4px)',
+                backgroundColor: 'rgba(0,0,0,0.78)',
                 color: '#fff',
                 display: 'flex',
                 alignItems: 'center',
