@@ -5,15 +5,12 @@ import type { StoredSource } from '../storage';
 type SourcesMap = Record<string, StoredSource>;
 
 interface SyncState {
-  // True when a local-vs-cloud conflict needs the user to choose. UI reads
-  // this and renders a Dialog; user resolution dispatches CONFLICT_EVENT.
-  conflict: { local: SourcesMap; cloud: SourcesMap } | null;
   // True when the initial cloud hydration is in flight (used by Settings/UI
   // to hide stale state before the cloud overwrite lands).
   hydrating: boolean;
 }
 
-const state: SyncState = { conflict: null, hydrating: false };
+const state: SyncState = { hydrating: false };
 const STATE_EVENT = 'canvas:cloudSyncState';
 
 export function getCloudSyncState(): SyncState {
@@ -65,47 +62,29 @@ function schedulePush() {
 }
 
 /**
- * Reconcile local + cloud sources on sign-in. Three branches:
- *   - cloud empty                → push local up (could also be empty; no-op)
- *   - cloud has data, local empty → adopt cloud (overwrites local)
- *   - both have data              → set conflict state; UI prompts user
+ * Reconcile local + cloud sources on sign-in. Cloud always wins:
+ *   - cloud has data → adopt cloud (overwrites local)
+ *   - cloud empty, local has data → push local up (first-time migration)
+ *   - both empty → no-op
  */
 async function reconcileOnSignIn(userId: string): Promise<void> {
   state.hydrating = true;
   emitState();
   try {
     const cloud = await pullCloud(userId);
-    const local = getSources();
-    const localKeys = Object.keys(local);
     const cloudKeys = cloud ? Object.keys(cloud) : [];
-    if (cloudKeys.length === 0) {
-      if (localKeys.length > 0) await pushCloud(userId, local);
-      return;
-    }
-    if (localKeys.length === 0) {
+    if (cloudKeys.length > 0) {
       setSources(cloud!);
       return;
     }
-    // Both populated — keep both local + cloud snapshots, let UI ask.
-    state.conflict = { local, cloud: cloud! };
+    const local = getSources();
+    if (Object.keys(local).length > 0) {
+      await pushCloud(userId, local);
+    }
   } finally {
     state.hydrating = false;
     emitState();
   }
-}
-
-export async function resolveConflictUseCloud(): Promise<void> {
-  if (!state.conflict) return;
-  setSources(state.conflict.cloud);
-  state.conflict = null;
-  emitState();
-}
-
-export async function resolveConflictUseLocal(): Promise<void> {
-  if (!state.conflict || !currentUserId) return;
-  await pushCloud(currentUserId, state.conflict.local);
-  state.conflict = null;
-  emitState();
 }
 
 /**
@@ -139,13 +118,8 @@ export function startCloudSync(): () => void {
       // Null currentUserId BEFORE clearing local sources so the SOURCES_EVENT
       // that fires from setSources() doesn't try to push the empty map up.
       currentUserId = null;
-      if (state.conflict) {
-        state.conflict = null;
-        emitState();
-      }
-      // Local sources belong to whichever user just signed out — leaving them
-      // behind makes the next sign-in pop a conflict dialog comparing two
-      // different accounts' libraries.
+      // Local sources belong to whichever user just signed out — clear them
+      // so the next sign-in starts from a clean slate (cloud will hydrate).
       if (wasSignedIn && Object.keys(getSources()).length > 0) {
         setSources({});
       }
