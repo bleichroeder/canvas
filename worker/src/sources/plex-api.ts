@@ -87,6 +87,10 @@ export function mapMetadata(
   let type: Item['type'];
   if (typeOverride) type = typeOverride;
   else if (m.type === 'movie' || m.type === 'show' || m.type === 'episode') type = m.type;
+  // Music tracks are playable leaves — route them to /item/<src>/<id> like a
+  // movie. Artists and albums stay as 'folder' so /lib/<src>/<id> drills into
+  // their children via /library/metadata/<id>/children.
+  else if (m.type === 'track') type = 'movie';
   else type = 'folder';
   // Derive hasCC only when the bulk request was made with includeStreams=1
   // (otherwise Stream entries are absent and we can't claim either way).

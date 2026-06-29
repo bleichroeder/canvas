@@ -73,8 +73,8 @@ export const plexAdapter: SourceAdapter = {
       'X-Plex-Container-Start': String(offset),
       'X-Plex-Container-Size': String(limit),
     };
-    type AllResponse = MediaContainer<PlexMetadata & { librarySectionTitle?: string }> & {
-      MediaContainer: { totalSize?: number };
+    type AllResponse = MediaContainer<PlexMetadata & { librarySectionTitle?: string; parentTitle?: string }> & {
+      MediaContainer: { totalSize?: number; title1?: string; title2?: string; librarySectionTitle?: string };
     };
     const tryFetch = async (subpath: string, extra?: Record<string, string>): Promise<AllResponse> => {
       const params = new URLSearchParams(extra ? { ...baseParams, ...extra } : baseParams);
@@ -83,10 +83,18 @@ export const plexAdapter: SourceAdapter = {
         `/library/sections/${encodeURIComponent(libraryId)}/${subpath}?${params.toString()}`,
       );
     };
-    // Try /all with includeStreams=1 first (powers CC badges on video posters).
-    // On 404, retry without includeStreams. Still 404 → diagnose the section:
-    // verify it exists in the user's section list, and for music sections
-    // try /albums as a known music-specific fallback.
+    const tryMetadataChildren = async (): Promise<AllResponse> => {
+      const params = new URLSearchParams(baseParams);
+      return plexFetch<AllResponse>(
+        ctx,
+        `/library/metadata/${encodeURIComponent(libraryId)}/children?${params.toString()}`,
+      );
+    };
+    // Try /library/sections/X/all first (the section-browse path). On 404,
+    // retry without includeStreams. Still 404 → the id likely isn't a section
+    // at all but a ratingKey for a metadata item (album, artist, etc., which
+    // happen when music items appear on Home from /library/recentlyAdded).
+    // In that case browse children via /library/metadata/X/children.
     let all: AllResponse;
     try {
       all = await tryFetch('all', { includeStreams: '1' });
@@ -98,20 +106,25 @@ export const plexAdapter: SourceAdapter = {
       } catch (e2) {
         const msg2 = (e2 as Error).message;
         if (!msg2.includes(' 404 ')) throw e2;
-        // /all keeps 404ing — figure out why.
+        // Not a section — check if it's a metadata id we can drill into.
         const sections = await plexFetch<MediaContainer<PlexSection>>(ctx, '/library/sections').catch(() => null);
         const directory = sections?.MediaContainer.Directory ?? [];
         const target = directory.find((s) => s.key === libraryId);
         if (!target) {
-          const availableList = directory.map((s) => `${s.key} (${s.title})`).join(', ') || '(none)';
-          throw new Error(
-            `Plex section "${libraryId}" not found on this server. ` +
-            `It may have been deleted or belong to a different Plex server. ` +
-            `Available sections: ${availableList}`,
-          );
-        }
-        // Section exists. For music sections try /albums; otherwise rethrow.
-        if (target.type === 'artist' || target.type === 'music' || target.type === 'audio') {
+          // Not in sections — try metadata/children before giving up.
+          try {
+            all = await tryMetadataChildren();
+          } catch (e3) {
+            const msg3 = (e3 as Error).message;
+            if (!msg3.includes(' 404 ')) throw e3;
+            const availableList = directory.map((s) => `${s.key} (${s.title})`).join(', ') || '(none)';
+            throw new Error(
+              `Plex id "${libraryId}" isn't a section or a browsable metadata item on this server. ` +
+              `Available sections: ${availableList}`,
+            );
+          }
+        } else if (target.type === 'artist' || target.type === 'music' || target.type === 'audio') {
+          // Section exists and is music — try /albums for the music-section quirk.
           all = await tryFetch('albums');
         } else {
           throw new Error(
