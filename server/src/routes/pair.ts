@@ -11,6 +11,8 @@ import type { PairPayload } from '../db/schema';
 import { generatePin, isPinShape } from '../lib/pin';
 import { nowSec } from '../lib/time';
 import { logger } from '../log';
+import { getAuthContext } from '../middleware/auth';
+import { createSource, grantSourceAccess } from '../storage/sources';
 import {
   FLIXIFY_API_BASE,
   harvestCookies,
@@ -190,12 +192,21 @@ export function makePairRoutes(getDb: () => Db) {
     if (!session) return c.json({ error: 'code expired' }, 410);
     if (session.expiresAt < nowSec()) return c.json({ error: 'code expired' }, 410);
     const existingPayload = (session.payload ?? {}) as PairPayload;
+    const auth = getAuthContext(c);
+    const created = createSource(getDb(), {
+      type: type as 'plex' | 'flixify',
+      baseUrl: baseUrl as string,
+      token: token as string,
+      label: label as string,
+      pairedByUserId: auth.userId,
+    });
+    grantSourceAccess(getDb(), auth.userId, created.id);
     updatePairSessionPayload(getDb(), code, {
       ...existingPayload,
-      source: { type, baseUrl, token, label },
+      source: { id: created.id, type, baseUrl, token, label },
     });
     setPairSessionStatus(getDb(), code, 'approved');
-    logger.info({ code }, 'pair approve');
+    logger.info({ code, sourceId: created.id, by: auth.userId }, 'source created from pair approve');
     return c.body(null, 204);
   });
 
@@ -308,10 +319,20 @@ export function makePairRoutes(getDb: () => Db) {
       ...(assetHost !== undefined ? { asset_host: assetHost } : {}),
       mirror,
     };
+    const flixifyAuth = getAuthContext(c);
+    const flixifyCreated = createSource(getDb(), {
+      type: 'flixify',
+      baseUrl: `https://${mirror}`,
+      token: serializeFlixifyAuth(finalAuth),
+      label: mirror,
+      pairedByUserId: flixifyAuth.userId,
+    });
+    grantSourceAccess(getDb(), flixifyAuth.userId, flixifyCreated.id);
     updatePairSessionPayload(getDb(), code, {
       ...payload,
       flixify: { pin_id, auth: finalAuth, mirror },
       source: {
+        id: flixifyCreated.id,
         type: 'flixify',
         baseUrl: `https://${mirror}`,
         token: serializeFlixifyAuth(finalAuth),
@@ -319,7 +340,7 @@ export function makePairRoutes(getDb: () => Db) {
       },
     });
     setPairSessionStatus(getDb(), code, 'approved');
-    logger.info({ code, mirror }, 'flixify pair approved');
+    logger.info({ code, mirror, sourceId: flixifyCreated.id, by: flixifyAuth.userId }, 'flixify pair approved');
     return c.json({ status: 'approved' });
   });
 
