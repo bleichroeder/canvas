@@ -4,20 +4,39 @@ export interface VideoSinkOptions {
   clock: () => number;
   onError: (err: Error) => void;
   onFirstFrame?: () => void;
+  /**
+   * Backpressure signal. The sink calls this with 'pause' when the queue
+   * fills past HIGH_WATER and 'resume' when it drains back to LOW_WATER.
+   * Player wires it to the engine's fetcher so we stop pulling bytes (and
+   * therefore stop decoding) when we have enough buffered video to play
+   * out. Without this, hardware decoders that run faster than realtime
+   * race ahead and fill the queue with frames whose timestamps are all in
+   * the future relative to the playback clock — every frame gets dropped
+   * by drawDue's tolerance check and video freezes after the first paint.
+   */
+  onBackpressure?: (state: 'pause' | 'resume') => void;
 }
 
-// Hard cap on decoded frames held in memory between decoder output and canvas
-// paint. Each 1080p VideoFrame is ~6 MB; without a cap, any draw-loop stall
-// blows the renderer's memory budget and Chromium kills the tab.
-const MAX_QUEUED_FRAMES = 12;
+// Backpressure thresholds (in queued frames).
+//   HIGH_WATER: pause the fetcher when we've buffered this many frames
+//   LOW_WATER:  resume when we drain back to this many
+// At 24 fps, 12 frames ≈ 0.5 sec of buffered video — plenty of headroom for
+// the draw loop without committing a lot of memory.
+const HIGH_WATER = 12;
+const LOW_WATER = 4;
+// Defense-in-depth cap. If backpressure doesn't take effect quickly enough
+// (the fetcher is still in flight when we signal pause, demuxer still has
+// chunks to emit, decoder still has chunks to consume), we drop the
+// INCOMING frame rather than the oldest. Dropping oldest is wrong when the
+// decoder races ahead — every queued frame is in the future and the oldest
+// is the one closest to the clock and most likely to be the next one drawn.
+const HARD_CAP = 18;
 
 // Draw cadence in ms. ~16ms ≈ 60Hz, more than enough for 24-30fps streams.
 // We use setInterval rather than requestAnimationFrame because Tesla's
 // browser throttles RAF whenever the car's UI overlays our tab (climate
-// panel, autopilot status, lane-departure warnings, etc.). That throttling
-// left the first frame painted and froze every subsequent one while audio
-// kept playing. setInterval keeps firing regardless of focus state; vsync
-// misalignment isn't perceptible at 24fps streaming content.
+// panel, autopilot status, lane-departure warnings, etc.). setInterval
+// keeps firing regardless of focus state.
 const DRAW_INTERVAL_MS = 16;
 
 export class VideoSink {
@@ -27,10 +46,12 @@ export class VideoSink {
   private readonly clock: () => number;
   private readonly frames: VideoFrame[] = [];
   private readonly onFirstFrame: (() => void) | undefined;
+  private readonly onBackpressure: ((state: 'pause' | 'resume') => void) | undefined;
   private timerHandle: number | null = null;
   private frameIntervalSec = 1 / 24;
   private firstFrameDispatched = false;
   private droppedFrames = 0;
+  private backpressureState: 'flowing' | 'paused' = 'flowing';
 
   constructor(opts: VideoSinkOptions) {
     this.canvas = opts.canvas;
@@ -41,6 +62,7 @@ export class VideoSink {
     this.ctx = ctx;
     this.clock = opts.clock;
     this.onFirstFrame = opts.onFirstFrame;
+    this.onBackpressure = opts.onBackpressure;
     this.decoder = new VideoDecoder({
       output: (frame) => this.onFrame(frame),
       error: (e) => opts.onError(e as unknown as Error),
@@ -88,17 +110,21 @@ export class VideoSink {
     if (frame.duration) {
       this.frameIntervalSec = frame.duration / 1_000_000;
     }
-    // Drop the oldest queued frame if we're at capacity. Older frames are
-    // already past the clock by definition (drawDue runs every tick and
-    // evicts everything <= clock), so dropping them costs nothing visually
-    // — and prevents the unbounded-queue OOM that crashed the renderer.
-    if (this.frames.length >= MAX_QUEUED_FRAMES) {
-      const oldest = this.frames.shift();
-      if (oldest) oldest.close();
+    // Hard cap: if the queue is already at HARD_CAP, drop the INCOMING
+    // frame. The oldest queued frames are the ones nearest the playback
+    // clock — we need to keep them so drawDue has something to paint.
+    if (this.frames.length >= HARD_CAP) {
+      frame.close();
       this.droppedFrames++;
+      return;
     }
     this.frames.push(frame);
     this.frames.sort((a, b) => a.timestamp - b.timestamp);
+    // Signal the fetcher to pause once we've buffered enough video ahead.
+    if (this.frames.length >= HIGH_WATER && this.backpressureState === 'flowing') {
+      this.backpressureState = 'paused';
+      if (this.onBackpressure) this.onBackpressure('pause');
+    }
   }
 
   private drawDue(): void {
@@ -121,6 +147,11 @@ export class VideoSink {
           try { this.onFirstFrame(); } catch { /* ignore */ }
         }
       }
+    }
+    // Resume the fetcher when the queue has drained enough.
+    if (this.frames.length <= LOW_WATER && this.backpressureState === 'paused') {
+      this.backpressureState = 'flowing';
+      if (this.onBackpressure) this.onBackpressure('resume');
     }
   }
 }

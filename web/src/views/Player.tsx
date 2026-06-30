@@ -242,6 +242,14 @@ export function Player({ source, id }: Props) {
                 clock: () => (audioRef.current ? audioRef.current.currentTime() : performance.now() / 1000),
                 onError: (e) => setErrMsg(`video: ${e.message}`),
                 onFirstFrame: () => setReseeking(false),
+                // Stop pulling network bytes when the video queue is full so
+                // hardware decoders that run faster than realtime don't race
+                // ahead and pile future-stamped frames into the queue (which
+                // drawDue would then reject and the video would freeze).
+                onBackpressure: (state) => {
+                  if (state === 'pause') engineRef.current?.pause();
+                  else engineRef.current?.resume();
+                },
               });
               videoRef.current = video;
             }
