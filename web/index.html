@@ -66,8 +66,8 @@
         .splash-play-fill, .splash-chevron, .splash-word { animation: none !important; }
         .splash-play-fill { opacity: 0; }
         .splash-chevron { opacity: 1; }
-        .splash-chevron-left  { d: path("M 188 62 L 162 88 L 188 114"); }
-        .splash-chevron-right { d: path("M 332 62 L 358 88 L 332 114"); }
+        .splash-chevron-left  { d: path("M 168 62 L 142 88 L 168 114"); }
+        .splash-chevron-right { d: path("M 352 62 L 378 88 L 352 114"); }
         .splash-word { opacity: 1; transform: none; }
       }
     </style>
@@ -79,11 +79,11 @@
         <path class="splash-play-fill" d="M 232 50 L 312 88 L 232 126 Z" />
         <path class="splash-chevron splash-chevron-left" d="M 232 50 L 312 88 L 232 126">
           <animate attributeName="d" begin="1.0s" dur="0.75s" fill="freeze" calcMode="spline" keySplines="0.42 0 0.18 1"
-                   values="M 232 50 L 312 88 L 232 126; M 188 62 L 162 88 L 188 114" />
+                   values="M 232 50 L 312 88 L 232 126; M 168 62 L 142 88 L 168 114" />
         </path>
         <path class="splash-chevron splash-chevron-right" d="M 232 50 L 312 88 L 232 126">
           <animate attributeName="d" begin="1.0s" dur="0.75s" fill="freeze" calcMode="spline" keySplines="0.42 0 0.18 1"
-                   values="M 232 50 L 312 88 L 232 126; M 332 62 L 358 88 L 332 114" />
+                   values="M 232 50 L 312 88 L 232 126; M 352 62 L 378 88 L 352 114" />
         </path>
         <text class="splash-word" x="260" y="100" text-anchor="middle">canvas</text>
       </svg>
@@ -103,7 +103,13 @@
           var el = document.getElementById('canvas-splash');
           if (!el) return;
           el.classList.add('canvas-splash-fade');
-          setTimeout(function () { el.remove(); }, 500);
+          setTimeout(function () {
+            el.remove();
+            // Tell App it can render now. The form/inputs only mount after
+            // this fires, so password-manager extensions don't attach UI
+            // (autofill icons, etc.) to inputs while the splash is on top.
+            window.dispatchEvent(new Event('canvas:splashGone'));
+          }, 500);
         }
         window.addEventListener('canvas:ready', function () {
           ready = true;

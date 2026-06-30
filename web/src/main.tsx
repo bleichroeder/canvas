@@ -1,4 +1,4 @@
-import { StrictMode, useEffect } from 'react';
+import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -48,6 +48,26 @@ function App() {
   // back to home before the sign-in card has a chance to render.
   const needsHomeRedirect = route.path === '/sign-in' && !auth.loading && !!auth.user;
 
+  // Defer the entire route render until the splash leaves the DOM. Without
+  // this, the SignIn form mounts behind the splash and password-manager
+  // extensions attach their autofill UI to the inputs — those icons render
+  // outside the React tree and bleed through the splash. useEffects (auth
+  // check, redirects) still run as usual; we just hold back the visible
+  // tree. The splash dispatches 'canvas:splashGone' from index.html when it
+  // removes itself.
+  const [splashGone, setSplashGone] = useState(() =>
+    typeof document !== 'undefined' && !document.getElementById('canvas-splash'),
+  );
+  useEffect(() => {
+    if (splashGone) return;
+    const onGone = () => setSplashGone(true);
+    window.addEventListener('canvas:splashGone', onGone);
+    // Catch the case where the splash was removed between initial-state
+    // computation and effect setup (rare; defensive).
+    if (!document.getElementById('canvas-splash')) setSplashGone(true);
+    return () => window.removeEventListener('canvas:splashGone', onGone);
+  }, [splashGone]);
+
   useEffect(() => {
     // The index.html splash holds the screen until 'canvas:ready' fires.
     // Public routes (sign-in, pair) don't depend on auth; everything else
@@ -78,6 +98,9 @@ function App() {
     ['/sign-in', () => <SignIn />],
   ];
 
+  // While the splash is still up, don't mount the visible tree (see splash
+  // gating comment above).
+  if (!splashGone) return null;
   // While auth is resolving on a protected route, render nothing — the
   // index.html splash holds the screen so there's no flash of sign-in UI.
   if (requiresAuth && auth.loading) return null;
