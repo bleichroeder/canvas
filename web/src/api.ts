@@ -1,23 +1,17 @@
 import { API_BASE } from './config';
-import { getSources } from './storage';
-import type { StoredSource } from './storage';
-
-function sourcesHeader(): Record<string, string> {
-  const s = getSources();
-  if (Object.keys(s).length === 0) return {};
-  // Stripped down to only the fields the worker validates.
-  const compact: Record<string, { type: StoredSource['type']; baseUrl: string; token: string }> = {};
-  for (const [k, v] of Object.entries(s)) {
-    compact[k] = { type: v.type, baseUrl: v.baseUrl, token: v.token };
-  }
-  return { 'x-sources': JSON.stringify(compact) };
-}
+import { getBearer, clearSession } from './lib/session';
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  for (const [k, v] of Object.entries(sourcesHeader())) headers.set(k, v);
+  const bearer = getBearer();
+  if (bearer) headers.set('authorization', `Bearer ${bearer}`);
   if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  if (res.status === 401) {
+    clearSession();
+    if (location.hash !== '#/claim') location.hash = '#/claim';
+    throw new Error('unauthorized');
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`HTTP ${res.status} — ${text.slice(0, 300)}`);
@@ -27,6 +21,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 import type { HomeRow, Item, ItemDetail, BrowseResult, PlayResolution, SourceHomeResponse } from './types';
+import type { StoredSource } from './storage';
 
 export const api = {
   home: () => request<{ rows: (HomeRow & { source: string })[]; errors: { source: string; status: number; message: string }[]; libraryCounts: Record<string, number> }>('/api/home'),
@@ -100,17 +95,43 @@ export const api = {
       body: JSON.stringify({ code }),
     }),
 
-  // Fetch a VTT subtitle file by relative worker path. The subtitle proxy
-  // route needs the x-sources header to look up the source's token, so we
-  // can't fetch directly from the URL the worker hands back.
+  // Fetch a VTT subtitle file by relative worker path. Bearer auth is added
+  // automatically by request(), so this now goes through the same auth flow.
   fetchSubtitlesText: async (relativeUrl: string): Promise<string> => {
     const headers = new Headers();
-    for (const [k, v] of Object.entries(sourcesHeader())) headers.set(k, v);
+    const bearer = getBearer();
+    if (bearer) headers.set('authorization', `Bearer ${bearer}`);
     const res = await fetch(`${API_BASE}${relativeUrl}`, { headers });
+    if (res.status === 401) {
+      clearSession();
+      if (location.hash !== '#/claim') location.hash = '#/claim';
+      throw new Error('unauthorized');
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`HTTP ${res.status} — ${text.slice(0, 200)}`);
     }
     return res.text();
   },
+
+  // Auth endpoints
+  authClaim: (token: string, deviceLabel: string) =>
+    request<{ bearer: string; user: { id: number; label: string; role: 'admin' | 'member' } }>('/api/auth/claim', {
+      method: 'POST', body: JSON.stringify({ token, deviceLabel }),
+    }),
+  authMe: () => request<{ user: { id: number; label: string; role: 'admin' | 'member' }; devices: { id: string; label: string; lastSeenAt: number; current: boolean }[] }>('/api/auth/me'),
+  authLogout: () => request<void>('/api/auth/logout', { method: 'POST' }),
+  authRevokeDevice: (id: string) => request<void>(`/api/auth/devices/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  // Admin endpoints
+  adminListUsers: () => request<{ id: number; label: string; role: 'admin' | 'member'; deviceCount: number; sourceAccessCount: number | null; createdAt: number }[]>('/api/admin/users'),
+  adminCreateUser: (label: string) => request<{ user: { id: number; label: string; role: 'admin' | 'member' }; claimToken: string }>('/api/admin/users', { method: 'POST', body: JSON.stringify({ label }) }),
+  adminDeleteUser: (id: number) => request<void>(`/api/admin/users/${id}`, { method: 'DELETE' }),
+  adminRegenerateClaim: (userId: number) => request<{ claimToken: string }>(`/api/admin/users/${userId}/claim-token`, { method: 'POST' }),
+  adminGrantSource: (userId: number, sourceId: number) => request<void>(`/api/admin/users/${userId}/sources/${sourceId}`, { method: 'POST' }),
+  adminRevokeSource: (userId: number, sourceId: number) => request<void>(`/api/admin/users/${userId}/sources/${sourceId}`, { method: 'DELETE' }),
+
+  // Source management
+  listSources: () => request<{ id: number; type: 'plex' | 'flixify'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }[]>('/api/sources'),
+  deleteSource: (id: number) => request<void>(`/api/sources/${id}`, { method: 'DELETE' }),
 };

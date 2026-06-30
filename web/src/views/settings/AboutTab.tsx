@@ -8,8 +8,7 @@ import AccordionDetails from '@mui/material/AccordionDetails';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { ElevatedCard } from '../../components/ElevatedCard';
 import { SettingRow } from '../../components/SettingRow';
-import { useAuth } from '../../lib/use-auth';
-import { isSupabaseConfigured } from '../../lib/supabase';
+import { getUser } from '../../lib/session';
 import { getCrashLog, clearCrashLog } from '../../lib/crash-telemetry';
 import type { CrashRecord } from '../../lib/crash-telemetry';
 
@@ -37,11 +36,10 @@ function CrashRow({ record }: { record: CrashRecord }) {
 }
 
 export function AboutTab() {
-  const auth = useAuth();
+  const user = getUser();
   const [diagOpen, setDiagOpen] = useState(false);
   const [crashes, setCrashes] = useState<CrashRecord[]>(() => getCrashLog());
   const buildSha = import.meta.env.VITE_BUILD_SHA ?? 'dev';
-  const cloudConnected = isSupabaseConfigured() && !!auth.user;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -49,18 +47,12 @@ export function AboutTab() {
         <SettingRow label="Version" control={<Typography color="text.secondary">v1.2.0 · build {buildSha}</Typography>} />
         <SettingRow label="Player engine" control={<Typography color="text.secondary">canvas / WebCodecs</Typography>} />
         <SettingRow
-          label="Cloud sync"
+          label="Signed in as"
           divider={false}
           control={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box
-                sx={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  backgroundColor: cloudConnected ? 'success.main' : 'error.main',
-                }}
-              />
-              <Typography color="text.secondary">{cloudConnected ? 'Connected' : 'Not configured'}</Typography>
-            </Box>
+            <Typography color="text.secondary">
+              {user ? `${user.label} (${user.role})` : 'Not signed in'}
+            </Typography>
           }
         />
       </ElevatedCard>
@@ -121,8 +113,8 @@ export function AboutTab() {
   {
     BUILD_SHA: import.meta.env.VITE_BUILD_SHA ?? 'dev',
     CANVAS_API: import.meta.env.VITE_CANVAS_API ?? 'unset',
-    SUPABASE_CONFIGURED: isSupabaseConfigured(),
-    USER_ID: auth.user?.id ?? null,
+    USER_ID: user?.id ?? null,
+    USER_ROLE: user?.role ?? null,
   },
   null,
   2,

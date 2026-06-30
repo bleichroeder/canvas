@@ -5,8 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import Fade from '@mui/material/Fade';
 import { theme } from './theme';
 import { useRoute, matchRoute, navigate } from './router';
-import { useAuth } from './lib/use-auth';
-import { isSupabaseConfigured } from './lib/supabase';
+import { getUser } from './lib/session';
 import { Home } from './views/Home';
 import { SourceHome } from './views/SourceHome';
 import { Library } from './views/Library';
@@ -16,10 +15,9 @@ import { Settings } from './views/Settings';
 import { Pair } from './views/Pair';
 import { PhonePair } from './views/PhonePair';
 import { Player } from './views/Player';
-import { SignIn } from './views/SignIn';
+import { Claim } from './views/Claim';
 import { NowPlayingStrip } from './components/NowPlayingStrip';
 import { DrivingDisclaimer } from './components/DrivingDisclaimer';
-import { startCloudSync } from './lib/cloud-sync';
 import { checkForPreviousCrash } from './lib/crash-telemetry';
 
 // Detect renderer-killed-mid-playback once at cold load. Logs to console and
@@ -35,26 +33,21 @@ function NotFound() {
 
 // Routes accessible without a canvas account. /pair is the phone-side
 // helper for the Tesla's QR — anyone holding the short-lived pair code is
-// authorized for THAT pairing; the Tesla's session is what binds the new
-// source to a user. /sign-in is the auth entry point itself.
-const PUBLIC_ROUTES = new Set(['/sign-in', '/pair']);
+// authorized for THAT pairing. /claim is the auth entry point.
+const PUBLIC_ROUTES = new Set(['/claim', '/pair']);
 
 function App() {
   const route = useRoute();
-  const auth = useAuth();
-  const requiresAuth = isSupabaseConfigured() && !PUBLIC_ROUTES.has(route.path);
-  const needsSignInRedirect = requiresAuth && !auth.loading && !auth.user;
-  // Signed-in users landing on /sign-in (e.g., bookmarked URL, post-OAuth) bounce
-  // back to home before the sign-in card has a chance to render.
-  const needsHomeRedirect = route.path === '/sign-in' && !auth.loading && !!auth.user;
+  const user = getUser();
+  const isPublicRoute = PUBLIC_ROUTES.has(route.path);
+  const needsClaimRedirect = !isPublicRoute && !user;
+  const needsHomeRedirect = route.path === '/claim' && !!user;
 
   // Defer the entire route render until the splash leaves the DOM. Without
-  // this, the SignIn form mounts behind the splash and password-manager
+  // this, the Claim form mounts behind the splash and password-manager
   // extensions attach their autofill UI to the inputs — those icons render
-  // outside the React tree and bleed through the splash. useEffects (auth
-  // check, redirects) still run as usual; we just hold back the visible
-  // tree. The splash dispatches 'canvas:splashGone' from index.html when it
-  // removes itself.
+  // outside the React tree and bleed through the splash. The splash
+  // dispatches 'canvas:splashGone' from index.html when it removes itself.
   const [splashGone, setSplashGone] = useState(() =>
     typeof document !== 'undefined' && !document.getElementById('canvas-splash'),
   );
@@ -70,19 +63,14 @@ function App() {
 
   useEffect(() => {
     // The index.html splash holds the screen until 'canvas:ready' fires.
-    // Public routes (sign-in, pair) don't depend on auth; everything else
-    // waits for the initial session check to resolve so signed-in users don't
-    // see a sign-in flash. Dispatch immediately — any delay here lets a hash
-    // navigation hit a black screen while the timeout is still pending.
-    const ready = PUBLIC_ROUTES.has(route.path) || !auth.loading;
-    if (!ready) return;
+    // /claim and /pair don't depend on auth; dispatch immediately.
     window.dispatchEvent(new Event('canvas:ready'));
-  }, [auth.loading, route.path]);
+  }, []);
 
   useEffect(() => {
-    if (needsSignInRedirect) navigate('/sign-in');
+    if (needsClaimRedirect) navigate('/claim');
     else if (needsHomeRedirect) navigate('/');
-  }, [needsSignInRedirect, needsHomeRedirect]);
+  }, [needsClaimRedirect, needsHomeRedirect]);
 
   const routes: Array<[string, (params: Record<string, string>) => React.JSX.Element]> = [
     ['/', () => <Home />],
@@ -95,26 +83,19 @@ function App() {
     ['/settings', () => <Settings />],
     ['/settings/pair', () => <Pair />],
     ['/pair', () => <PhonePair />],
-    ['/sign-in', () => <SignIn />],
+    ['/claim', () => <Claim />],
   ];
 
-  // While the splash is still up, don't mount the visible tree (see splash
-  // gating comment above).
+  // While the splash is still up, don't mount the visible tree.
   if (!splashGone) return null;
-  // While auth is resolving on a protected route, render nothing — the
-  // index.html splash holds the screen so there's no flash of sign-in UI.
-  if (requiresAuth && auth.loading) return null;
-  // Likewise during the brief window after redirect fires but before the
-  // hash update lands.
-  if (needsSignInRedirect || needsHomeRedirect) return null;
+  // During the brief window after redirect fires but before the hash update lands.
+  if (needsClaimRedirect || needsHomeRedirect) return null;
 
   let element: React.JSX.Element = <NotFound />;
   for (const [pattern, renderFn] of routes) {
     const params = matchRoute(pattern, route.path);
     if (params) { element = renderFn(params); break; }
   }
-
-  const isPublicRoute = PUBLIC_ROUTES.has(route.path);
 
   return (
     <>
@@ -126,9 +107,6 @@ function App() {
     </>
   );
 }
-
-// Boot the cloud-sync coordinator once. No-op when Supabase env isn't set.
-startCloudSync();
 
 const root = document.getElementById('app');
 if (root) {

@@ -37,8 +37,7 @@ export const SOURCES_EVENT = 'canvas:sourcesChanged';
 
 export function setSources(s: Record<string, StoredSource>): void {
   localStorage.setItem(SOURCES_KEY, JSON.stringify(s));
-  // Fires whenever the source set changes — used by the cloud-sync layer
-  // to push updates to Supabase + by AppShell/Home to refresh derived UI.
+  // Fires whenever the source set changes — used by Home/AppShell to refresh derived UI.
   window.dispatchEvent(new Event(SOURCES_EVENT));
 }
 

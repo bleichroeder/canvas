@@ -49,10 +49,7 @@ export function Home() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [singleSourceLibraries, setSingleSourceLibraries] = useState<Item[]>([]);
   const [heroH, setHeroH] = useState<number | undefined>(undefined);
-  // Track sources in state so cloud-sync hydration after sign-in (which fires
-  // SOURCES_EVENT) triggers a re-render and re-fetch. Without this, the very
-  // first visit after sign-in renders "empty" because Home mounts before
-  // cloud-sync has finished pulling the user's sources from Supabase.
+  // Track sources in state so SOURCES_EVENT triggers a re-render and re-fetch.
   const [sources, setSourcesState] = useState<Record<string, StoredSource>>(() => getSources());
 
   useEffect(() => {
