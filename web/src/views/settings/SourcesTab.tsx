@@ -17,7 +17,7 @@ export function SourcesTab() {
   async function unpair(id: number) {
     try {
       await api.deleteSource(id);
-      refresh();
+      await refresh();
     } catch (e) {
       console.error('Failed to delete source:', e);
     }

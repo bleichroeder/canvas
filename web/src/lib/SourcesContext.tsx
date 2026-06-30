@@ -31,7 +31,7 @@ export interface SourcesContextValue {
   loading: boolean;
   error: string | null;
   /** Call after any mutation to re-fetch from the server. */
-  refresh: () => void;
+  refresh: () => Promise<void>;
 }
 
 const SourcesContext = createContext<SourcesContextValue>({
@@ -39,7 +39,7 @@ const SourcesContext = createContext<SourcesContextValue>({
   sourceList: [],
   loading: false,
   error: null,
-  refresh: () => {},
+  refresh: () => Promise.resolve(),
 });
 
 export function SourcesProvider({ children }: { children: ReactNode }) {

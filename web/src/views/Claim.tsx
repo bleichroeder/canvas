@@ -34,8 +34,8 @@ export function Claim() {
       navigate('/');
     } catch (e) {
       const msg = (e as Error).message;
-      if (msg.includes('401') || msg.includes('unauthorized')) {
-        setError('Invalid or expired claim token. Get a new one from the admin.');
+      if (msg.includes('unauthorized') || msg.includes('410') || msg.includes('invalid or expired')) {
+        setError('Invalid or expired claim token. Ask the admin to regenerate it.');
       } else {
         setError(msg);
       }

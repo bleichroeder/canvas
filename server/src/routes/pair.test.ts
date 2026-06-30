@@ -118,14 +118,29 @@ describe('pair routes', () => {
     // Verify access grant.
     expect(userHasSourceAccess(db, admin.id, 1)).toBe(true);
 
-    // /poll returns approved source with id.
+    // /poll returns approved source with id — token must be omitted.
     const pollRes = await jsonPost(app, '/api/pair/poll', { code }, bearer);
-    const pollBody = await pollRes.json() as { status: string; source: { id: number; label: string; type: string; baseUrl: string } };
+    const pollBody = await pollRes.json() as { status: string; source: Record<string, unknown> };
     expect(pollBody.status).toBe('approved');
     expect(pollBody.source.id).toBe(1);
     expect(pollBody.source.label).toBe('My Plex');
     expect(pollBody.source.type).toBe('plex');
     expect(pollBody.source.baseUrl).toBe('http://server.local');
+    expect('token' in pollBody.source).toBe(false);
+  });
+
+  test('POST /poll approved response never exposes token', async () => {
+    const startRes = await jsonPost(app, '/api/pair/start', { sourceType: 'plex' }, bearer);
+    const { code } = await startRes.json() as { code: string };
+    await jsonPost(app, '/api/pair/approve', {
+      code, type: 'plex', baseUrl: 'http://server.local', token: 'secret-token', label: 'My Plex',
+    }, bearer);
+    const pollRes = await jsonPost(app, '/api/pair/poll', { code }, bearer);
+    const pollBody = await pollRes.json() as { status: string; source: Record<string, unknown> };
+    expect(pollBody.status).toBe('approved');
+    expect('token' in pollBody.source).toBe(false);
+    expect(pollBody.source.id).toBeDefined();
+    expect(pollBody.source.label).toBe('My Plex');
   });
 
   test('POST /approve rejects invalid payload (missing label)', async () => {

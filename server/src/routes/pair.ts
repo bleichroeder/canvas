@@ -166,8 +166,11 @@ export function makePairRoutes(getDb: () => Db) {
       return c.json({ status: 'expired' });
     }
     if (session.status === 'approved') {
-      const payload = session.payload as { source?: unknown };
-      return c.json({ status: 'approved', source: payload.source });
+      const payload = session.payload as { source?: { id: number; type: string; baseUrl: string; token: string; label: string } };
+      const src = payload.source;
+      if (!src) return c.json({ status: 'approved' });
+      const { token: _omit, ...safeSource } = src;
+      return c.json({ status: 'approved', source: safeSource });
     }
     return c.json({ status: 'pending', sourceType: session.type });
   });

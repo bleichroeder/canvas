@@ -26,11 +26,12 @@ interface DrivingDisclaimerProps {
 export function DrivingDisclaimer({ isPublicRoute }: DrivingDisclaimerProps) {
   const [acknowledged, setAcknowledged] = useState(false);
   const user = getUser();
+  const userId = user?.id ?? null;
 
-  // Reset acknowledgment when user signs out (user becomes null).
+  // Reset acknowledgment when user signs out (userId becomes null).
   useEffect(() => {
-    if (!user) setAcknowledged(false);
-  }, [user]);
+    if (userId === null) setAcknowledged(false);
+  }, [userId]);
 
   const open = !!user && !isPublicRoute && !acknowledged;
 

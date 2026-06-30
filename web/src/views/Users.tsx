@@ -66,17 +66,20 @@ function ManagePanel({ user, currentUserId, onDeleted }: ManagePanelProps) {
   const [regenLoading, setRegenLoading] = useState(false);
   const [grantLoading, setGrantLoading] = useState<Record<number, boolean>>({});
   const [copiedToken, setCopiedToken] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isSelf = user.id === currentUserId;
   const isAdmin = user.role === 'admin';
 
   async function handleDelete() {
+    setError(null);
     setDeleting(true);
     try {
       await api.adminDeleteUser(user.id);
       onDeleted();
     } catch (e) {
       console.error('delete user failed:', e);
+      setError((e as Error).message);
     } finally {
       setDeleting(false);
       setConfirmDelete(false);
@@ -84,18 +87,21 @@ function ManagePanel({ user, currentUserId, onDeleted }: ManagePanelProps) {
   }
 
   async function handleRegenerateClaim() {
+    setError(null);
     setRegenLoading(true);
     try {
       const { claimToken } = await api.adminRegenerateClaim(user.id);
       setRegen(claimToken);
     } catch (e) {
       console.error('regen claim failed:', e);
+      setError((e as Error).message);
     } finally {
       setRegenLoading(false);
     }
   }
 
   async function handleGrantToggle(sourceId: number, currentlyGranted: boolean) {
+    setError(null);
     setGrantLoading((prev) => ({ ...prev, [sourceId]: true }));
     try {
       if (currentlyGranted) {
@@ -103,9 +109,10 @@ function ManagePanel({ user, currentUserId, onDeleted }: ManagePanelProps) {
       } else {
         await api.adminGrantSource(user.id, sourceId);
       }
-      refreshSources();
+      await refreshSources();
     } catch (e) {
       console.error('grant toggle failed:', e);
+      setError((e as Error).message);
     } finally {
       setGrantLoading((prev) => ({ ...prev, [sourceId]: false }));
     }
@@ -120,6 +127,11 @@ function ManagePanel({ user, currentUserId, onDeleted }: ManagePanelProps) {
 
   return (
     <Box sx={{ px: 2, pb: 2, pt: 1 }}>
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 1.5 }}>
+          {error}
+        </Alert>
+      )}
       {/* Source access grid — admins get all sources implicitly, skip for them */}
       {!isAdmin && (
         <Box sx={{ mb: 2 }}>
