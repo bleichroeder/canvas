@@ -16,6 +16,7 @@ import { playRoutes } from './routes/play';
 import { progressRoutes } from './routes/progress';
 import { makeSourceStatusRoutes } from './routes/source-status';
 import { subtitlesRoutes } from './routes/subtitles';
+import { makeSourcesMgmtRoutes } from './routes/sources-mgmt';
 import { registerAdapter } from './sources/registry';
 import { plexAdapter } from './sources/plex';
 import { flixifyAdapter } from './sources/flixify';
@@ -50,7 +51,8 @@ export function buildApp(db: Db): Hono {
   app.use('/api/subtitles',     requireUser(() => db));
   app.use('/api/admin/*',       requireUser(() => db));
   app.use('/api/admin/*',       requireAdmin);
-  // (sources management mount comes in Task 5)
+  app.use('/api/sources',       requireUser(() => db));
+  app.use('/api/sources/*',     requireUser(() => db));
 
   app.route('/api/pair',           makePairRoutes(() => db));
   app.route('/api/home',           homeRoutes);
@@ -63,5 +65,6 @@ export function buildApp(db: Db): Hono {
   app.route('/api/source-status',  makeSourceStatusRoutes(() => db));
   app.route('/api/subtitles',      subtitlesRoutes);
   app.route('/api/admin',          makeAdminRoutes(() => db));
+  app.route('/api/sources',        makeSourcesMgmtRoutes(() => db));
   return app;
 }
