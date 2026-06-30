@@ -191,6 +191,7 @@ export function makePairRoutes(getDb: () => Db) {
     const session = getPairSession(getDb(), code);
     if (!session) return c.json({ error: 'code expired' }, 410);
     if (session.expiresAt < nowSec()) return c.json({ error: 'code expired' }, 410);
+    if (session.status === 'approved') return c.body(null, 204);
     const existingPayload = (session.payload ?? {}) as PairPayload;
     const auth = getAuthContext(c);
     const created = createSource(getDb(), {

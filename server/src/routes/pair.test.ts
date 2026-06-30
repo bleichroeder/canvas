@@ -11,7 +11,7 @@ import { errorHandler } from '../middleware/error-handler';
 import { createUser } from '../storage/users';
 import { createDeviceSession } from '../storage/device-sessions';
 import { generateBearer, hashBearer } from '../lib/bearer';
-import { getSource, userHasSourceAccess } from '../storage/sources';
+import { getSource, listAllSources, userHasSourceAccess } from '../storage/sources';
 
 async function makeApp() {
   const sqlite = new Database(':memory:');
@@ -142,6 +142,32 @@ describe('pair routes', () => {
       code: 'XXX-YYY', type: 'plex', baseUrl: 'http://x', token: 't', label: 'l',
     }, bearer);
     expect(res.status).toBe(410);
+  });
+
+  test('POST /approve is idempotent — second call is a 204 no-op with no extra source row', async () => {
+    const startRes = await jsonPost(app, '/api/pair/start', { sourceType: 'plex' }, bearer);
+    const { code } = await startRes.json() as { code: string };
+    const approveBody = { code, type: 'plex', baseUrl: 'http://server.local', token: 'tkn', label: 'My Plex' };
+
+    // First approve — should succeed.
+    const first = await jsonPost(app, '/api/pair/approve', approveBody, bearer);
+    expect(first.status).toBe(204);
+
+    // Second approve with the same code — must also return 204 without creating a second source.
+    const second = await jsonPost(app, '/api/pair/approve', approveBody, bearer);
+    expect(second.status).toBe(204);
+
+    // Only ONE source row must exist.
+    const allSources = listAllSources(db);
+    expect(allSources).toHaveLength(1);
+    const onlySource = allSources[0];
+    if (!onlySource) throw new Error('expected exactly one source row');
+
+    // /poll must return the original source id.
+    const pollRes = await jsonPost(app, '/api/pair/poll', { code }, bearer);
+    const pollBody = await pollRes.json() as { status: string; source: { id: number } };
+    expect(pollBody.status).toBe('approved');
+    expect(pollBody.source.id).toBe(onlySource.id);
   });
 
   test('DELETE /:code returns 204 and removes the row', async () => {
