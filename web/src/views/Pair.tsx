@@ -62,7 +62,7 @@ export function Pair() {
         if (res.status === 'approved' && res.source) {
           await api.pairDelete(state.code).catch(() => {});
           // Refresh sources from the server so the new source appears immediately.
-          refreshSources();
+          await refreshSources();
           setState({ kind: 'paired', label: res.source.label });
           setTimeout(() => navigate('/settings'), 1200);
           return;

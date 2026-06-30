@@ -6,7 +6,7 @@
  *   - Regenerate claim token (shows new token prominently)
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -406,9 +406,8 @@ export function Users() {
               {users.map((u) => {
                 const isExpanded = expandedId === u.id;
                 return (
-                  <>
+                  <Fragment key={u.id}>
                     <TableRow
-                      key={u.id}
                       sx={{
                         cursor: 'pointer',
                         '&:hover': { backgroundColor: 'action.hover' },
@@ -443,7 +442,7 @@ export function Users() {
                       </TableCell>
                       <TableCell>{fmtDate(u.createdAt)}</TableCell>
                     </TableRow>
-                    <TableRow key={`${u.id}-expand`}>
+                    <TableRow>
                       <TableCell colSpan={6} sx={{ py: 0, borderBottom: isExpanded ? undefined : 'none' }}>
                         <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                           <ManagePanel
@@ -457,7 +456,7 @@ export function Users() {
                         </Collapse>
                       </TableCell>
                     </TableRow>
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>
