@@ -27,8 +27,8 @@
         transform-box: view-box;
         transform-origin: 270px 88px;
         animation:
-          splash-play-pop 0.42s cubic-bezier(.34, 1.45, .64, 1) forwards,
-          splash-play-fade 0.18s cubic-bezier(.4, 0, .6, 1) 0.85s forwards;
+          splash-play-pop 0.35s cubic-bezier(.34, 1.45, .64, 1) forwards,
+          splash-play-fade 0.15s cubic-bezier(.4, 0, .6, 1) 0.7s forwards;
       }
       .splash-chevron {
         fill: none;
@@ -38,7 +38,7 @@
         stroke-linejoin: round;
         vector-effect: non-scaling-stroke;
         opacity: 0;
-        animation: splash-chev-in 0.18s cubic-bezier(.4, 0, .6, 1) 0.92s forwards;
+        animation: splash-chev-in 0.15s cubic-bezier(.4, 0, .6, 1) 0.75s forwards;
       }
       .splash-word {
         fill: #f4f5f7;
@@ -49,7 +49,7 @@
         opacity: 0;
         transform-box: view-box;
         transform-origin: 260px 88px;
-        animation: splash-word-in 0.5s cubic-bezier(.22, 1, .36, 1) 1.6s forwards;
+        animation: splash-word-in 0.4s cubic-bezier(.22, 1, .36, 1) 1.3s forwards;
       }
       @keyframes splash-play-pop {
         0%   { opacity: 0; transform: scale(.55); }
@@ -78,11 +78,11 @@
         <title id="canvasSplashTitle">canvas</title>
         <path class="splash-play-fill" d="M 232 50 L 312 88 L 232 126 Z" />
         <path class="splash-chevron splash-chevron-left" d="M 232 50 L 312 88 L 232 126">
-          <animate attributeName="d" begin="1.0s" dur="0.75s" fill="freeze" calcMode="spline" keySplines="0.42 0 0.18 1"
+          <animate attributeName="d" begin="0.8s" dur="0.6s" fill="freeze" calcMode="spline" keySplines="0.42 0 0.18 1"
                    values="M 232 50 L 312 88 L 232 126; M 168 62 L 142 88 L 168 114" />
         </path>
         <path class="splash-chevron splash-chevron-right" d="M 232 50 L 312 88 L 232 126">
-          <animate attributeName="d" begin="1.0s" dur="0.75s" fill="freeze" calcMode="spline" keySplines="0.42 0 0.18 1"
+          <animate attributeName="d" begin="0.8s" dur="0.6s" fill="freeze" calcMode="spline" keySplines="0.42 0 0.18 1"
                    values="M 232 50 L 312 88 L 232 126; M 352 62 L 378 88 L 352 114" />
         </path>
         <text class="splash-word" x="260" y="100" text-anchor="middle">canvas</text>
@@ -96,7 +96,7 @@
       // animation would get cut off mid-morph on fast cold loads. After
       // BOTH the event has fired AND the minimum hold has elapsed, fade.
       (function () {
-        var SPLASH_MIN_MS = 2200;
+        var SPLASH_MIN_MS = 1750;
         var startedAt = Date.now();
         var ready = false;
         function dismiss() {
