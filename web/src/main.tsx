@@ -6,6 +6,7 @@ import Fade from '@mui/material/Fade';
 import { theme } from './theme';
 import { useRoute, matchRoute, navigate } from './router';
 import { getUser } from './lib/session';
+import { SourcesProvider } from './lib/SourcesContext';
 import { Home } from './views/Home';
 import { SourceHome } from './views/SourceHome';
 import { Library } from './views/Library';
@@ -16,6 +17,8 @@ import { Pair } from './views/Pair';
 import { PhonePair } from './views/PhonePair';
 import { Player } from './views/Player';
 import { Claim } from './views/Claim';
+import { Users } from './views/Users';
+import { Devices } from './views/Devices';
 import { NowPlayingStrip } from './components/NowPlayingStrip';
 import { DrivingDisclaimer } from './components/DrivingDisclaimer';
 import { checkForPreviousCrash } from './lib/crash-telemetry';
@@ -82,6 +85,8 @@ function App() {
     ['/play/:src/:id', (p) => <Player source={p.src!} id={p.id!} />],
     ['/settings', () => <Settings />],
     ['/settings/pair', () => <Pair />],
+    ['/settings/users', () => <Users />],
+    ['/settings/devices', () => <Devices />],
     ['/pair', () => <PhonePair />],
     ['/claim', () => <Claim />],
   ];
@@ -97,7 +102,7 @@ function App() {
     if (params) { element = renderFn(params); break; }
   }
 
-  return (
+  const inner = (
     <>
       <Fade in key={route.path} timeout={250}>
         <div>{element}</div>
@@ -106,6 +111,14 @@ function App() {
       <DrivingDisclaimer isPublicRoute={isPublicRoute} />
     </>
   );
+
+  // Only mount SourcesProvider when the user is authenticated so the initial
+  // api.listSources() call has a bearer token to send. Public routes (/claim,
+  // /pair) never need source data.
+  if (!isPublicRoute && user) {
+    return <SourcesProvider>{inner}</SourcesProvider>;
+  }
+  return inner;
 }
 
 const root = document.getElementById('app');

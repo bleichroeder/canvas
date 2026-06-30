@@ -1,40 +1,35 @@
-import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import AddIcon from '@mui/icons-material/Add';
 import LibraryAddOutlinedIcon from '@mui/icons-material/LibraryAddOutlined';
+import CircularProgress from '@mui/material/CircularProgress';
 import { ElevatedCard } from '../../components/ElevatedCard';
 import { SectionHeading } from '../../components/SectionHeading';
 import { SourceCard } from '../../components/SourceCard';
 import { EmptyState } from '../../components/EmptyState';
 import { navigate } from '../../router';
-import { getSources, removeSource, renameSource, SOURCES_EVENT } from '../../storage';
-import type { StoredSource } from '../../storage';
+import { api } from '../../api';
+import { useSources } from '../../lib/SourcesContext';
 
 export function SourcesTab() {
-  const [sources, setLocalSources] = useState<Record<string, StoredSource>>(getSources());
+  const { sourceList, loading, refresh } = useSources();
 
-  useEffect(() => {
-    const onChange = () => setLocalSources(getSources());
-    window.addEventListener(SOURCES_EVENT, onChange);
-    window.addEventListener('storage', onChange);
-    return () => {
-      window.removeEventListener(SOURCES_EVENT, onChange);
-      window.removeEventListener('storage', onChange);
-    };
-  }, []);
-
-  function unpair(key: string) {
-    removeSource(key);
-    setLocalSources({ ...getSources() });
+  async function unpair(id: number) {
+    try {
+      await api.deleteSource(id);
+      refresh();
+    } catch (e) {
+      console.error('Failed to delete source:', e);
+    }
   }
 
-  function rename(key: string, newLabel: string) {
-    renameSource(key, newLabel);
-    setLocalSources({ ...getSources() });
+  if (loading && sourceList.length === 0) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
-
-  const entries = Object.entries(sources);
 
   return (
     <Box>
@@ -51,7 +46,7 @@ export function SourcesTab() {
         }
         sx={{ mt: 0, mb: 2, px: 0 }}
       />
-      {entries.length === 0 ? (
+      {sourceList.length === 0 ? (
         <EmptyState
           icon={<LibraryAddOutlinedIcon />}
           title="No sources paired yet"
@@ -61,15 +56,15 @@ export function SourcesTab() {
         />
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {entries.map(([key, src]) => (
-            <ElevatedCard key={key}>
+          {sourceList.map((src) => (
+            <ElevatedCard key={src.id}>
               <SourceCard
-                srcKey={key}
+                srcKey={String(src.id)}
                 label={src.label}
                 type={src.type}
                 baseUrl={src.baseUrl}
-                onUnpair={() => unpair(key)}
-                onRename={(newLabel) => rename(key, newLabel)}
+                onUnpair={() => void unpair(src.id)}
+                onRename={undefined}
               />
             </ElevatedCard>
           ))}

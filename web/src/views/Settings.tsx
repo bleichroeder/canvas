@@ -3,9 +3,13 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
+import Button from '@mui/material/Button';
+import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
+import DevicesOutlinedIcon from '@mui/icons-material/DevicesOutlined';
 import { useTheme } from '@mui/material/styles';
 import { AppShell } from '../components/AppShell';
-import { useRoute } from '../router';
+import { useRoute, navigate } from '../router';
+import { getUser } from '../lib/session';
 import { AccountTab } from './settings/AccountTab';
 import { SourcesTab } from './settings/SourcesTab';
 import { PlaybackTab } from './settings/PlaybackTab';
@@ -17,6 +21,9 @@ const TAB_IDS: readonly TabId[] = ['account', 'sources', 'playback', 'about'] as
 export function Settings() {
   const theme = useTheme();
   const route = useRoute();
+  const user = getUser();
+  const isAdmin = user?.role === 'admin';
+
   // Allow deep-links to a specific tab via /settings?tab=sources (e.g. from
   // Home's unavailable-source FAB). Unknown values fall back to 'account'.
   const initialTab: TabId =
@@ -32,7 +39,31 @@ export function Settings() {
         }}
       >
         <Box sx={{ px: 2.5, pt: 2.5, pb: 1, maxWidth: 760, mx: 'auto' }}>
-          <Typography variant="h1" sx={{ mb: 3 }}>Settings</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
+            <Typography variant="h1">Settings</Typography>
+            <Box sx={{ display: 'flex', gap: 1, pt: 0.5 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<DevicesOutlinedIcon />}
+                onClick={() => navigate('/settings/devices')}
+                sx={{ textTransform: 'none', fontWeight: 500 }}
+              >
+                Devices
+              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<PeopleOutlinedIcon />}
+                  onClick={() => navigate('/settings/users')}
+                  sx={{ textTransform: 'none', fontWeight: 500 }}
+                >
+                  Users
+                </Button>
+              )}
+            </Box>
+          </Box>
           <Tabs
             value={tab}
             onChange={(_, v) => setTab(v as TabId)}

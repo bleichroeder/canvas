@@ -74,3 +74,20 @@ export function userHasSourceAccess(db: Db, userId: number, sourceId: number): b
     .get();
   return !!row;
 }
+
+/**
+ * Returns a map of sourceId → userId[] for all grants in the user_source_access
+ * table. Used by the admin GET /api/sources endpoint to include `usersWithAccess`
+ * in each source entry so the Users admin UI can render grant checkboxes without
+ * an extra per-user endpoint.
+ */
+export function listAllSourceAccessGrants(db: Db): Map<number, number[]> {
+  const rows = db.select().from(userSourceAccess).all();
+  const map = new Map<number, number[]>();
+  for (const row of rows) {
+    const list = map.get(row.sourceId) ?? [];
+    list.push(row.userId);
+    map.set(row.sourceId, list);
+  }
+  return map;
+}

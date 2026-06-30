@@ -20,7 +20,8 @@ export interface SourceCardProps {
   type: StoredSource['type'];
   baseUrl: string;
   onUnpair(): void;
-  onRename(newLabel: string): void;
+  /** Optional — if not provided the rename button is hidden. Server-side rename not yet implemented. */
+  onRename?: (newLabel: string) => void;
 }
 
 const DOT_COLOR: Record<string, string> = {
@@ -43,7 +44,7 @@ function timeAgo(ms: number | null): string {
   return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
-export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onRename }: SourceCardProps) {
+export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onRename = undefined }: SourceCardProps) {
   const [status, setStatus] = useState<'loading' | 'ok' | 'degraded' | 'unreachable' | 'lan-only'>('loading');
   const [lastSeenAt, setLastSeenAt] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -100,14 +101,16 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onRename }:
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Typography variant="body1" sx={{ fontWeight: 500 }}>{label}</Typography>
-            <IconButton
-              size="small"
-              onClick={() => { setRenameDraft(label); setRenameOpen(true); }}
-              aria-label="rename source"
-              sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
-            >
-              <EditOutlinedIcon sx={{ fontSize: 16 }} />
-            </IconButton>
+            {onRename && (
+              <IconButton
+                size="small"
+                onClick={() => { setRenameDraft(label); setRenameOpen(true); }}
+                aria-label="rename source"
+                sx={{ color: 'text.secondary', '&:hover': { color: 'text.primary' } }}
+              >
+                <EditOutlinedIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            )}
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {type} · {baseUrl}
@@ -131,7 +134,7 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onRename }:
             value={renameDraft}
             onChange={(e) => setRenameDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && renameDraft.trim()) {
+              if (e.key === 'Enter' && renameDraft.trim() && onRename) {
                 setRenameOpen(false);
                 onRename(renameDraft.trim());
               }
@@ -143,7 +146,7 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onRename }:
           <Button
             variant="contained"
             disabled={!renameDraft.trim() || renameDraft.trim() === label}
-            onClick={() => { setRenameOpen(false); onRename(renameDraft.trim()); }}
+            onClick={() => { setRenameOpen(false); if (onRename) onRename(renameDraft.trim()); }}
           >
             Save
           </Button>

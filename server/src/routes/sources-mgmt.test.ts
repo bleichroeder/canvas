@@ -90,4 +90,25 @@ describe('sources-mgmt routes', () => {
       expect('token' in row).toBe(false);
     }
   });
+
+  test('GET / for admin includes usersWithAccess on each source', async () => {
+    const { app, db, member, s1, adminBearer } = await makeFixture();
+    grantSourceAccess(db, member.id, s1.id);
+    const res = await app.fetch(new Request('http://test/api/sources', { headers: { authorization: `Bearer ${adminBearer}` } }));
+    const body = await res.json() as { id: number; usersWithAccess?: number[] }[];
+    const s1Row = body.find((r) => r.id === s1.id);
+    expect(s1Row).toBeDefined();
+    expect(Array.isArray(s1Row!.usersWithAccess)).toBe(true);
+    expect(s1Row!.usersWithAccess).toContain(member.id);
+  });
+
+  test('GET / for member does NOT include usersWithAccess', async () => {
+    const { app, db, member, s1, memberBearer } = await makeFixture();
+    grantSourceAccess(db, member.id, s1.id);
+    const res = await app.fetch(new Request('http://test/api/sources', { headers: { authorization: `Bearer ${memberBearer}` } }));
+    const body = await res.json() as Record<string, unknown>[];
+    for (const row of body) {
+      expect('usersWithAccess' in row).toBe(false);
+    }
+  });
 });

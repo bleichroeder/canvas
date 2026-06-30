@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Db } from '../db';
-import { getSource, listAllSources, listAccessibleSources, deleteSource } from '../storage/sources';
+import { getSource, listAllSources, listAccessibleSources, deleteSource, listAllSourceAccessGrants } from '../storage/sources';
 import { getAuthContext } from '../middleware/auth';
 import { logger } from '../log';
 
@@ -10,7 +10,23 @@ export function makeSourcesMgmtRoutes(getDb: () => Db) {
   r.get('/', async (c) => {
     const auth = getAuthContext(c);
     const db = getDb();
-    const rows = auth.role === 'admin' ? listAllSources(db) : listAccessibleSources(db, auth.userId);
+    if (auth.role === 'admin') {
+      const rows = listAllSources(db);
+      // Include per-source user-access lists so the admin Users UI can render
+      // grant checkboxes without a second round-trip per user.
+      const grants = listAllSourceAccessGrants(db);
+      return c.json(rows.map((s) => ({
+        id: s.id,
+        type: s.type,
+        baseUrl: s.baseUrl,
+        label: s.label,
+        pairedByUserId: s.pairedByUserId,
+        createdAt: s.createdAt,
+        usersWithAccess: grants.get(s.id) ?? [],
+        // NB: s.token (upstream auth) is NEVER returned — it stays server-side.
+      })));
+    }
+    const rows = listAccessibleSources(db, auth.userId);
     return c.json(rows.map((s) => ({
       id: s.id,
       type: s.type,

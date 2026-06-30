@@ -2,7 +2,7 @@ import CardActionArea from '@mui/material/CardActionArea';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { navigate } from '../router';
-import { getSources } from '../storage';
+import { useSources } from '../lib/SourcesContext';
 import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
 import type { Item } from '../types';
 
@@ -23,6 +23,7 @@ function formatEpisodeSubtitle(item: Item): string | undefined {
 }
 
 export function PosterCard({ item, source, width = 220, showSourceBadge = false }: PosterCardProps) {
+  const { sources } = useSources();
   const isFolder = item.type === 'folder';
   const href = isFolder
     ? `/lib/${source}/${item.id}`
@@ -32,7 +33,7 @@ export function PosterCard({ item, source, width = 220, showSourceBadge = false 
   // with movies/shows.
   const isMusic = item.kind === 'music-artist' || item.kind === 'music-album' || item.kind === 'music-track';
   const aspectRatio = isMusic ? 1 : 2 / 3;
-  const src = showSourceBadge ? getSources()[source] : undefined;
+  const src = showSourceBadge ? sources[source] : undefined;
   const displayTitle = item.type === 'episode' && item.showTitle ? item.showTitle : item.title;
   const subtitle =
     item.type === 'episode' ? formatEpisodeSubtitle(item)

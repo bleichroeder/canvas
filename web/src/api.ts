@@ -132,6 +132,6 @@ export const api = {
   adminRevokeSource: (userId: number, sourceId: number) => request<void>(`/api/admin/users/${userId}/sources/${sourceId}`, { method: 'DELETE' }),
 
   // Source management
-  listSources: () => request<{ id: number; type: 'plex' | 'flixify'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }[]>('/api/sources'),
+  listSources: () => request<{ id: number; type: 'plex' | 'flixify'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number; usersWithAccess?: number[] }[]>('/api/sources'),
   deleteSource: (id: number) => request<void>(`/api/sources/${id}`, { method: 'DELETE' }),
 };

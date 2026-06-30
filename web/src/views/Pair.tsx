@@ -9,7 +9,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import QRCode from 'qrcode';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
-import { addSource, makeSourceKey } from '../storage';
+import { useSources } from '../lib/SourcesContext';
 import { navigate } from '../router';
 import type { StoredSource } from '../storage';
 
@@ -31,6 +31,7 @@ const SOURCE_TYPES: Array<{ type: SourceType; label: string; available: boolean 
 export function Pair() {
   const [state, setState] = useState<State>({ kind: 'choose' });
   const [qrSvg, setQrSvg] = useState<string>('');
+  const { refresh: refreshSources } = useSources();
 
   useEffect(() => {
     if (state.kind !== 'pairing') return;
@@ -59,9 +60,9 @@ export function Pair() {
         const res = await api.pairPoll(state.code);
         if (cancelled) return;
         if (res.status === 'approved' && res.source) {
-          const key = makeSourceKey(res.source.label || res.source.baseUrl);
-          addSource(key, res.source);
           await api.pairDelete(state.code).catch(() => {});
+          // Refresh sources from the server so the new source appears immediately.
+          refreshSources();
           setState({ kind: 'paired', label: res.source.label });
           setTimeout(() => navigate('/settings'), 1200);
           return;
