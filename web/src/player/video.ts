@@ -7,12 +7,18 @@ export interface VideoSinkOptions {
 }
 
 // Hard cap on decoded frames held in memory between decoder output and canvas
-// paint. Each 1080p VideoFrame is ~6 MB; without a cap, any RAF stall (page
-// backgrounded, GPU throttled, decoder running ahead of playback) blows the
-// renderer's memory budget and Chromium kills the tab. ~12 frames is ~0.5 sec
-// of 24fps content — plenty of headroom for the render loop to catch up,
-// nowhere near OOM territory.
+// paint. Each 1080p VideoFrame is ~6 MB; without a cap, any draw-loop stall
+// blows the renderer's memory budget and Chromium kills the tab.
 const MAX_QUEUED_FRAMES = 12;
+
+// Draw cadence in ms. ~16ms ≈ 60Hz, more than enough for 24-30fps streams.
+// We use setInterval rather than requestAnimationFrame because Tesla's
+// browser throttles RAF whenever the car's UI overlays our tab (climate
+// panel, autopilot status, lane-departure warnings, etc.). That throttling
+// left the first frame painted and froze every subsequent one while audio
+// kept playing. setInterval keeps firing regardless of focus state; vsync
+// misalignment isn't perceptible at 24fps streaming content.
+const DRAW_INTERVAL_MS = 16;
 
 export class VideoSink {
   private readonly canvas: HTMLCanvasElement;
@@ -21,7 +27,7 @@ export class VideoSink {
   private readonly clock: () => number;
   private readonly frames: VideoFrame[] = [];
   private readonly onFirstFrame: (() => void) | undefined;
-  private rafHandle: number | null = null;
+  private timerHandle: number | null = null;
   private frameIntervalSec = 1 / 24;
   private firstFrameDispatched = false;
   private droppedFrames = 0;
@@ -48,18 +54,14 @@ export class VideoSink {
   }
 
   start(): void {
-    if (this.rafHandle !== null) return;
-    const tick = () => {
-      this.drawDue();
-      this.rafHandle = requestAnimationFrame(tick);
-    };
-    this.rafHandle = requestAnimationFrame(tick);
+    if (this.timerHandle !== null) return;
+    this.timerHandle = window.setInterval(() => this.drawDue(), DRAW_INTERVAL_MS);
   }
 
   stop(): void {
-    if (this.rafHandle !== null) {
-      cancelAnimationFrame(this.rafHandle);
-      this.rafHandle = null;
+    if (this.timerHandle !== null) {
+      window.clearInterval(this.timerHandle);
+      this.timerHandle = null;
     }
   }
 
@@ -87,7 +89,7 @@ export class VideoSink {
       this.frameIntervalSec = frame.duration / 1_000_000;
     }
     // Drop the oldest queued frame if we're at capacity. Older frames are
-    // already past the clock by definition (drawDue runs every RAF and
+    // already past the clock by definition (drawDue runs every tick and
     // evicts everything <= clock), so dropping them costs nothing visually
     // — and prevents the unbounded-queue OOM that crashed the renderer.
     if (this.frames.length >= MAX_QUEUED_FRAMES) {
