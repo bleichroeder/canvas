@@ -3,6 +3,8 @@ import { config } from './config';
 import { corsMiddleware } from './middleware/cors';
 import { errorHandler } from './middleware/error-handler';
 import { requestLog } from './middleware/request-log';
+import { requireUser } from './middleware/auth';
+import { makeAuthRoutes } from './routes/auth';
 import { makePairRoutes } from './routes/pair';
 import { homeRoutes } from './routes/home';
 import { sourceHomeRoutes } from './routes/source-home';
@@ -29,15 +31,33 @@ export function buildApp(db: Db): Hono {
   app.use('*', requestLog());
   app.onError(errorHandler);
   app.get('/health', (c) => c.json({ ok: true, version: config.version }));
-  app.route('/api/pair', makePairRoutes(() => db));
-  app.route('/api/home',        homeRoutes);
-  app.route('/api/source-home', sourceHomeRoutes);
-  app.route('/api/library',     libraryRoutes);
-  app.route('/api/item',        itemRoutes);
-  app.route('/api/search',      searchRoutes);
-  app.route('/api/play',          playRoutes);
-  app.route('/api/progress',      progressRoutes);
-  app.route('/api/source-status', makeSourceStatusRoutes(() => db));
-  app.route('/api/subtitles',     subtitlesRoutes);
+
+  // Auth routes — /claim is public; /me, /logout, /devices/* require auth
+  // internally via requireUser applied inside makeAuthRoutes.
+  app.route('/api/auth', makeAuthRoutes(() => db));
+
+  // Everything else under /api/* requires a valid bearer token.
+  app.use('/api/pair/*',        requireUser(() => db));
+  app.use('/api/home',          requireUser(() => db));
+  app.use('/api/source-home',   requireUser(() => db));
+  app.use('/api/library/*',     requireUser(() => db));
+  app.use('/api/item/*',        requireUser(() => db));
+  app.use('/api/search',        requireUser(() => db));
+  app.use('/api/play/*',        requireUser(() => db));
+  app.use('/api/progress/*',    requireUser(() => db));
+  app.use('/api/source-status', requireUser(() => db));
+  app.use('/api/subtitles',     requireUser(() => db));
+  // (admin, sources management mounts come in Tasks 4-5)
+
+  app.route('/api/pair',           makePairRoutes(() => db));
+  app.route('/api/home',           homeRoutes);
+  app.route('/api/source-home',    sourceHomeRoutes);
+  app.route('/api/library',        libraryRoutes);
+  app.route('/api/item',           itemRoutes);
+  app.route('/api/search',         searchRoutes);
+  app.route('/api/play',           playRoutes);
+  app.route('/api/progress',       progressRoutes);
+  app.route('/api/source-status',  makeSourceStatusRoutes(() => db));
+  app.route('/api/subtitles',      subtitlesRoutes);
   return app;
 }
