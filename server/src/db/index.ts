@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite';
 import { drizzle, type BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 import * as schema from './schema';
 
-export type Db = BunSQLiteDatabase<typeof schema>;
+export type Db = BunSQLiteDatabase<typeof schema> & { $client: Database };
 
 export function initDb(path: string): Db {
   const sqlite = new Database(path, { create: true });

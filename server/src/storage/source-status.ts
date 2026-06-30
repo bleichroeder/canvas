@@ -13,7 +13,7 @@ export function putSourceStatus(db: Db, row: NewSourceStatusCacheRow): void {
     target: sourceStatusCache.sourceKey,
     set: {
       status: row.status,
-      lastSeenAt: row.lastSeenAt,
+      lastSeenAt: row.lastSeenAt ?? null,
       expiresAt: row.expiresAt,
       payload: row.payload,
     },
@@ -21,6 +21,7 @@ export function putSourceStatus(db: Db, row: NewSourceStatusCacheRow): void {
 }
 
 export function reapSourceStatus(db: Db, now: number = nowSec()): number {
-  const result = db.delete(sourceStatusCache).where(lt(sourceStatusCache.expiresAt, now)).run();
-  return result.changes ?? 0;
+  const stmt = db.$client.prepare(`DELETE FROM source_status_cache WHERE expires_at < ?`);
+  const result = stmt.run(now);
+  return result.changes;
 }

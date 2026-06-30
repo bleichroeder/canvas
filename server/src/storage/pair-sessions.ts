@@ -32,6 +32,7 @@ export function deletePairSession(db: Db, code: string): void {
 }
 
 export function reapPairSessions(db: Db, now: number = nowSec()): number {
-  const result = db.delete(pairSessions).where(lt(pairSessions.expiresAt, now)).run();
-  return result.changes ?? 0;
+  const stmt = db.$client.prepare(`DELETE FROM pair_sessions WHERE expires_at < ?`);
+  const result = stmt.run(now);
+  return result.changes;
 }
