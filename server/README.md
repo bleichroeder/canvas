@@ -33,6 +33,29 @@ npm run dev
 
 Open <http://localhost:5173/>.
 
+## First run
+
+On first boot with an empty database, the server prints an admin claim token:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  FIRST-RUN ADMIN CLAIM TOKEN (expires 24h):              │
+│                                                          │
+│      ABCD-EFGH-IJKL-MNOP-XYZ                             │
+│                                                          │
+│  Enter this token on your first device to become admin.  │
+│  Also written to: ./data/admin-claim-token.txt           │
+└──────────────────────────────────────────────────────────┘
+```
+
+Visit the canvas web UI in your browser and enter the token to claim admin.
+You can then add additional users from Settings → Users; each new user gets
+their own claim token.
+
+If you lose your admin device and the token has expired, restart the server
+— it detects the recovery state (admin exists, no devices, no active token)
+and emits a fresh token.
+
 ## Commands
 
 | Command | Purpose |
