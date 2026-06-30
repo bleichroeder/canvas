@@ -13,34 +13,110 @@
         display: flex; align-items: center; justify-content: center;
         z-index: 9999;
         pointer-events: none;
-        transition: opacity 400ms ease-out;
+        transition: opacity 450ms ease-out;
       }
       #canvas-splash.canvas-splash-fade { opacity: 0; }
-      #canvas-splash-wordmark {
+      #canvas-splash-logo {
+        width: min(560px, 78vw);
+        height: auto;
+        overflow: visible;
+      }
+      .splash-play-fill {
+        fill: #4f8ef7;
+        opacity: 0;
+        transform-box: view-box;
+        transform-origin: 270px 88px;
+        animation:
+          splash-play-pop 0.42s cubic-bezier(.34, 1.45, .64, 1) forwards,
+          splash-play-fade 0.18s cubic-bezier(.4, 0, .6, 1) 0.85s forwards;
+      }
+      .splash-chevron {
+        fill: none;
+        stroke: #4f8ef7;
+        stroke-width: 7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        vector-effect: non-scaling-stroke;
+        opacity: 0;
+        animation: splash-chev-in 0.18s cubic-bezier(.4, 0, .6, 1) 0.92s forwards;
+      }
+      .splash-word {
+        fill: #f4f5f7;
         font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        font-size: 64px;
+        font-size: 44px;
         font-weight: 500;
-        letter-spacing: 8px;
-        color: #f4f5f7;
-        animation: canvas-splash-breathe 1.6s ease-in-out infinite;
+        letter-spacing: 3px;
+        opacity: 0;
+        transform-box: view-box;
+        transform-origin: 260px 88px;
+        animation: splash-word-in 0.5s cubic-bezier(.22, 1, .36, 1) 1.6s forwards;
       }
-      @keyframes canvas-splash-breathe {
-        0%, 100% { opacity: 0.55; }
-        50%      { opacity: 1; }
+      @keyframes splash-play-pop {
+        0%   { opacity: 0; transform: scale(.55); }
+        60%  { opacity: 1; transform: scale(1.06); }
+        100% { opacity: 1; transform: scale(1); }
       }
-      .canvas-splash-bracket { color: #4f8ef7; }
+      @keyframes splash-play-fade { to { opacity: 0; } }
+      @keyframes splash-chev-in { to { opacity: 1; } }
+      @keyframes splash-word-in {
+        0%   { opacity: 0; transform: scaleX(.88) translateY(2px); }
+        100% { opacity: 1; transform: scaleX(1)   translateY(0);   }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .splash-play-fill, .splash-chevron, .splash-word { animation: none !important; }
+        .splash-play-fill { opacity: 0; }
+        .splash-chevron { opacity: 1; }
+        .splash-chevron-left  { d: path("M 188 62 L 162 88 L 188 114"); }
+        .splash-chevron-right { d: path("M 332 62 L 358 88 L 332 114"); }
+        .splash-word { opacity: 1; transform: none; }
+      }
     </style>
   </head>
   <body>
-    <div id="canvas-splash"><div id="canvas-splash-wordmark"><span class="canvas-splash-bracket">&lt;</span>canvas<span class="canvas-splash-bracket">&gt;</span></div></div>
+    <div id="canvas-splash">
+      <svg id="canvas-splash-logo" viewBox="0 0 520 160" role="img" aria-labelledby="canvasSplashTitle" preserveAspectRatio="xMidYMid meet">
+        <title id="canvasSplashTitle">canvas</title>
+        <path class="splash-play-fill" d="M 232 50 L 312 88 L 232 126 Z" />
+        <path class="splash-chevron splash-chevron-left" d="M 232 50 L 312 88 L 232 126">
+          <animate attributeName="d" begin="1.0s" dur="0.75s" fill="freeze" calcMode="spline" keySplines="0.42 0 0.18 1"
+                   values="M 232 50 L 312 88 L 232 126; M 188 62 L 162 88 L 188 114" />
+        </path>
+        <path class="splash-chevron splash-chevron-right" d="M 232 50 L 312 88 L 232 126">
+          <animate attributeName="d" begin="1.0s" dur="0.75s" fill="freeze" calcMode="spline" keySplines="0.42 0 0.18 1"
+                   values="M 232 50 L 312 88 L 232 126; M 332 62 L 358 88 L 332 114" />
+        </path>
+        <text class="splash-word" x="260" y="100" text-anchor="middle">canvas</text>
+      </svg>
+    </div>
     <div id="app"></div>
     <script>
-      window.addEventListener('canvas:ready', function () {
-        var el = document.getElementById('canvas-splash');
-        if (!el) return;
-        el.classList.add('canvas-splash-fade');
-        setTimeout(function () { el.remove(); }, 500);
-      });
+      // Hold the splash for at least one full animation cycle (~2.2s) before
+      // letting the app fade it out. App fires 'canvas:ready' once auth
+      // resolves — that's usually well under 2s, so without this gate the
+      // animation would get cut off mid-morph on fast cold loads. After
+      // BOTH the event has fired AND the minimum hold has elapsed, fade.
+      (function () {
+        var SPLASH_MIN_MS = 2200;
+        var startedAt = Date.now();
+        var ready = false;
+        function dismiss() {
+          var el = document.getElementById('canvas-splash');
+          if (!el) return;
+          el.classList.add('canvas-splash-fade');
+          setTimeout(function () { el.remove(); }, 500);
+        }
+        window.addEventListener('canvas:ready', function () {
+          ready = true;
+          var elapsed = Date.now() - startedAt;
+          if (elapsed >= SPLASH_MIN_MS) dismiss();
+          else setTimeout(dismiss, SPLASH_MIN_MS - elapsed);
+        });
+        // Reduced-motion users skip the animation entirely — collapse the
+        // minimum hold so they're not staring at a static splash.
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          SPLASH_MIN_MS = 0;
+        }
+      })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
