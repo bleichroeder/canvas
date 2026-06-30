@@ -3,7 +3,22 @@ import { plexAdapter } from './plex';
 
 afterEach(() => { mock.restore(); });
 
-function mockMetadataResponse(durationMs: number, partId: number) {
+interface MockStream {
+  id: number;
+  streamType: number;
+  codec?: string;
+  language?: string;
+  languageTag?: string;
+  displayTitle?: string;
+  title?: string;
+  selected?: boolean;
+}
+
+function mockMetadataResponse(durationMs: number, partId: number, streams?: MockStream[]) {
+  const Part: Record<string, unknown>[] = [{ id: partId, key: `/library/parts/${partId}/x/file.mkv` }];
+  if (streams && streams.length > 0) {
+    Part[0] = { ...Part[0], Stream: streams };
+  }
   return new Response(
     JSON.stringify({
       MediaContainer: {
@@ -17,7 +32,7 @@ function mockMetadataResponse(durationMs: number, partId: number) {
             Media: [
               {
                 duration: durationMs,
-                Part: [{ id: partId, key: `/library/parts/${partId}/x/file.mkv` }],
+                Part,
               },
             ],
           },
@@ -70,5 +85,56 @@ describe('plexAdapter.resolveStream', () => {
     expect(res.thumbnailUrlTemplate).toBe(
       'https://plex.example/library/parts/7/indexes/sd/{ms}?X-Plex-Token=tok',
     );
+  });
+
+  it('returns subtitleTracks when the metadata includes streamType 3 subtitle streams', async () => {
+    spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockMetadataResponse(6_499_000, 7, [
+        {
+          id: 101,
+          streamType: 1, // video — must be excluded
+          codec: 'h264',
+        },
+        {
+          id: 202,
+          streamType: 3, // subtitle — must be included
+          languageTag: 'en',
+          displayTitle: 'English (SRT)',
+        },
+        {
+          id: 303,
+          streamType: 3, // subtitle — must be included
+          languageTag: 'fr',
+          displayTitle: 'French (SRT)',
+        },
+      ]),
+    );
+    const res = await plexAdapter.resolveStream(
+      { baseUrl: 'https://plex.example', token: 'tok' },
+      '42',
+    );
+    expect(res.subtitleTracks).toBeDefined();
+    expect(res.subtitleTracks!.length).toBe(2);
+    const en = res.subtitleTracks![0]!;
+    expect(en.id).toBe('202');
+    expect(en.language).toBe('en');
+    expect(en.label).toBe('English (SRT)');
+    expect(en.format).toBe('vtt');
+    expect(en.url).toContain('partId=7');
+    expect(en.url).toContain('streamId=202');
+  });
+
+  it('omits subtitleTracks from result when there are no streamType 3 streams', async () => {
+    spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockMetadataResponse(6_499_000, 7, [
+        { id: 101, streamType: 1, codec: 'h264' },
+        { id: 102, streamType: 2, codec: 'aac' },
+      ]),
+    );
+    const res = await plexAdapter.resolveStream(
+      { baseUrl: 'https://plex.example', token: 'tok' },
+      '42',
+    );
+    expect(res.subtitleTracks).toBeUndefined();
   });
 });

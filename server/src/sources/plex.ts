@@ -240,15 +240,18 @@ export const plexAdapter: SourceAdapter = {
     const subtitleTracks = partId !== undefined
       ? streams
           .filter((s) => s.streamType === 3 && s.id !== undefined)
-          .map((s) => ({
-            id: String(s.id),
-            language: s.languageTag ?? s.language,
-            label: s.displayTitle ?? s.title ?? s.language ?? `Subtitle ${s.id}`,
-            // Relative path; frontend prefixes with API_BASE. Worker proxies
-            // the actual Plex VTT fetch (Plex doesn't send CORS headers).
-            url: `/api/subtitles?partId=${partId}&streamId=${s.id}`,
-            format: 'vtt' as const,
-          }))
+          .map((s) => {
+            const lang = s.languageTag ?? s.language;
+            return {
+              id: String(s.id),
+              ...(lang !== undefined ? { language: lang } : {}),
+              label: s.displayTitle ?? s.title ?? s.language ?? `Subtitle ${s.id}`,
+              // Relative path; frontend prefixes with API_BASE. Worker proxies
+              // the actual Plex VTT fetch (Plex doesn't send CORS headers).
+              url: `/api/subtitles?partId=${partId}&streamId=${s.id}`,
+              format: 'vtt' as const,
+            };
+          })
       : [];
 
     const session = crypto.randomUUID();
@@ -283,6 +286,7 @@ export const plexAdapter: SourceAdapter = {
     return {
       url,
       durationSec: Math.round(durationMs / 1000),
+      ...(subtitleTracks.length > 0 ? { subtitleTracks } : {}),
       ...(thumbnailUrlTemplate ? { thumbnailUrlTemplate } : {}),
     };
   },
