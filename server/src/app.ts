@@ -3,8 +3,9 @@ import { config } from './config';
 import { corsMiddleware } from './middleware/cors';
 import { errorHandler } from './middleware/error-handler';
 import { requestLog } from './middleware/request-log';
-import { requireUser } from './middleware/auth';
+import { requireUser, requireAdmin } from './middleware/auth';
 import { makeAuthRoutes } from './routes/auth';
+import { makeAdminRoutes } from './routes/admin';
 import { makePairRoutes } from './routes/pair';
 import { homeRoutes } from './routes/home';
 import { sourceHomeRoutes } from './routes/source-home';
@@ -47,7 +48,9 @@ export function buildApp(db: Db): Hono {
   app.use('/api/progress/*',    requireUser(() => db));
   app.use('/api/source-status', requireUser(() => db));
   app.use('/api/subtitles',     requireUser(() => db));
-  // (admin, sources management mounts come in Tasks 4-5)
+  app.use('/api/admin/*',       requireUser(() => db));
+  app.use('/api/admin/*',       requireAdmin);
+  // (sources management mount comes in Task 5)
 
   app.route('/api/pair',           makePairRoutes(() => db));
   app.route('/api/home',           homeRoutes);
@@ -59,5 +62,6 @@ export function buildApp(db: Db): Hono {
   app.route('/api/progress',       progressRoutes);
   app.route('/api/source-status',  makeSourceStatusRoutes(() => db));
   app.route('/api/subtitles',      subtitlesRoutes);
+  app.route('/api/admin',          makeAdminRoutes(() => db));
   return app;
 }
