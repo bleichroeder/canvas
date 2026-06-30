@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 
 // Payload shapes — typed JSON columns. Schema is per-table; route handlers
 // cast at the boundary.
@@ -46,3 +47,83 @@ export type PairSession = typeof pairSessions.$inferSelect;
 export type NewPairSession = typeof pairSessions.$inferInsert;
 export type SourceStatusCacheRow = typeof sourceStatusCache.$inferSelect;
 export type NewSourceStatusCacheRow = typeof sourceStatusCache.$inferInsert;
+
+// ── Sub-project B tables ──────────────────────────────────────────────────────
+
+export const users = sqliteTable(
+  'users',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    label: text('label').notNull(),
+    role: text('role', { enum: ['admin', 'member'] }).notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    // DB-enforced singleton: at most one admin row.
+    adminSingleton: uniqueIndex('users_admin_singleton')
+      .on(t.role)
+      .where(sql`${t.role} = 'admin'`),
+  }),
+);
+
+export const claimTokens = sqliteTable(
+  'claim_tokens',
+  {
+    token: text('token').primaryKey(),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+    usedAt: integer('used_at'),
+  },
+  (t) => ({
+    expiresIdx: index('claim_tokens_expires').on(t.expiresAt),
+  }),
+);
+
+export const deviceSessions = sqliteTable(
+  'device_sessions',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    deviceLabel: text('device_label').notNull(),
+    createdAt: integer('created_at').notNull(),
+    lastSeenAt: integer('last_seen_at').notNull(),
+  },
+  (t) => ({
+    userIdx: index('device_sessions_user').on(t.userId),
+  }),
+);
+
+export const sources = sqliteTable(
+  'sources',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    type: text('type', { enum: ['plex', 'flixify'] }).notNull(),
+    baseUrl: text('base_url').notNull(),
+    token: text('token').notNull(),
+    label: text('label').notNull(),
+    pairedByUserId: integer('paired_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at').notNull(),
+  },
+);
+
+export const userSourceAccess = sqliteTable(
+  'user_source_access',
+  {
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    sourceId: integer('source_id').notNull().references(() => sources.id, { onDelete: 'cascade' }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.sourceId] }),
+  }),
+);
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type ClaimToken = typeof claimTokens.$inferSelect;
+export type NewClaimToken = typeof claimTokens.$inferInsert;
+export type DeviceSession = typeof deviceSessions.$inferSelect;
+export type NewDeviceSession = typeof deviceSessions.$inferInsert;
+export type Source = typeof sources.$inferSelect;
+export type NewSource = typeof sources.$inferInsert;
+export type UserSourceAccess = typeof userSourceAccess.$inferSelect;
