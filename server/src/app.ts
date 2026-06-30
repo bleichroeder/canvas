@@ -9,6 +9,10 @@ import { sourceHomeRoutes } from './routes/source-home';
 import { libraryRoutes } from './routes/library';
 import { itemRoutes } from './routes/item';
 import { searchRoutes } from './routes/search';
+import { playRoutes } from './routes/play';
+import { progressRoutes } from './routes/progress';
+import { makeSourceStatusRoutes } from './routes/source-status';
+import { subtitlesRoutes } from './routes/subtitles';
 import { registerAdapter } from './sources/registry';
 import { plexAdapter } from './sources/plex';
 import { flixifyAdapter } from './sources/flixify';
@@ -31,5 +35,9 @@ export function buildApp(db: Db): Hono {
   app.route('/api/library',     libraryRoutes);
   app.route('/api/item',        itemRoutes);
   app.route('/api/search',      searchRoutes);
+  app.route('/api/play',          playRoutes);
+  app.route('/api/progress',      progressRoutes);
+  app.route('/api/source-status', makeSourceStatusRoutes(() => db));
+  app.route('/api/subtitles',     subtitlesRoutes);
   return app;
 }
