@@ -4,7 +4,7 @@ import { drizzle } from 'drizzle-orm/bun-sqlite';
 import * as schema from '../db/schema';
 import type { Db } from '../db';
 import { runMigrations } from '../db/migrate';
-import { createUser, getUser, getUserByLabel, listUsers, deleteUser, countAdmins } from './users';
+import { createUser, getUser, getUserByLabel, listUsers, deleteUser, countAdmins, setPasswordHash, getPasswordHash } from './users';
 
 function makeDb(): Db {
   const sqlite = new Database(':memory:');
@@ -60,5 +60,12 @@ describe('users storage', () => {
     expect(countAdmins(db)).toBe(1);
     createUser(db, { label: 'B', role: 'member' });
     expect(countAdmins(db)).toBe(1);
+  });
+
+  test('setPasswordHash + getPasswordHash round trip', () => {
+    const u = createUser(db, { label: 'X', role: 'member' });
+    expect(getPasswordHash(db, u.id)).toBeNull();
+    setPasswordHash(db, u.id, 'argon2-hash-here');
+    expect(getPasswordHash(db, u.id)).toBe('argon2-hash-here');
   });
 });

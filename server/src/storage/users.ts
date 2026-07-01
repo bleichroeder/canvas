@@ -34,3 +34,12 @@ export function countAdmins(db: Db): number {
   const r = db.select({ c: sql<number>`count(*)` }).from(users).where(eq(users.role, 'admin')).get();
   return r?.c ?? 0;
 }
+
+export function setPasswordHash(db: Db, userId: number, hash: string): void {
+  db.update(users).set({ passwordHash: hash }).where(eq(users.id, userId)).run();
+}
+
+export function getPasswordHash(db: Db, userId: number): string | null {
+  const row = db.select({ h: users.passwordHash }).from(users).where(eq(users.id, userId)).get();
+  return row?.h ?? null;
+}

@@ -6,10 +6,11 @@ import * as schema from '../db/schema';
 import type { Db } from '../db';
 import { runMigrations } from '../db/migrate';
 import { makeAdminRoutes } from './admin';
+import { makeAuthRoutes } from './auth';
 import { requireUser, requireAdmin } from '../middleware/auth';
 import { errorHandler } from '../middleware/error-handler';
-import { createUser } from '../storage/users';
-import { createDeviceSession } from '../storage/device-sessions';
+import { createUser, setPasswordHash } from '../storage/users';
+import { createDeviceSession, listUserDevices } from '../storage/device-sessions';
 import { createSource } from '../storage/sources';
 import { generateBearer, hashBearer } from '../lib/bearer';
 
@@ -28,10 +29,19 @@ async function makeAuthedFixture() {
 
   const app = new Hono();
   app.onError(errorHandler);
+  app.route('/api/auth', makeAuthRoutes(() => db));
   app.use('/api/admin/*', requireUser(() => db));
   app.use('/api/admin/*', requireAdmin);
   app.route('/api/admin', makeAdminRoutes(() => db));
   return { app, db, admin, member, adminBearer, memberBearer };
+}
+
+async function jsonPost(app: Hono, path: string, body: unknown): Promise<Response> {
+  return app.fetch(new Request(`http://test${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
 }
 
 function jsonReq(path: string, method: string, body: unknown, bearer: string): Request {
@@ -115,5 +125,48 @@ describe('admin routes', () => {
     await app.fetch(jsonReq(`/api/admin/users/${member.id}/sources/${s.id}`, 'POST', undefined, adminBearer));
     const res = await app.fetch(jsonReq(`/api/admin/users/${member.id}/sources/${s.id}`, 'DELETE', undefined, adminBearer));
     expect(res.status).toBe(204);
+  });
+
+  test('POST /users with password creates user + no claim token', async () => {
+    const { app, adminBearer } = await makeAuthedFixture();
+    const res = await app.fetch(jsonReq('/api/admin/users', 'POST', { label: 'Kid', password: 'kidpassword' }, adminBearer));
+    expect(res.status).toBe(200);
+    const body = await res.json() as { user: { label: string }; claimToken?: string };
+    expect(body.user.label).toBe('Kid');
+    expect(body.claimToken).toBeUndefined();
+  });
+
+  test('POST /users rejects short password', async () => {
+    const { app, adminBearer } = await makeAuthedFixture();
+    const res = await app.fetch(jsonReq('/api/admin/users', 'POST', { label: 'Kid', password: 'short' }, adminBearer));
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /users without password still emits claimToken', async () => {
+    const { app, adminBearer } = await makeAuthedFixture();
+    const res = await app.fetch(jsonReq('/api/admin/users', 'POST', { label: 'Kid' }, adminBearer));
+    const body = await res.json() as { claimToken?: string };
+    expect(body.claimToken).toMatch(/^[A-Z0-9]{4}-/);
+  });
+
+  test('POST /users/:id/reset-password sets new password + revokes sessions', async () => {
+    const { app, db, adminBearer } = await makeAuthedFixture();
+    const kid = createUser(db, { label: 'Kid', role: 'member' });
+    setPasswordHash(db, kid.id, await Bun.password.hash('oldpass'));
+    // Give Kid a device session
+    createDeviceSession(db, { userId: kid.id, deviceLabel: 'phone', tokenHash: 'kid-hash-1' });
+
+    const res = await app.fetch(jsonReq(`/api/admin/users/${kid.id}/reset-password`, 'POST', { newPassword: 'newpassword' }, adminBearer));
+    expect(res.status).toBe(204);
+    expect(listUserDevices(db, kid.id).length).toBe(0);
+    // Kid's new password works
+    const login = await jsonPost(app, '/api/auth/login', { label: 'Kid', password: 'newpassword', deviceLabel: 'x' });
+    expect(login.status).toBe(200);
+  });
+
+  test('POST /users/:id/reset-password on admin returns 409', async () => {
+    const { app, admin, adminBearer } = await makeAuthedFixture();
+    const res = await app.fetch(jsonReq(`/api/admin/users/${admin.id}/reset-password`, 'POST', { newPassword: 'newpassword' }, adminBearer));
+    expect(res.status).toBe(409);
   });
 });

@@ -56,6 +56,7 @@ export const users = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     label: text('label').notNull(),
     role: text('role', { enum: ['admin', 'member'] }).notNull(),
+    passwordHash: text('password_hash'),      // nullable; NULL = no password set yet
     createdAt: integer('created_at').notNull(),
   },
   (t) => ({
