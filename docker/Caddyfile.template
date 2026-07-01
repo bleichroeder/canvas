@@ -1,0 +1,37 @@
+# Rendered at container start by /app/docker/entrypoint.sh via envsubst.
+# Placeholders:
+#   ${CANVAS_HOSTNAME}         effective hostname (sslip.io auto or user-provided domain)
+#   ${CANVAS_PORT}             Bun server port on 127.0.0.1
+#   ${CANVAS_ADMIN_EMAIL}      optional LE contact email
+#   ${CANVAS_LE_STAGING_LINE}  either empty, or "acme_ca https://acme-staging-v02.api.letsencrypt.org/directory"
+#
+# Tailscale Funnel mode uses a separate Caddyfile written inline by
+# entrypoint.sh; see that script for the ":8080" plain-HTTP variant.
+
+{
+	email {$CANVAS_ADMIN_EMAIL}
+	${CANVAS_LE_STAGING_LINE}
+	# Persist certs on the /data volume so they survive container restarts.
+	storage file_system /data/caddy
+}
+
+${CANVAS_HOSTNAME} {
+	# Reverse-proxy /api/* and /health to the Bun canvas server. `handle`
+	# does NOT strip the path prefix — canvas expects to see the full URL.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:${CANVAS_PORT}
+	}
+	handle /health {
+		reverse_proxy 127.0.0.1:${CANVAS_PORT}
+	}
+
+	# Everything else: static frontend from /app/web (Vite build output).
+	# try_files falls through to index.html for hash-router deep links.
+	handle {
+		root * /app/web
+		try_files {path} /index.html
+		file_server
+	}
+
+	encode gzip
+}
