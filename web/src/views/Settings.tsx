@@ -14,9 +14,10 @@ import { AccountTab } from './settings/AccountTab';
 import { SourcesTab } from './settings/SourcesTab';
 import { PlaybackTab } from './settings/PlaybackTab';
 import { AboutTab } from './settings/AboutTab';
+import { DeploymentTab } from './settings/DeploymentTab';
 
-type TabId = 'account' | 'sources' | 'playback' | 'about';
-const TAB_IDS: readonly TabId[] = ['account', 'sources', 'playback', 'about'] as const;
+type TabId = 'account' | 'sources' | 'playback' | 'about' | 'deployment';
+const TAB_IDS: readonly TabId[] = ['account', 'sources', 'playback', 'about', 'deployment'] as const;
 
 export function Settings() {
   const theme = useTheme();
@@ -88,6 +89,7 @@ export function Settings() {
             <Tab label="Sources" value="sources" />
             <Tab label="Playback" value="playback" />
             <Tab label="About" value="about" />
+            {isAdmin && <Tab label="Deployment" value="deployment" />}
           </Tabs>
         </Box>
         <Box sx={{ px: 2.5, pt: 3, pb: 6, maxWidth: 760, mx: 'auto' }}>
@@ -95,6 +97,7 @@ export function Settings() {
           {tab === 'sources' && <SourcesTab />}
           {tab === 'playback' && <PlaybackTab />}
           {tab === 'about' && <AboutTab />}
+          {tab === 'deployment' && isAdmin && <DeploymentTab />}
         </Box>
       </Box>
     </AppShell>

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useRef, type ReactNode } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import IconButton from '@mui/material/IconButton';
@@ -7,13 +7,56 @@ import Box from '@mui/material/Box';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsIcon from '@mui/icons-material/Settings';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { useRoute, navigate } from '../router';
 import { RouteBreadcrumbs } from './Breadcrumbs';
 import { useNowPlaying } from './NowPlayingStrip';
+import { getUser } from '../lib/session';
+import { api } from '../api';
 
 interface AppShellProps {
   children: ReactNode;
   heroHeight?: number;
+}
+
+// Poll deployment status every 30 seconds (admin only). Only shows a banner
+// when status === 'failed'; all other states are silent. The banner links to
+// /settings/deployment so the admin can investigate and fix.
+function useDeploymentFailedBanner(): string | null {
+  const user = getUser();
+  const isAdmin = user?.role === 'admin';
+  const [failedMessage, setFailedMessage] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    let cancelled = false;
+
+    async function check() {
+      try {
+        const status = await api.deploymentStatus();
+        if (!cancelled) {
+          setFailedMessage(status.status === 'failed' ? status.statusMessage ?? 'Unknown deployment error.' : null);
+        }
+      } catch {
+        // Ignore — network blip, don't clear an existing banner
+      }
+      if (!cancelled) {
+        timerRef.current = setTimeout(() => { void check(); }, 30_000);
+      }
+    }
+
+    void check();
+
+    return () => {
+      cancelled = true;
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once per AppShell mount; isAdmin is stable for a session
+
+  return isAdmin ? failedMessage : null;
 }
 
 export function AppShell({ children, heroHeight }: AppShellProps) {
@@ -21,6 +64,7 @@ export function AppShell({ children, heroHeight }: AppShellProps) {
   const isHome = route.path === '/';
   const nowPlaying = useNowPlaying();
   const mainPaddingBottom = nowPlaying ? '108px' : 0;
+  const deploymentFailedMessage = useDeploymentFailedBanner();
 
   // When a hero is present, top bar starts transparent and solidifies once
   // the user scrolls past it. Without a hero, the bar is always solid.
@@ -102,7 +146,49 @@ export function AppShell({ children, heroHeight }: AppShellProps) {
           </IconButton>
         </Toolbar>
       </AppBar>
+      {/* Spacer that accounts for the fixed AppBar height */}
       <Toolbar variant="dense" sx={{ minHeight: 56 }} />
+      {/* Deployment failure banner — admin-only, only shown when status === 'failed' */}
+      {deploymentFailedMessage && (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            px: 2.5,
+            py: 1,
+            bgcolor: 'error.dark',
+            color: '#fff',
+            fontSize: 14,
+            lineHeight: 1.5,
+            flexWrap: 'wrap',
+          }}
+        >
+          <ErrorOutlineIcon fontSize="small" sx={{ flexShrink: 0 }} />
+          <Typography variant="body2" component="span" sx={{ color: '#fff', flex: 1 }}>
+            <strong>Deployment error:</strong> {deploymentFailedMessage}
+          </Typography>
+          <Box
+            component="button"
+            onClick={() => navigate('/settings?tab=deployment')}
+            sx={{
+              background: 'rgba(255,255,255,0.15)',
+              border: '1px solid rgba(255,255,255,0.35)',
+              borderRadius: 1,
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              px: 1.5,
+              py: 0.5,
+              flexShrink: 0,
+              '&:hover': { background: 'rgba(255,255,255,0.25)' },
+            }}
+          >
+            Fix in Settings → Deployment
+          </Box>
+        </Box>
+      )}
       <Box component="main" sx={{ pb: mainPaddingBottom }}>{children}</Box>
     </Box>
   );

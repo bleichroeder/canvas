@@ -171,7 +171,7 @@ export const api = {
 
   // Deployment status + admin config
   deploymentStatus: () =>
-    request<{ mode: string; status: string; publicUrl: string | null; externallyManaged: boolean }>(
+    request<{ mode: string; status: string; publicUrl: string | null; statusMessage: string | null; externallyManaged: boolean }>(
       '/api/deployment/status',
     ),
   adminGetDeployment: () =>
