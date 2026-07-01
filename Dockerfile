@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.7
 #
-# canvas self-host distribution image.
-# Multi-stage: build the React frontend, pull Caddy's binary, then assemble
-# a Bun-based runtime containing everything.
+# canvas self-host image. HTTP-only on :8787 — put your own reverse proxy
+# (Caddy, nginx, Cloudflare Tunnel, Tailscale Funnel, etc.) in front of it.
+# See docs/reverse-proxy-examples/ for working recipes.
 
 # --- Stage 1: build the React frontend ---
 FROM node:20-alpine AS web-build
@@ -10,49 +10,34 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY web/ ./
-# VITE_CANVAS_API left unset — the bundled frontend calls /api/* as
-# relative URLs. Caddy inside the runtime proxies to the Bun server.
+# VITE_CANVAS_API unset — the bundled frontend calls /api/* as relative URLs.
 RUN npm run build
 
-# --- Stage 2: grab the Caddy binary from its official alpine image ---
-FROM caddy:2-alpine AS caddy-src
-
-# --- Stage 3: runtime (Bun + Caddy + built frontend + entrypoint) ---
+# --- Stage 2: runtime (Bun + built frontend) ---
 FROM oven/bun:1.3-alpine AS runtime
 
-# Runtime deps:
-#   gettext  — provides envsubst for Caddyfile templating
-#   curl     — used by docker/detect-public-ip.sh
-#   tini     — proper PID-1 for signal + zombie handling
-RUN apk add --no-cache gettext curl tini
-
-# Caddy binary from stage 2.
-COPY --from=caddy-src /usr/bin/caddy /usr/local/bin/caddy
+# tini as PID 1 for proper signal + zombie handling.
+RUN apk add --no-cache tini
 
 WORKDIR /app
 
-# Server deps first for layer caching; production install then source copy.
+# Server deps first for layer caching.
 COPY server/package.json server/
 COPY server/bun.lockb* server/
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     cd server && (bun install --production --frozen-lockfile || bun install --production)
 COPY server/ server/
 
-# Built frontend from stage 1.
+# Built frontend from stage 1 — served statically by the Bun server on /*.
 COPY --from=web-build /web/dist /app/web
 
-# Orchestration bits.
-COPY docker/ /app/docker/
-RUN chmod +x /app/docker/entrypoint.sh /app/docker/detect-public-ip.sh
-
-# Directories Caddy + canvas expect to exist.
-RUN mkdir -p /etc/caddy /data /data/caddy
-
-# Persistent state.
+# Persistent state (SQLite database).
+RUN mkdir -p /data
 VOLUME ["/data"]
 
-# HTTPS + HTTP (LE HTTP-01 challenge). Tailscale mode uses neither externally.
-EXPOSE 80 443
+ENV CANVAS_DB_PATH=/data/canvas.db
+ENV CANVAS_WEB_DIR=/app/web
 
-# tini forwards signals properly to bun.
-ENTRYPOINT ["/sbin/tini", "--", "/app/docker/entrypoint.sh"]
+EXPOSE 8787
+WORKDIR /app/server
+ENTRYPOINT ["/sbin/tini", "--", "bun", "run", "src/index.ts"]

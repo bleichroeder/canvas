@@ -75,8 +75,14 @@ export function buildApp(db: Db): Hono {
 
   // Static frontend. Serves files from CANVAS_WEB_DIR (bundled at /app/web
   // in the Docker image). Falls back to index.html for unmatched paths so
-  // hash-router deep links + client-side routing keep working.
+  // client-side routing keeps working.
   app.use('/*', serveStatic({ root: config.CANVAS_WEB_DIR }));
-  app.get('*',  serveStatic({ path: `${config.CANVAS_WEB_DIR}/index.html` }));
+  app.get('/*', async (c) => {
+    const file = Bun.file(`${config.CANVAS_WEB_DIR}/index.html`);
+    if (!(await file.exists())) return c.notFound();
+    return new Response(file, {
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+  });
   return app;
 }
