@@ -82,20 +82,42 @@ EOF
 	echo "[entrypoint] canvas will be reachable via the Tailscale sidecar."
 else
 	if [ -n "${CANVAS_LOCAL_TLS:-}" ] && [ "$CANVAS_LOCAL_TLS" != "0" ]; then
-		# Local-test mode — Caddy skips ACME entirely and signs certs from its
-		# internal CA. Browser will show an untrusted-cert warning that you
-		# CAN click through. Useful when your router isn't forwarding 80/443
-		# and you just want to poke at the app locally.
-		export CANVAS_LE_STAGING_LINE="local_certs"
-		echo "[entrypoint] using Caddy internal CA (local test mode; expect a cert warning)"
-	elif [ -n "$CANVAS_LE_STAGING" ] && [ "$CANVAS_LE_STAGING" != "0" ]; then
-		export CANVAS_LE_STAGING_LINE="acme_ca https://acme-staging-v02.api.letsencrypt.org/directory"
-		echo "[entrypoint] using Let's Encrypt STAGING (untrusted cert, no rate limit)"
+		# Local-test mode — bind Caddy to `localhost` so the browser can hit
+		# https://localhost:<port>/ directly. Caddy auto-uses its internal CA
+		# for `localhost` (special-cased); browser shows a click-through cert
+		# warning. No ACME involved.
+		cat > /etc/caddy/Caddyfile <<EOF
+{
+	storage file_system /data/caddy
+}
+
+localhost {
+	handle /api/* {
+		reverse_proxy 127.0.0.1:${CANVAS_PORT}
+	}
+	handle /health {
+		reverse_proxy 127.0.0.1:${CANVAS_PORT}
+	}
+	handle {
+		root * /app/web
+		try_files {path} /index.html
+		file_server
+	}
+	encode gzip
+}
+EOF
+		echo "[entrypoint] using Caddy internal CA for localhost (local test mode)"
+		echo "[entrypoint] Canvas is ready at: https://localhost/  (accept the browser cert warning)"
 	else
-		export CANVAS_LE_STAGING_LINE=""
+		if [ -n "$CANVAS_LE_STAGING" ] && [ "$CANVAS_LE_STAGING" != "0" ]; then
+			export CANVAS_LE_STAGING_LINE="acme_ca https://acme-staging-v02.api.letsencrypt.org/directory"
+			echo "[entrypoint] using Let's Encrypt STAGING (untrusted cert, no rate limit)"
+		else
+			export CANVAS_LE_STAGING_LINE=""
+		fi
+		envsubst < /app/docker/Caddyfile.template > /etc/caddy/Caddyfile
+		echo "[entrypoint] Canvas is ready at: https://${CANVAS_HOSTNAME}/"
 	fi
-	envsubst < /app/docker/Caddyfile.template > /etc/caddy/Caddyfile
-	echo "[entrypoint] Canvas is ready at: https://${CANVAS_HOSTNAME}/"
 fi
 
 # ---------- Service startup ----------
