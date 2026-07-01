@@ -81,7 +81,14 @@ if [ "$MODE" = "tailscale" ]; then
 EOF
 	echo "[entrypoint] canvas will be reachable via the Tailscale sidecar."
 else
-	if [ -n "$CANVAS_LE_STAGING" ] && [ "$CANVAS_LE_STAGING" != "0" ]; then
+	if [ -n "${CANVAS_LOCAL_TLS:-}" ] && [ "$CANVAS_LOCAL_TLS" != "0" ]; then
+		# Local-test mode — Caddy skips ACME entirely and signs certs from its
+		# internal CA. Browser will show an untrusted-cert warning that you
+		# CAN click through. Useful when your router isn't forwarding 80/443
+		# and you just want to poke at the app locally.
+		export CANVAS_LE_STAGING_LINE="local_certs"
+		echo "[entrypoint] using Caddy internal CA (local test mode; expect a cert warning)"
+	elif [ -n "$CANVAS_LE_STAGING" ] && [ "$CANVAS_LE_STAGING" != "0" ]; then
 		export CANVAS_LE_STAGING_LINE="acme_ca https://acme-staging-v02.api.letsencrypt.org/directory"
 		echo "[entrypoint] using Let's Encrypt STAGING (untrusted cert, no rate limit)"
 	else
