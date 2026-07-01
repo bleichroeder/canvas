@@ -159,4 +159,44 @@ export const api = {
   // Source management
   listSources: () => request<{ id: number; type: 'plex' | 'flixify'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number; usersWithAccess?: number[] }[]>('/api/sources'),
   deleteSource: (id: number) => request<void>(`/api/sources/${id}`, { method: 'DELETE' }),
+
+  // Setup (first-run wizard)
+  setupProbe: () =>
+    request<{ setupRequired: boolean }>('/api/setup/probe'),
+  setup: (adminUsername: string, adminPassword: string, deviceLabel: string) =>
+    request<{ bearer: string; user: SessionUser }>('/api/setup', {
+      method: 'POST',
+      body: JSON.stringify({ adminUsername, adminPassword, deviceLabel }),
+    }),
+
+  // Deployment status + admin config
+  deploymentStatus: () =>
+    request<{ mode: string; status: string; publicUrl: string | null; externallyManaged: boolean }>(
+      '/api/deployment/status',
+    ),
+  adminGetDeployment: () =>
+    request<{
+      mode: string;
+      domain: string | null;
+      adminEmail: string | null;
+      publicUrl: string | null;
+      status: string;
+      statusMessage: string | null;
+      certExpiresAt: number | null;
+      lastAppliedAt: number | null;
+      hasCfNamedToken: boolean;
+      externallyManaged: boolean;
+    }>('/api/admin/deployment'),
+  adminSetDeployment: (payload: {
+    mode: string;
+    domain?: string;
+    adminEmail?: string;
+    cfNamedToken?: string;
+  }) =>
+    request<void>('/api/admin/deployment', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  adminApplyDeployment: () =>
+    request<void>('/api/admin/deployment/apply', { method: 'POST' }),
 };
