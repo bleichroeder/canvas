@@ -1,8 +1,11 @@
-# Bare canvas — HTTP only on :8787. Put your own reverse proxy in front for
-# TLS, public hostname, etc. See docs/reverse-proxy-examples/ for recipes.
+# canvas — one-command install with browser-configured deployment.
 #
 #   docker compose up -d
 #   docker compose logs -f canvas
+#
+# Then open http://localhost:8787/ in a browser and follow the setup wizard:
+# create your admin account and pick how canvas is exposed (Cloudflare Quick
+# Tunnel is the recommended default — no signup or domain required).
 
 services:
   canvas:
@@ -10,6 +13,11 @@ services:
     container_name: canvas
     restart: unless-stopped
     ports:
-      - "8787:8787"
+      - "80:80"       # Caddy HTTP (mode=domain LE challenge + redirect)
+      - "443:443"     # Caddy HTTPS (mode=domain)
+      - "8787:8787"   # Bun canvas server (always; localhost admin fallback)
     volumes:
       - ./canvas-data:/data
+    # For advanced users running their own reverse proxy in front:
+    # environment:
+    #   CANVAS_EXTERNAL_PROXY: "1"

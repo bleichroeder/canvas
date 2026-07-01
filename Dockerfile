@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1.7
 #
-# canvas self-host image. HTTP-only on :8787 — put your own reverse proxy
-# (Caddy, nginx, Cloudflare Tunnel, Tailscale Funnel, etc.) in front of it.
-# See docs/reverse-proxy-examples/ for working recipes.
+# canvas self-host image with bundled Caddy + cloudflared. Deployment mode
+# selected at runtime via the browser wizard — see docs/deployment-modes.md.
+#
+# For users who prefer BYO reverse proxy: set CANVAS_EXTERNAL_PROXY=1 and
+# canvas runs HTTP-only on 8787 (Caddy + cloudflared stay dormant).
 
 # --- Stage 1: build the React frontend ---
 FROM node:20-alpine AS web-build
@@ -10,14 +12,22 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY web/ ./
-# VITE_CANVAS_API unset — the bundled frontend calls /api/* as relative URLs.
 RUN npm run build
 
-# --- Stage 2: runtime (Bun + built frontend) ---
+# --- Stage 2: pull the Caddy binary ---
+FROM caddy:2-alpine AS caddy-src
+
+# --- Stage 3: pull the cloudflared binary ---
+FROM cloudflare/cloudflared:latest AS cloudflared-src
+
+# --- Stage 4: runtime ---
 FROM oven/bun:1.3-alpine AS runtime
 
-# tini as PID 1 for proper signal + zombie handling.
-RUN apk add --no-cache tini
+# gettext = envsubst (Caddyfile templating); tini = PID 1 signal handling.
+RUN apk add --no-cache gettext tini
+
+COPY --from=caddy-src /usr/bin/caddy /usr/local/bin/caddy
+COPY --from=cloudflared-src /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 
 WORKDIR /app
 
@@ -28,16 +38,22 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
     cd server && (bun install --production --frozen-lockfile || bun install --production)
 COPY server/ server/
 
-# Built frontend from stage 1 — served statically by the Bun server on /*.
+# Built frontend from stage 1 (served statically by Bun on same origin).
 COPY --from=web-build /web/dist /app/web
 
-# Persistent state (SQLite database).
-RUN mkdir -p /data
+# Orchestration bits — entrypoint + Caddyfile template.
+COPY docker/ /app/docker/
+RUN chmod +x /app/docker/entrypoint.sh
+
+RUN mkdir -p /data /data/caddy
 VOLUME ["/data"]
 
 ENV CANVAS_DB_PATH=/data/canvas.db
 ENV CANVAS_WEB_DIR=/app/web
+ENV CANVAS_DATA_DIR=/data
 
-EXPOSE 8787
-WORKDIR /app/server
-ENTRYPOINT ["/sbin/tini", "--", "bun", "run", "src/index.ts"]
+# 80/443 for Caddy (mode=domain); 8787 for Bun (mode=local, admin access
+# regardless of mode). Cloudflared modes don't need any external ports.
+EXPOSE 80 443 8787
+
+ENTRYPOINT ["/sbin/tini", "--", "/app/docker/entrypoint.sh"]
