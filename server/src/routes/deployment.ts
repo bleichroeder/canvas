@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import type { Db } from '../db';
-import { getDeploymentConfig, updateDeploymentConfig, type DeploymentPatch } from '../storage/deployment-config';
+import { updateDeploymentConfig, type DeploymentPatch } from '../storage/deployment-config';
 import { writeDeploymentSidecarFiles } from '../lib/deployment-writer';
+import { refreshDeploymentSync } from '../lib/deployment-sync';
 import { config } from '../config';
 import { logger } from '../log';
 
@@ -27,7 +28,8 @@ export function makeDeploymentRoutes(getDb: () => Db) {
 
   // Admin — full config, minus the secret token.
   r.get('/admin/deployment', async (c) => {
-    const conf = getDeploymentConfig(getDb());
+    // Refresh in case cf-quick's public URL just landed in the sidecar file.
+    const conf = refreshDeploymentSync(getDb(), config.CANVAS_DATA_DIR);
     return c.json({
       mode: conf.mode,
       domain: conf.domain,
@@ -81,9 +83,10 @@ export function makeDeploymentRoutes(getDb: () => Db) {
     return c.body(null, 204);
   });
 
-  // Public — safe subset.
+  // Public — safe subset. Also picks up cf-quick's late-arriving public URL
+  // by re-reading the sidecar file on each poll.
   r.get('/deployment/status', async (c) => {
-    const conf = getDeploymentConfig(getDb());
+    const conf = refreshDeploymentSync(getDb(), config.CANVAS_DATA_DIR);
     return c.json({
       mode: conf.mode,
       status: conf.status,

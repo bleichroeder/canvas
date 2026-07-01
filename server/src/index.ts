@@ -5,6 +5,7 @@ import { logger } from './log';
 import { initDb } from './db';
 import { runMigrations } from './db/migrate';
 import { bootstrapAdminIfNeeded } from './lib/bootstrap';
+import { refreshDeploymentSync } from './lib/deployment-sync';
 import { startReaper } from './storage/reaper';
 import { buildApp } from './app';
 
@@ -14,6 +15,12 @@ mkdirSync(dirname(config.CANVAS_DB_PATH), { recursive: true });
 const db = initDb(config.CANVAS_DB_PATH);
 runMigrations(db);
 bootstrapAdminIfNeeded(db, { dbPath: config.CANVAS_DB_PATH, claimTokenTtlSec: 24 * 60 * 60 });
+
+// Reconcile deployment_config with runtime after a restart: flip status
+// from pending/applying back to ready, populate publicUrl from sidecar for
+// cf-quick, etc.
+refreshDeploymentSync(db, config.CANVAS_DATA_DIR);
+
 const stopReaper = startReaper(db);
 
 // Module-level ref so the setup route can call server.requestIP(req).
