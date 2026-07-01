@@ -31,7 +31,7 @@ export function AccountTab() {
       console.warn('sign-out failed:', e);
     } finally {
       clearSession();
-      navigate('/claim');
+      navigate('/sign-in');
       setSigningOut(false);
     }
   }

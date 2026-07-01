@@ -67,7 +67,7 @@ export function Devices() {
       await api.authRevokeDevice(device.id);
       if (device.current) {
         clearSession();
-        navigate('/claim');
+        navigate('/sign-in');
         return;
       }
       setDevices((prev) => prev.filter((d) => d.id !== device.id));
