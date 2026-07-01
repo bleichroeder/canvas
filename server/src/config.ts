@@ -6,6 +6,7 @@ const ConfigSchema = z.object({
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
   CANVAS_DB_PATH: z.string().default('./data/canvas.db'),
+  CANVAS_WEB_DIR: z.string().default('/app/web'),
   CANVAS_ALLOWED_ORIGINS: z.string()
     .default('http://localhost:5173')
     .transform((s) => s.split(',').map((t) => t.trim()).filter(Boolean)),

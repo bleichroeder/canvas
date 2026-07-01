@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { serveStatic } from 'hono/bun';
 import { config } from './config';
 import { corsMiddleware } from './middleware/cors';
 import { errorHandler } from './middleware/error-handler';
@@ -66,5 +67,16 @@ export function buildApp(db: Db): Hono {
   app.route('/api/subtitles',      makeSubtitlesRoutes(() => db));
   app.route('/api/admin',          makeAdminRoutes(() => db));
   app.route('/api/sources',        makeSourcesMgmtRoutes(() => db));
+
+  // Anything under /api/* that didn't match a mounted route returns a JSON
+  // 404 (so unknown API calls don't accidentally fall through to the static
+  // frontend below and get HTML).
+  app.all('/api/*', (c) => c.json({ error: 'not found' }, 404));
+
+  // Static frontend. Serves files from CANVAS_WEB_DIR (bundled at /app/web
+  // in the Docker image). Falls back to index.html for unmatched paths so
+  // hash-router deep links + client-side routing keep working.
+  app.use('/*', serveStatic({ root: config.CANVAS_WEB_DIR }));
+  app.get('*',  serveStatic({ path: `${config.CANVAS_WEB_DIR}/index.html` }));
   return app;
 }
