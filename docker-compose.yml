@@ -1,0 +1,26 @@
+# Default canvas self-host setup:
+#   docker compose up -d
+#
+# Uses sslip.io + Let's Encrypt for HTTPS. Requires ports 80 + 443
+# forwarded on your router to the machine running this compose file.
+# See docker-compose.tailscale.yml if your ISP blocks port 80 or you
+# don't want to touch your router.
+
+services:
+  canvas:
+    image: ghcr.io/dherzfeld/canvas:latest
+    container_name: canvas
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./canvas-data:/data
+    # Optional env vars — uncomment one or more as needed:
+    # environment:
+    #   # Use your own domain instead of auto-sslip.io:
+    #   CANVAS_DOMAIN: canvas.yourdomain.com
+    #   # LE staging (untrusted cert, no rate limit) for testing:
+    #   CANVAS_LE_STAGING: "1"
+    #   # Override IP detection (rarely needed):
+    #   CANVAS_PUBLIC_IP_OVERRIDE: 203.0.113.42
