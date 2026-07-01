@@ -465,10 +465,12 @@ export function Setup() {
             <Button
               variant="contained"
               size="large"
-              onClick={() => navigate('/sign-in')}
+              // Wizard's step 1 already called setSession(bearer, user), so the
+              // user is signed in — send them straight to Home, not /sign-in.
+              onClick={() => navigate('/')}
               sx={{ py: 1.5, fontSize: 15, fontWeight: 600, mt: 1 }}
             >
-              Continue to sign in
+              Continue to canvas
             </Button>
           </Stack>
         )}

@@ -115,15 +115,11 @@ export function SignIn() {
           >
             {busy ? <CircularProgress size={22} color="inherit" /> : 'Sign in'}
           </Button>
-          <Button
-            variant="text"
-            size="small"
-            disabled={busy}
-            onClick={() => navigate('/claim')}
-            sx={{ color: 'text.secondary' }}
-          >
-            I have a claim token
-          </Button>
+          {/*
+            Legacy claim-token flow — hidden by default now that F's setup
+            wizard handles fresh-install admin creation. Kept reachable via
+            direct navigation to /#/claim for account-recovery cases only.
+          */}
         </Box>
       </Paper>
     </SignInShell>
