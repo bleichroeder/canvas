@@ -8,13 +8,37 @@ import { generateBearer, hashBearer } from '../lib/bearer';
 import { config } from '../config';
 import { logger } from '../log';
 
-export function isLoopback(remoteAddr: string | null | undefined): boolean {
+/**
+ * Whether a client IP is trusted to initiate first-run setup.
+ *
+ * Accepts loopback + any RFC1918 private-network address. The wider criteria
+ * is deliberate: when canvas runs inside Docker, `docker run -p 8787:8787`
+ * NATs external requests so they arrive at Bun from Docker's bridge network
+ * (e.g. 172.17.0.1) — the actual client's IP is lost. Requiring literal
+ * loopback would make /api/setup unreachable from any browser outside the
+ * container, defeating the point.
+ *
+ * The security posture is: canvas at :8787 should only be exposed to trusted
+ * networks before an admin exists. Anyone with LAN or same-host access can
+ * complete setup; that's the same trust boundary users get for `docker run`
+ * itself.
+ */
+export function isTrustedSetupClient(remoteAddr: string | null | undefined): boolean {
   if (!remoteAddr) return false;
-  return (
-    remoteAddr === '127.0.0.1' ||
-    remoteAddr === '::1' ||
-    remoteAddr === '::ffff:127.0.0.1'
-  );
+  // Strip IPv4-mapped IPv6 prefix (::ffff:x.x.x.x)
+  const addr = remoteAddr.replace(/^::ffff:/, '');
+  // IPv6 loopback
+  if (addr === '::1') return true;
+  // IPv4 literal
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/.exec(addr);
+  if (!m) return false;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  if (a === 127) return true;                              // 127.0.0.0/8 loopback
+  if (a === 10) return true;                               // 10.0.0.0/8
+  if (a === 192 && b === 168) return true;                 // 192.168.0.0/16
+  if (a === 172 && b >= 16 && b <= 31) return true;        // 172.16.0.0/12
+  return false;
 }
 
 // Use the return type of Bun.serve() rather than the generic Server<T> type
@@ -24,20 +48,10 @@ type BunServer = ReturnType<typeof Bun.serve>;
 export function makeSetupRoutes(getDb: () => Db, getServer: () => BunServer | null) {
   const r = new Hono();
 
-  // GET /setup/probe — lightweight loopback-only reachability check (no auth).
-  // Used by the first-run wizard to verify it's running on the same host.
+  // GET /setup/probe — public "is setup needed?" flag for the frontend.
+  // No auth, no host restriction — this leaks no secrets, just tells the
+  // wizard whether to redirect to /#/setup or /#/sign-in on load.
   r.get('/setup/probe', (c) => {
-    const server = getServer();
-    let remoteAddr: string | null = null;
-    if (server) {
-      try {
-        const ip = server.requestIP(c.req.raw);
-        remoteAddr = ip?.address ?? null;
-      } catch { /* fallthrough */ }
-    }
-    if (!isLoopback(remoteAddr)) {
-      return c.json({ error: 'setup can only be initiated from localhost' }, 403);
-    }
     const noAdmin = countAdmins(getDb()) === 0;
     return c.json({ setupRequired: noAdmin });
   });
@@ -58,9 +72,9 @@ export function makeSetupRoutes(getDb: () => Db, getServer: () => BunServer | nu
         remoteAddr = ip?.address ?? null;
       } catch { /* fallthrough */ }
     }
-    if (!isLoopback(remoteAddr)) {
-      logger.warn({ remoteAddr }, 'setup attempt from non-loopback');
-      return c.json({ error: 'setup can only be initiated from localhost' }, 403);
+    if (!isTrustedSetupClient(remoteAddr)) {
+      logger.warn({ remoteAddr }, 'setup attempt from untrusted host');
+      return c.json({ error: 'setup can only be initiated from a trusted host (loopback or LAN)' }, 403);
     }
 
     const body = await c.req.json().catch(() => null) as {

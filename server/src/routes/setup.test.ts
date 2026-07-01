@@ -8,7 +8,7 @@ import { Hono } from 'hono';
 import * as schema from '../db/schema';
 import type { Db } from '../db';
 import { runMigrations } from '../db/migrate';
-import { makeSetupRoutes, isLoopback } from './setup';
+import { makeSetupRoutes, isTrustedSetupClient } from './setup';
 import { errorHandler } from '../middleware/error-handler';
 import { createUser, setPasswordHash, countAdmins } from '../storage/users';
 import { config } from '../config';
@@ -52,16 +52,22 @@ const VALID_BODY = {
   deviceLabel: 'My Tesla',
 };
 
-// ── isLoopback unit tests ──────────────────────────────────────────────────────
+// ── isTrustedSetupClient unit tests ────────────────────────────────────────────
 
-describe('isLoopback', () => {
-  test('127.0.0.1 is loopback', () => { expect(isLoopback('127.0.0.1')).toBe(true); });
-  test('::1 is loopback', () => { expect(isLoopback('::1')).toBe(true); });
-  test('::ffff:127.0.0.1 is loopback', () => { expect(isLoopback('::ffff:127.0.0.1')).toBe(true); });
-  test('192.168.1.1 is not loopback', () => { expect(isLoopback('192.168.1.1')).toBe(false); });
-  test('null is not loopback', () => { expect(isLoopback(null)).toBe(false); });
-  test('undefined is not loopback', () => { expect(isLoopback(undefined)).toBe(false); });
-  test('empty string is not loopback', () => { expect(isLoopback('')).toBe(false); });
+describe('isTrustedSetupClient', () => {
+  test('127.0.0.1 is trusted', () => { expect(isTrustedSetupClient('127.0.0.1')).toBe(true); });
+  test('127.5.10.20 (127/8 loopback) is trusted', () => { expect(isTrustedSetupClient('127.5.10.20')).toBe(true); });
+  test('::1 is trusted', () => { expect(isTrustedSetupClient('::1')).toBe(true); });
+  test('::ffff:127.0.0.1 is trusted', () => { expect(isTrustedSetupClient('::ffff:127.0.0.1')).toBe(true); });
+  test('10.0.0.5 (10/8 private) is trusted', () => { expect(isTrustedSetupClient('10.0.0.5')).toBe(true); });
+  test('192.168.1.1 (192.168/16 private) is trusted', () => { expect(isTrustedSetupClient('192.168.1.1')).toBe(true); });
+  test('172.17.0.1 (Docker bridge, 172.16/12 private) is trusted', () => { expect(isTrustedSetupClient('172.17.0.1')).toBe(true); });
+  test('172.31.255.255 (edge of 172.16/12) is trusted', () => { expect(isTrustedSetupClient('172.31.255.255')).toBe(true); });
+  test('172.32.0.1 (outside 172.16/12) is NOT trusted', () => { expect(isTrustedSetupClient('172.32.0.1')).toBe(false); });
+  test('8.8.8.8 (public IP) is NOT trusted', () => { expect(isTrustedSetupClient('8.8.8.8')).toBe(false); });
+  test('null is not trusted', () => { expect(isTrustedSetupClient(null)).toBe(false); });
+  test('undefined is not trusted', () => { expect(isTrustedSetupClient(undefined)).toBe(false); });
+  test('empty string is not trusted', () => { expect(isTrustedSetupClient('')).toBe(false); });
 });
 
 // ── POST /api/setup ────────────────────────────────────────────────────────────
@@ -108,13 +114,27 @@ describe('POST /api/setup', () => {
     expect(res.status).toBe(200);
   });
 
-  test('returns 403 for non-loopback address', async () => {
+  test('192.168.1.100 (LAN) is accepted', async () => {
     const db = makeDb();
     const app = makeApp(db, '192.168.1.100');
     const res = await jsonPost(app, '/api/setup', VALID_BODY);
+    expect(res.status).toBe(200);
+  });
+
+  test('172.17.0.1 (Docker bridge) is accepted', async () => {
+    const db = makeDb();
+    const app = makeApp(db, '172.17.0.1');
+    const res = await jsonPost(app, '/api/setup', VALID_BODY);
+    expect(res.status).toBe(200);
+  });
+
+  test('returns 403 for public IP', async () => {
+    const db = makeDb();
+    const app = makeApp(db, '8.8.8.8');
+    const res = await jsonPost(app, '/api/setup', VALID_BODY);
     expect(res.status).toBe(403);
     const body = await res.json() as { error: string };
-    expect(body.error).toMatch(/localhost/);
+    expect(body.error).toMatch(/trusted host/);
   });
 
   test('returns 403 when server returns null IP', async () => {
@@ -175,7 +195,10 @@ describe('POST /api/setup', () => {
 // ── GET /api/setup/probe ───────────────────────────────────────────────────────
 
 describe('GET /api/setup/probe', () => {
-  test('returns setupRequired=true from loopback when no admin', async () => {
+  // Probe is intentionally public (no host restriction) — it reveals no
+  // secrets, just whether the wizard should fire. Frontend uses it on load.
+
+  test('returns setupRequired=true when no admin exists', async () => {
     const db = makeDb();
     const app = makeApp(db, '127.0.0.1');
     const res = await app.fetch(new Request('http://test/api/setup/probe'));
@@ -184,7 +207,7 @@ describe('GET /api/setup/probe', () => {
     expect(body.setupRequired).toBe(true);
   });
 
-  test('returns setupRequired=false from loopback when admin exists', async () => {
+  test('returns setupRequired=false when admin exists', async () => {
     const db = makeDb();
     createUser(db, { label: 'admin', role: 'admin' });
     const app = makeApp(db, '127.0.0.1');
@@ -194,10 +217,10 @@ describe('GET /api/setup/probe', () => {
     expect(body.setupRequired).toBe(false);
   });
 
-  test('returns 403 from non-loopback', async () => {
+  test('probe is reachable from any host (no host restriction)', async () => {
     const db = makeDb();
-    const app = makeApp(db, '10.0.0.5');
+    const app = makeApp(db, '8.8.8.8');  // public IP
     const res = await app.fetch(new Request('http://test/api/setup/probe'));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 });
