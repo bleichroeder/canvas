@@ -128,3 +128,23 @@ export type NewDeviceSession = typeof deviceSessions.$inferInsert;
 export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
 export type UserSourceAccess = typeof userSourceAccess.$inferSelect;
+
+// ── Sub-project F tables ──────────────────────────────────────────────────────
+
+export const deploymentConfig = sqliteTable('deployment_config', {
+  id: integer('id').primaryKey({ autoIncrement: false }),  // singleton, always 1
+  mode: text('mode', { enum: ['local', 'domain', 'cf-quick', 'cf-named'] })
+    .notNull().default('local'),
+  domain: text('domain'),
+  adminEmail: text('admin_email'),
+  cfNamedToken: text('cf_named_token'),
+  publicUrl: text('public_url'),
+  status: text('status', { enum: ['pending', 'applying', 'ready', 'failed'] })
+    .notNull().default('ready'),
+  statusMessage: text('status_message'),
+  certExpiresAt: integer('cert_expires_at'),
+  lastAppliedAt: integer('last_applied_at'),
+});
+
+export type DeploymentConfig = typeof deploymentConfig.$inferSelect;
+export type NewDeploymentConfig = typeof deploymentConfig.$inferInsert;

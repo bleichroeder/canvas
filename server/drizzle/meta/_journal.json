@@ -22,6 +22,13 @@
       "when": 1782865673168,
       "tag": "0002_tearful_nemesis",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1782918094054,
+      "tag": "0003_curly_phil_sheldon",
+      "breakpoints": true
     }
   ]
 }
