@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Db } from '../db';
-import { parseXSources } from '../lib/x-sources';
+import { getUserSources } from '../lib/user-sources';
+import { getAuthContext } from '../middleware/auth';
 import { isRfc1918Host } from '../lib/rfc1918';
 import { getSourceStatus, putSourceStatus } from '../storage/source-status';
 import { nowSec } from '../lib/time';
@@ -56,7 +57,7 @@ export function makeSourceStatusRoutes(getDb: () => Db) {
     const key = c.req.query('key');
     if (!key) return c.json({ error: 'missing key' }, 400);
 
-    const sources = parseXSources(c.req.raw);
+    const sources = getUserSources(getDb(), getAuthContext(c));
     const src = sources[key];
     if (!src) return c.json({ error: 'unknown source key' }, 404);
 

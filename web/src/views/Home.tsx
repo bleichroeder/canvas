@@ -10,8 +10,7 @@ import LibraryAddOutlinedIcon from '@mui/icons-material/LibraryAddOutlined';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useTheme } from '@mui/material/styles';
 import { api } from '../api';
-import { getSources, SOURCES_EVENT } from '../storage';
-import type { StoredSource } from '../storage';
+import { useSources } from '../lib/SourcesContext';
 import { AppShell } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { Hero } from '../components/Hero';
@@ -49,26 +48,16 @@ export function Home() {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [singleSourceLibraries, setSingleSourceLibraries] = useState<Item[]>([]);
   const [heroH, setHeroH] = useState<number | undefined>(undefined);
-  // Track sources in state so cloud-sync hydration after sign-in (which fires
-  // SOURCES_EVENT) triggers a re-render and re-fetch. Without this, the very
-  // first visit after sign-in renders "empty" because Home mounts before
-  // cloud-sync has finished pulling the user's sources from Supabase.
-  const [sources, setSourcesState] = useState<Record<string, StoredSource>>(() => getSources());
-
-  useEffect(() => {
-    const onChange = () => setSourcesState(getSources());
-    window.addEventListener(SOURCES_EVENT, onChange);
-    window.addEventListener('storage', onChange);
-    return () => {
-      window.removeEventListener(SOURCES_EVENT, onChange);
-      window.removeEventListener('storage', onChange);
-    };
-  }, []);
+  // Sources from the app-level context — fetched once at mount, refetched on focus.
+  const { sources, loading: sourcesLoading } = useSources();
 
   const sourceCount = Object.keys(sources).length;
   const singleSourceKey = sourceCount === 1 ? Object.keys(sources)[0] : undefined;
 
   useEffect(() => {
+    // While the sources context is still loading we can't tell whether there
+    // are 0 sources (genuine empty state) or just haven't fetched yet.
+    if (sourcesLoading) return;
     if (sourceCount === 0) {
       setState({ kind: 'empty' });
       return;
@@ -80,7 +69,7 @@ export function Home() {
       (e: Error) => { if (!cancelled) setState({ kind: 'error', message: e.message }); },
     );
     return () => { cancelled = true; };
-  }, [sourceCount]);
+  }, [sourceCount, sourcesLoading]);
 
   useEffect(() => {
     if (!singleSourceKey) { setSingleSourceLibraries([]); return; }

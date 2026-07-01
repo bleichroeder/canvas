@@ -1,92 +1,58 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type FormEvent } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
-import Divider from '@mui/material/Divider';
 import CircularProgress from '@mui/material/CircularProgress';
-import GoogleIcon from '@mui/icons-material/Google';
-import { getSupabase } from '../lib/supabase';
-import { useAuth } from '../lib/use-auth';
+import { api } from '../api';
+import { setSession } from '../lib/session';
 import { navigate } from '../router';
 
-type Mode = 'sign-in' | 'sign-up';
+function defaultDeviceName(): string {
+  const ua = navigator.userAgent;
+  if (/Tesla/i.test(ua)) return 'Tesla';
+  if (/iPhone/i.test(ua)) return 'iPhone';
+  if (/Android/i.test(ua)) return 'Android';
+  return 'Web';
+}
 
 export function SignIn() {
-  const auth = useAuth();
-  const [mode, setMode] = useState<Mode>('sign-in');
-  const [email, setEmail] = useState('');
+  const [label, setLabel] = useState('');
   const [password, setPassword] = useState('');
+  const [deviceLabel, setDeviceLabel] = useState(defaultDeviceName());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-  const sb = getSupabase();
 
-  useEffect(() => {
-    if (auth.user) navigate('/');
-  }, [auth.user]);
-  if (auth.user) return null;
-
-  if (!sb) {
-    return (
-      <SignInShell>
-        <Paper sx={cardSx}>
-          <Alert severity="error">
-            Authentication is not configured for this build. Contact the administrator.
-          </Alert>
-        </Paper>
-      </SignInShell>
-    );
-  }
-
-  async function submit(e: React.FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!sb) return;
     setBusy(true);
     setError(null);
-    setInfo(null);
     try {
-      if (mode === 'sign-in') {
-        const { error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        navigate('/');
+      const res = await api.authLogin(
+        label.trim(),
+        password,
+        deviceLabel.trim() || defaultDeviceName(),
+      );
+      setSession(res.bearer, res.user);
+      if (!res.user.hasPassword) {
+        navigate('/set-password');
       } else {
-        const { error } = await sb.auth.signUp({ email, password });
-        if (error) throw error;
-        setInfo('Check your email for a confirmation link, then sign in.');
-        setMode('sign-in');
+        navigate('/');
       }
     } catch (e) {
-      setError((e as Error).message);
+      const msg = (e as Error).message ?? '';
+      if (msg.includes('401') || msg.toLowerCase().includes('invalid-credentials') || msg.toLowerCase().includes('invalid credentials')) {
+        setError('Invalid username or password.');
+      } else if (msg.includes('400') || msg.toLowerCase().includes('password-not-set') || msg.toLowerCase().includes('password not set')) {
+        setError('This account does not have a password yet. Use a claim token or ask the admin to reset.');
+      } else {
+        setError(`Sign in failed: ${msg}`);
+      }
     } finally {
       setBusy(false);
     }
-  }
-
-  async function signInWithGoogle() {
-    if (!sb) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const { error } = await sb.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo: window.location.origin },
-      });
-      if (error) throw error;
-      // Browser is redirecting to Google; leave busy=true so the form stays
-      // disabled during the hand-off.
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
-    }
-  }
-
-  function toggleMode() {
-    setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in');
-    setError(null);
-    setInfo(null);
   }
 
   return (
@@ -109,37 +75,17 @@ export function SignIn() {
           <Box component="span" sx={{ color: 'primary.main' }}>&gt;</Box>
         </Typography>
 
-        <Button
-          fullWidth
-          variant="outlined"
-          size="large"
-          startIcon={<GoogleIcon />}
-          onClick={signInWithGoogle}
-          disabled={busy}
-          sx={{
-            py: 1.5,
-            fontSize: 15,
-            borderColor: 'divider',
-            color: 'text.primary',
-            '&:hover': { borderColor: 'primary.main', backgroundColor: 'rgba(79,142,247,0.06)' },
-          }}
-        >
-          Continue with Google
-        </Button>
-
-        <Divider sx={{ my: 2.5, fontSize: 12, color: 'text.secondary' }}>or</Divider>
-
         <Box component="form" onSubmit={submit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            label="Username"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
             required
-            autoComplete="email"
             autoFocus
             disabled={busy}
             fullWidth
+            autoComplete="username"
+            inputProps={{ spellCheck: false, autoCapitalize: 'none', autoCorrect: 'off' }}
           />
           <TextField
             label="Password"
@@ -147,33 +93,36 @@ export function SignIn() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
             disabled={busy}
             fullWidth
+            autoComplete="current-password"
+          />
+          <TextField
+            label="Device name"
+            value={deviceLabel}
+            onChange={(e) => setDeviceLabel(e.target.value)}
+            disabled={busy}
+            fullWidth
+            helperText="Helps identify this session in account settings"
           />
           {error && <Alert severity="error" sx={{ py: 0.5 }}>{error}</Alert>}
-          {info && <Alert severity="success" sx={{ py: 0.5 }}>{info}</Alert>}
           <Button
             type="submit"
             variant="contained"
             size="large"
-            disabled={busy || !email || !password}
+            disabled={busy || !label.trim() || !password}
             sx={{ py: 1.5, fontSize: 15, fontWeight: 600 }}
           >
-            {busy ? <CircularProgress size={22} color="inherit" /> : (mode === 'sign-in' ? 'Sign in' : 'Create account')}
+            {busy ? <CircularProgress size={22} color="inherit" /> : 'Sign in'}
           </Button>
-        </Box>
-
-        <Box sx={{ mt: 2.5, textAlign: 'center' }}>
           <Button
             variant="text"
-            onClick={toggleMode}
+            size="small"
             disabled={busy}
-            sx={{ fontSize: 13, color: 'text.secondary', textTransform: 'none' }}
+            onClick={() => navigate('/claim')}
+            sx={{ color: 'text.secondary' }}
           >
-            {mode === 'sign-in'
-              ? "Don't have an account? Create one"
-              : 'Already have an account? Sign in'}
+            I have a claim token
           </Button>
         </Box>
       </Paper>

@@ -25,7 +25,6 @@
     "@fontsource/inter": "^5.0.18",
     "@mui/icons-material": "^6.1.0",
     "@mui/material": "^6.1.0",
-    "@supabase/supabase-js": "^2.108.2",
     "mp4box": "^0.5.2",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

@@ -9,7 +9,7 @@ import { api } from '../api';
 import { AppShell } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { PosterCard } from '../components/PosterCard';
-import { getSourceLabel } from '../storage';
+import { useSources } from '../lib/SourcesContext';
 import type { Item } from '../types';
 
 export function SearchView() {
@@ -17,6 +17,7 @@ export function SearchView() {
   const [results, setResults] = useState<(Item & { source: string })[]>([]);
   const [loading, setLoading] = useState(false);
   const debounce = useRef<number | undefined>(undefined);
+  const { sources } = useSources();
 
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
@@ -76,7 +77,7 @@ export function SearchView() {
           {[...grouped.entries()].map(([srcKey, hits]) => (
             <Box key={srcKey} sx={{ mb: 4 }}>
               <Typography variant="h3" sx={{ mb: 1.5 }}>
-                {getSourceLabel(srcKey) ?? srcKey}
+                {sources[srcKey]?.label ?? srcKey}
                 <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1.5 }}>
                   · {hits.length} {hits.length === 1 ? 'result' : 'results'}
                 </Typography>

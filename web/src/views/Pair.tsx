@@ -9,7 +9,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import QRCode from 'qrcode';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
-import { addSource, makeSourceKey } from '../storage';
+import { useSources } from '../lib/SourcesContext';
 import { navigate } from '../router';
 import type { StoredSource } from '../storage';
 
@@ -31,10 +31,13 @@ const SOURCE_TYPES: Array<{ type: SourceType; label: string; available: boolean 
 export function Pair() {
   const [state, setState] = useState<State>({ kind: 'choose' });
   const [qrSvg, setQrSvg] = useState<string>('');
+  const [qrUrl, setQrUrl] = useState<string>('');
+  const { refresh: refreshSources } = useSources();
 
   useEffect(() => {
     if (state.kind !== 'pairing') return;
     const url = `${window.location.protocol}//${window.location.host}/#/pair?code=${encodeURIComponent(state.code)}&type=${state.type}`;
+    setQrUrl(url);
     QRCode.toString(url, { type: 'svg', errorCorrectionLevel: 'M', margin: 2, width: 280 })
       .then(setQrSvg)
       .catch(() => setQrSvg(''));
@@ -59,9 +62,9 @@ export function Pair() {
         const res = await api.pairPoll(state.code);
         if (cancelled) return;
         if (res.status === 'approved' && res.source) {
-          const key = makeSourceKey(res.source.label || res.source.baseUrl);
-          addSource(key, res.source);
           await api.pairDelete(state.code).catch(() => {});
+          // Refresh sources from the server so the new source appears immediately.
+          await refreshSources();
           setState({ kind: 'paired', label: res.source.label });
           setTimeout(() => navigate('/settings'), 1200);
           return;
@@ -79,6 +82,52 @@ export function Pair() {
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.kind === 'pairing' ? state.code : null]);
+
+  // The pairing (QR) state renders full-screen without AppShell chrome so the
+  // QR is the star and there is no branded top bar competing for attention.
+  if (state.kind === 'pairing') {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 3, textAlign: 'center' }}>
+        <Typography variant="h2" sx={{ mb: 3 }}>Scan with your phone to pair</Typography>
+        {qrSvg ? (
+          <Box
+            sx={{
+              display: 'inline-block', p: 2.5,
+              backgroundColor: '#ffffff',
+              borderRadius: 2,
+              mb: 3,
+            }}
+            dangerouslySetInnerHTML={{ __html: qrSvg }}
+          />
+        ) : (
+          <Box sx={{ width: 280, height: 280, mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CircularProgress />
+          </Box>
+        )}
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+          Or enter <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{state.code}</Box> at:
+        </Typography>
+        <Typography
+          component="a"
+          href={qrUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          variant="caption"
+          sx={{ display: 'block', mb: 2, fontFamily: 'monospace', color: 'primary.main', textDecoration: 'underline', wordBreak: 'break-all', maxWidth: 480 }}
+        >
+          {qrUrl}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mt: 2 }}>
+          <CircularProgress size={20} />
+          <Typography color="text.secondary">Waiting for approval…</Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+          Expires {new Date(state.expiresAt).toLocaleTimeString()}.
+        </Typography>
+        <Button variant="text" size="small" onClick={() => setState({ kind: 'choose' })} sx={{ mt: 3 }}>Cancel</Button>
+      </Box>
+    );
+  }
 
   return (
     <AppShell>
@@ -109,36 +158,6 @@ export function Pair() {
               ))}
             </Box>
           </>
-        )}
-        {state.kind === 'pairing' && (
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography variant="h2" sx={{ mb: 3 }}>Scan with your phone to pair</Typography>
-            {qrSvg ? (
-              <Box
-                sx={{
-                  display: 'inline-block', p: 2.5,
-                  backgroundColor: '#ffffff',
-                  borderRadius: 2,
-                  mb: 3,
-                }}
-                dangerouslySetInnerHTML={{ __html: qrSvg }}
-              />
-            ) : (
-              <Box sx={{ width: 280, height: 280, mx: 'auto', mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <CircularProgress />
-              </Box>
-            )}
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-              Or enter <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{state.code}</Box> at {window.location.host}/#/pair
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mt: 2 }}>
-              <CircularProgress size={20} />
-              <Typography color="text.secondary">Waiting for approval…</Typography>
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-              Expires {new Date(state.expiresAt).toLocaleTimeString()}.
-            </Typography>
-          </Box>
         )}
         {state.kind === 'paired' && (
           <Box sx={{ textAlign: 'center' }}>

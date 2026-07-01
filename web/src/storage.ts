@@ -1,3 +1,12 @@
+/**
+ * StoredSource — kept for type-compatibility with legacy import sites while
+ * the migration is in progress, but local source persistence is removed.
+ * Sources now live on the server and are fetched via api.listSources() /
+ * SourcesContext. The `token` field is intentionally absent from the server
+ * response (server-side only).
+ *
+ * @deprecated Use ApiSource from lib/SourcesContext instead.
+ */
 export interface StoredSource {
   type: 'plex' | 'jellyfin' | 'flixify' | 'generic';
   baseUrl: string;
@@ -12,7 +21,6 @@ export interface Prefs {
   skipIntro: boolean;
 }
 
-const SOURCES_KEY = 'canvas.sources';
 const PREFS_KEY = 'canvas.prefs';
 
 const DEFAULT_PREFS: Prefs = {
@@ -21,46 +29,6 @@ const DEFAULT_PREFS: Prefs = {
   defaultAudioLang: '',
   skipIntro: false,
 };
-
-export function getSources(): Record<string, StoredSource> {
-  try {
-    const raw = localStorage.getItem(SOURCES_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed !== null ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-export const SOURCES_EVENT = 'canvas:sourcesChanged';
-
-export function setSources(s: Record<string, StoredSource>): void {
-  localStorage.setItem(SOURCES_KEY, JSON.stringify(s));
-  // Fires whenever the source set changes — used by the cloud-sync layer
-  // to push updates to Supabase + by AppShell/Home to refresh derived UI.
-  window.dispatchEvent(new Event(SOURCES_EVENT));
-}
-
-export function addSource(key: string, source: StoredSource): void {
-  const cur = getSources();
-  cur[key] = source;
-  setSources(cur);
-}
-
-export function removeSource(key: string): void {
-  const cur = getSources();
-  delete cur[key];
-  setSources(cur);
-}
-
-export function renameSource(key: string, newLabel: string): void {
-  const cur = getSources();
-  const s = cur[key];
-  if (!s) return;
-  cur[key] = { ...s, label: newLabel };
-  setSources(cur);
-}
 
 export function getPrefs(): Prefs {
   try {
@@ -74,16 +42,6 @@ export function getPrefs(): Prefs {
 
 export function setPrefs(p: Prefs): void {
   localStorage.setItem(PREFS_KEY, JSON.stringify(p));
-}
-
-export function makeSourceKey(label: string): string {
-  // Stable-ish key derived from label; collision-safe by suffix.
-  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 8) || 'src';
-  const existing = getSources();
-  let candidate = slug;
-  let i = 2;
-  while (existing[candidate]) candidate = `${slug}${i++}`;
-  return candidate;
 }
 
 const LIBRARY_NAMES_KEY = 'canvas.libraryNames';
@@ -111,11 +69,6 @@ export function setLibraryName(srcKey: string, libId: string, name: string): voi
       localStorage.setItem(LIBRARY_NAMES_KEY, JSON.stringify(parsed));
     }
   } catch { /* ignore */ }
-}
-
-export function getSourceLabel(srcKey: string): string | undefined {
-  const s = getSources()[srcKey];
-  return s?.label;
 }
 
 const ITEM_TITLES_KEY = 'canvas.itemTitles';

@@ -1,14 +1,19 @@
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { config } from './config';
 import { logger } from './log';
 import { initDb } from './db';
 import { runMigrations } from './db/migrate';
+import { bootstrapAdminIfNeeded } from './lib/bootstrap';
 import { startReaper } from './storage/reaper';
 import { buildApp } from './app';
 
 logger.info({ version: config.version, env: config.NODE_ENV }, 'canvas server starting');
 
+mkdirSync(dirname(config.CANVAS_DB_PATH), { recursive: true });
 const db = initDb(config.CANVAS_DB_PATH);
 runMigrations(db);
+bootstrapAdminIfNeeded(db, { dbPath: config.CANVAS_DB_PATH, claimTokenTtlSec: 24 * 60 * 60 });
 const stopReaper = startReaper(db);
 const app = buildApp(db);
 

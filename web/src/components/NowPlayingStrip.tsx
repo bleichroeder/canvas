@@ -11,10 +11,9 @@ import { useRoute, navigate } from '../router';
 import {
   getNowPlaying,
   clearNowPlaying,
-  getSourceLabel,
-  getSources,
   NOW_PLAYING_EVENT,
 } from '../storage';
+import { useSources } from '../lib/SourcesContext';
 import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
 import type { NowPlaying } from '../storage';
 
@@ -45,6 +44,7 @@ function fmt(sec: number): string {
 export function NowPlayingStrip() {
   const route = useRoute();
   const np = useNowPlaying();
+  const { sources } = useSources();
 
   // Hide while the player itself is mounted, on the phone-pair page, or before
   // anything's ever been played.
@@ -55,8 +55,8 @@ export function NowPlayingStrip() {
   const pct = np.durationSec > 0
     ? Math.min(100, Math.max(0, (np.posSec / np.durationSec) * 100))
     : 0;
-  const sourceType = getSources()[np.src]?.type;
-  const sourceLabel = getSourceLabel(np.src) ?? np.src;
+  const sourceType = sources[np.src]?.type;
+  const sourceLabel = sources[np.src]?.label ?? np.src;
   const remaining = Math.max(0, np.durationSec - np.posSec);
 
   return (

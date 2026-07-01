@@ -9,7 +9,7 @@ import { AppShell } from '../components/AppShell';
 import { EmptyState } from '../components/EmptyState';
 import { Rail } from '../components/Rail';
 import { LibraryCard } from '../components/LibraryCard';
-import { getSourceLabel } from '../storage';
+import { useSources } from '../lib/SourcesContext';
 import type { SourceHomeResponse } from '../types';
 
 interface Props { source: string }
@@ -21,7 +21,8 @@ type State =
 
 export function SourceHome({ source }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' });
-  const label = getSourceLabel(source) ?? source;
+  const { sources } = useSources();
+  const label = sources[source]?.label ?? source;
 
   useEffect(() => {
     setState({ kind: 'loading' });

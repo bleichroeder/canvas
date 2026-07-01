@@ -7,12 +7,12 @@ import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 import DirectionsCarFilledOutlinedIcon from '@mui/icons-material/DirectionsCarFilledOutlined';
 import Box from '@mui/material/Box';
-import { useAuth } from '../lib/use-auth';
+import { getUser } from '../lib/session';
 
 interface DrivingDisclaimerProps {
   /**
    * Whether the current route is a public (non-auth-gated) route. Phone-side
-   * /pair and /sign-in surfaces don't need a driving disclaimer — they're
+   * /pair and /claim surfaces don't need a driving disclaimer — they're
    * not the in-vehicle app surface.
    */
   isPublicRoute: boolean;
@@ -22,18 +22,18 @@ interface DrivingDisclaimerProps {
  * Blocking modal shown once per cold app load, the first time the
  * authenticated user lands on an app screen. Dismisses with an explicit
  * "I understand" tap. In-memory state — page reload re-prompts.
- *
- * Resets on sign-out so a fresh sign-in re-prompts.
  */
 export function DrivingDisclaimer({ isPublicRoute }: DrivingDisclaimerProps) {
-  const auth = useAuth();
   const [acknowledged, setAcknowledged] = useState(false);
+  const user = getUser();
+  const userId = user?.id ?? null;
 
+  // Reset acknowledgment when user signs out (userId becomes null).
   useEffect(() => {
-    if (!auth.user) setAcknowledged(false);
-  }, [auth.user]);
+    if (userId === null) setAcknowledged(false);
+  }, [userId]);
 
-  const open = !!auth.user && !isPublicRoute && !acknowledged;
+  const open = !!user && !isPublicRoute && !acknowledged;
 
   return (
     <Dialog
