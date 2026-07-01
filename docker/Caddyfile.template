@@ -1,0 +1,12 @@
+# Rendered by entrypoint.sh via envsubst for mode=domain.
+# Placeholders: ${DOMAIN}, ${CANVAS_PORT}, ${ADMIN_EMAIL}
+
+{
+	email ${ADMIN_EMAIL}
+	storage file_system /data/caddy
+}
+
+${DOMAIN} {
+	reverse_proxy 127.0.0.1:${CANVAS_PORT}
+	encode gzip
+}
