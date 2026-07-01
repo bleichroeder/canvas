@@ -12,3 +12,19 @@ Thumbs.db
 !.dev.vars.example
 !.env.example
 vendor/
+
+# Local runtime state — SQLite DBs, admin claim tokens, Caddy cert caches,
+# Tailscale sidecar state. Recreated per install; never committed.
+canvas-data/
+caddy-data/
+caddy-config/
+canvas-tailscale-state/
+
+# Local reverse-proxy overlays. The tracked `docker-compose.yml` is the bare
+# canvas service; each user assembles their own stack (Caddy sidecar, CF
+# Tunnel, Tailscale, etc.) via override files kept out of git. See
+# docs/reverse-proxy-examples/ for recipes.
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yml
+Caddyfile
