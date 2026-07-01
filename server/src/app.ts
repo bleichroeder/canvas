@@ -18,6 +18,8 @@ import { makeProgressRoutes } from './routes/progress';
 import { makeSourceStatusRoutes } from './routes/source-status';
 import { makeSubtitlesRoutes } from './routes/subtitles';
 import { makeSourcesMgmtRoutes } from './routes/sources-mgmt';
+import { makeDeploymentRoutes } from './routes/deployment';
+import { makeSetupRoutes } from './routes/setup';
 import { registerAdapter } from './sources/registry';
 import { plexAdapter } from './sources/plex';
 import { flixifyAdapter } from './sources/flixify';
@@ -28,7 +30,10 @@ import type { Db } from './db';
 registerAdapter(plexAdapter);
 registerAdapter(flixifyAdapter);
 
-export function buildApp(db: Db): Hono {
+export function buildApp(
+  db: Db,
+  getServer: () => ReturnType<typeof Bun.serve> | null = () => null,
+): Hono {
   const app = new Hono();
   app.use('*', corsMiddleware());
   app.use('*', requestLog());
@@ -38,6 +43,14 @@ export function buildApp(db: Db): Hono {
   // Auth routes — /claim is public; /me, /logout, /devices/* require auth
   // internally via requireUser applied inside makeAuthRoutes.
   app.route('/api/auth', makeAuthRoutes(() => db));
+
+  // Public setup routes (unauthenticated; localhost guard is inside the route handler).
+  // Mounted BEFORE the admin middleware block so /api/setup/* is not caught by it.
+  app.route('/api', makeSetupRoutes(() => db, getServer));
+
+  // Public deployment status (no auth required).
+  // /api/deployment/status — mounted before admin middleware to avoid accidental auth catch.
+  app.route('/api', makeDeploymentRoutes(() => db));
 
   // Everything else under /api/* requires a valid bearer token.
   app.use('/api/pair/*',        requireUser(() => db));

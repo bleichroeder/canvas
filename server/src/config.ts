@@ -10,6 +10,8 @@ const ConfigSchema = z.object({
   CANVAS_ALLOWED_ORIGINS: z.string()
     .default('http://localhost:5173')
     .transform((s) => s.split(',').map((t) => t.trim()).filter(Boolean)),
+  CANVAS_EXTERNAL_PROXY: z.string().optional().transform((v) => v === '1' || v === 'true'),
+  CANVAS_DATA_DIR: z.string().default('/data'),
 });
 
 export type Config = z.infer<typeof ConfigSchema> & { version: string };

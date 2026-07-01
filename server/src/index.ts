@@ -15,13 +15,19 @@ const db = initDb(config.CANVAS_DB_PATH);
 runMigrations(db);
 bootstrapAdminIfNeeded(db, { dbPath: config.CANVAS_DB_PATH, claimTokenTtlSec: 24 * 60 * 60 });
 const stopReaper = startReaper(db);
-const app = buildApp(db);
+
+// Module-level ref so the setup route can call server.requestIP(req).
+// Assigned right after Bun.serve() returns; the closure is safe because
+// no request can arrive before Bun.serve() completes.
+let serverRef: ReturnType<typeof Bun.serve> | null = null;
+const app = buildApp(db, () => serverRef);
 
 const server = Bun.serve({
   port: config.PORT,
   hostname: config.HOST,
   fetch: app.fetch,
 });
+serverRef = server;
 
 logger.info({ url: `http://${config.HOST}:${config.PORT}` }, 'listening');
 
