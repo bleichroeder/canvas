@@ -67,6 +67,12 @@ function ManagePanel({ user, currentUserId, onDeleted }: ManagePanelProps) {
   const [grantLoading, setGrantLoading] = useState<Record<number, boolean>>({});
   const [copiedToken, setCopiedToken] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetPw, setResetPw] = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
 
   const isSelf = user.id === currentUserId;
   const isAdmin = user.role === 'admin';
@@ -125,11 +131,47 @@ function ManagePanel({ user, currentUserId, onDeleted }: ManagePanelProps) {
     });
   }
 
+  function openResetDialog() {
+    setResetPw('');
+    setResetConfirm('');
+    setResetError(null);
+    setResetOpen(true);
+  }
+
+  async function handleResetPassword() {
+    if (resetPw.length < 8) {
+      setResetError('Password must be at least 8 characters.');
+      return;
+    }
+    if (resetPw !== resetConfirm) {
+      setResetError('Passwords do not match.');
+      return;
+    }
+    setResetLoading(true);
+    setResetError(null);
+    try {
+      await api.adminResetPassword(user.id, resetPw);
+      setResetOpen(false);
+      setResetPw('');
+      setResetConfirm('');
+      setResetSuccess(`Password reset for ${user.label}. Give the new password to them. All their signed-in devices have been signed out.`);
+    } catch (e) {
+      setResetError((e as Error).message);
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
   return (
     <Box sx={{ px: 2, pb: 2, pt: 1 }}>
       {error && (
         <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 1.5 }}>
           {error}
+        </Alert>
+      )}
+      {resetSuccess && (
+        <Alert severity="success" onClose={() => setResetSuccess(null)} sx={{ mb: 1.5 }}>
+          {resetSuccess}
         </Alert>
       )}
       {/* Source access grid — admins get all sources implicitly, skip for them */}
@@ -212,6 +254,17 @@ function ManagePanel({ user, currentUserId, onDeleted }: ManagePanelProps) {
         )}
       </Box>
 
+      {/* Reset password */}
+      <Box sx={{ mb: 2 }}>
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={openResetDialog}
+        >
+          Reset password
+        </Button>
+      </Box>
+
       {/* Delete user */}
       {!isSelf && !isAdmin && (
         <Button
@@ -228,6 +281,46 @@ function ManagePanel({ user, currentUserId, onDeleted }: ManagePanelProps) {
           You cannot delete your own account.
         </Typography>
       )}
+
+      {/* Reset password dialog */}
+      <Dialog open={resetOpen} onClose={() => setResetOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Reset password for {user.label}</DialogTitle>
+        <DialogContent>
+          {resetError && <Alert severity="error" sx={{ mb: 2 }}>{resetError}</Alert>}
+          <TextField
+            autoFocus
+            fullWidth
+            size="small"
+            label="New password"
+            type="password"
+            autoComplete="new-password"
+            value={resetPw}
+            onChange={(e) => setResetPw(e.target.value)}
+            disabled={resetLoading}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            label="Confirm new password"
+            type="password"
+            autoComplete="new-password"
+            value={resetConfirm}
+            onChange={(e) => setResetConfirm(e.target.value)}
+            disabled={resetLoading}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResetOpen(false)} disabled={resetLoading}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => void handleResetPassword()}
+            disabled={resetLoading}
+          >
+            {resetLoading ? 'Resetting…' : 'Reset'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
         <DialogTitle>Delete {user.label}?</DialogTitle>
@@ -251,29 +344,39 @@ function ManagePanel({ user, currentUserId, onDeleted }: ManagePanelProps) {
 interface AddUserModalProps {
   open: boolean;
   onClose: () => void;
-  onCreated: (claimToken: string) => void;
+  /** claimToken is defined when user was created without a password; undefined when created with a password */
+  onCreated: (label: string, claimToken?: string) => void;
 }
 
 function AddUserModal({ open, onClose, onCreated }: AddUserModalProps) {
   const [label, setLabel] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function handleClose() {
     setLabel('');
+    setPassword('');
     setError(null);
     onClose();
   }
 
   async function handleCreate() {
     if (!label.trim()) return;
+    const trimmedLabel = label.trim();
+    const usePassword = password.length > 0;
+    if (usePassword && password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const { claimToken } = await api.adminCreateUser(label.trim());
-      onCreated(claimToken ?? '');
+      const res = await api.adminCreateUser(trimmedLabel, usePassword ? password : undefined);
       setLabel('');
+      setPassword('');
       onClose();
+      onCreated(trimmedLabel, res.claimToken);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -286,7 +389,7 @@ function AddUserModal({ open, onClose, onCreated }: AddUserModalProps) {
       <DialogTitle>Add user</DialogTitle>
       <DialogContent>
         <DialogContentText sx={{ mb: 2 }}>
-          Enter a display label for the new user. A one-time claim token will be generated — share it with them to sign in.
+          Enter a display name and optionally set an initial password. Leave the password blank to generate a one-time claim token instead.
         </DialogContentText>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <TextField
@@ -298,6 +401,19 @@ function AddUserModal({ open, onClose, onCreated }: AddUserModalProps) {
           onChange={(e) => setLabel(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
           disabled={loading}
+          sx={{ mb: 2 }}
+        />
+        <TextField
+          fullWidth
+          size="small"
+          label="Initial password (optional)"
+          type="password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') void handleCreate(); }}
+          disabled={loading}
+          helperText="Leave blank to send an invite via claim token instead."
         />
       </DialogContent>
       <DialogActions>
@@ -328,6 +444,7 @@ export function Users() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [newToken, setNewToken] = useState<string | null>(null);
+  const [newUserLabel, setNewUserLabel] = useState<string | null>(null);
   const [copiedNew, setCopiedNew] = useState(false);
 
   const loadUsers = useCallback(async () => {
@@ -345,8 +462,9 @@ export function Users() {
 
   useEffect(() => { void loadUsers(); }, [loadUsers]);
 
-  function handleUserCreated(token: string) {
-    setNewToken(token);
+  function handleUserCreated(label: string, claimToken?: string) {
+    setNewUserLabel(label);
+    setNewToken(claimToken ?? null);
     void loadUsers();
   }
 
@@ -374,25 +492,29 @@ export function Users() {
           </Button>
         </Box>
 
-        {newToken && (
+        {newUserLabel && (
           <Alert
             severity="success"
             sx={{ mb: 3 }}
-            onClose={() => setNewToken(null)}
+            onClose={() => { setNewUserLabel(null); setNewToken(null); }}
             action={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography sx={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>
-                  {newToken}
-                </Typography>
-                <Tooltip title={copiedNew ? 'Copied!' : 'Copy'}>
-                  <IconButton size="small" onClick={copyNewToken}>
-                    <ContentCopyIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
+              newToken ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography sx={{ fontFamily: 'monospace', fontSize: 13, wordBreak: 'break-all' }}>
+                    {newToken}
+                  </Typography>
+                  <Tooltip title={copiedNew ? 'Copied!' : 'Copy'}>
+                    <IconButton size="small" onClick={copyNewToken}>
+                      <ContentCopyIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              ) : undefined
             }
           >
-            User created. Share this claim token:
+            {newToken
+              ? `User created. Share this claim token:`
+              : `User created. Share the username "${newUserLabel}" and their password with them.`}
           </Alert>
         )}
 
