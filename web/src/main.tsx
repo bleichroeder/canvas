@@ -5,7 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import Fade from '@mui/material/Fade';
 import { theme } from './theme';
 import { useRoute, matchRoute, navigate } from './router';
-import { getUser } from './lib/session';
+import { getUser, clearSession } from './lib/session';
 import { SourcesProvider } from './lib/SourcesContext';
 import { Home } from './views/Home';
 import { SourceHome } from './views/SourceHome';
@@ -84,17 +84,14 @@ function App() {
     window.dispatchEvent(new Event('canvas:ready'));
   }, []);
 
-  // On app load, if unauthenticated, probe /api/setup/probe to determine
-  // whether first-run setup is needed. If setupRequired, redirect to /#/setup.
-  // If not, let the normal needsClaimRedirect → /sign-in logic handle it.
+  // On app load, ALWAYS probe /api/setup/probe. Even when localStorage looks
+  // like an authenticated user, the server DB may have been reset (fresh volume,
+  // container recreated, etc.) — in that case localStorage is stale and the
+  // wizard needs to run. Skipping the probe when `user` is truthy would strand
+  // the user on /sign-in with credentials that no longer exist on the server.
   useEffect(() => {
-    if (user) {
-      // Already authenticated — no probe needed.
-      setSetupChecked(true);
-      return;
-    }
-    // If already on /setup, no need to probe — just mark checked.
     if (route.path === '/setup') {
+      // Already on setup — no probe needed, no redirect.
       setSetupChecked(true);
       return;
     }
@@ -102,6 +99,8 @@ function App() {
     api.setupProbe().then((res) => {
       if (cancelled) return;
       if (res.setupRequired) {
+        // Wipe any stale localStorage session — server has no matching admin.
+        clearSession();
         navigate('/setup');
       }
       setSetupChecked(true);
