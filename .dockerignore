@@ -1,0 +1,33 @@
+# Node modules — reinstalled inside the image
+**/node_modules
+web/dist
+web/.env.local
+web/.env
+
+# Server local state
+server/data
+server/node_modules
+server/bunfig.toml.bak
+data
+
+# Local logs and OS junk
+*.log
+**/.DS_Store
+Thumbs.db
+
+# Docs + git + IDE — not needed at runtime
+docs/
+.git/
+.github/
+.vscode/
+.idea/
+
+# Existing worker (frozen — not part of the self-host image)
+worker/
+
+# Other repos in this workspace
+bookmarklet/
+
+# Test caches
+coverage/
+.nyc_output/

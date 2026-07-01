@@ -9,7 +9,6 @@
 # entrypoint.sh; see that script for the ":8080" plain-HTTP variant.
 
 {
-	email {$CANVAS_ADMIN_EMAIL}
 	${CANVAS_LE_STAGING_LINE}
 	# Persist certs on the /data volume so they survive container restarts.
 	storage file_system /data/caddy
