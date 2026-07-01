@@ -4,66 +4,80 @@ Self-hosted Tesla-in-car streaming client. Bypasses Tesla's `<video>`-while-not-
 
 > Passenger entertainment only — not for the driver, not for a moving vehicle.
 
-## Requirements
-
-- Docker
-- A machine on your home network (Raspberry Pi 4/5, spare desktop, NAS with Docker, etc.)
-- A way to put HTTPS in front of canvas (see [reverse-proxy recipes](docs/reverse-proxy-examples/))
-
 ## Quick start
 
 ```bash
-mkdir canvas && cd canvas
-curl -O https://raw.githubusercontent.com/dherzfeld/canvas/main/docker-compose.yml
-docker compose up -d
+docker run -d --restart unless-stopped \
+  --name canvas \
+  -p 80:80 -p 443:443 -p 8787:8787 \
+  -v canvas-data:/data \
+  ghcr.io/dherzfeld/canvas:latest
 ```
 
-Canvas listens on HTTP port 8787. Verify with:
+Or with `docker compose` — download [`docker-compose.yml`](docker-compose.yml) alongside it and `docker compose up -d`.
+
+Then open **`http://localhost:8787/`** in a browser. The setup wizard walks you through:
+
+1. **Create admin account** — username + password. Localhost / LAN only until you complete the wizard.
+2. **Pick how canvas is exposed** — four modes to choose from (details in [`docs/deployment-modes.md`](docs/deployment-modes.md)):
+   - **Cloudflare Quick Tunnel** *(recommended default)* — one click, no signup, canvas gets a public `<random>.trycloudflare.com` URL
+   - **Custom domain + Let's Encrypt** — bring your own domain, forward ports 80/443, canvas auto-fetches a cert
+   - **Cloudflare Named Tunnel** — paste a token from your CF Zero Trust dashboard for a stable URL
+   - **Local only** — HTTP on 8787, LAN-only access
+3. **Apply** — canvas restarts, obtains TLS certs / opens the tunnel (~5-30 seconds), then shows your public URL
+
+Bookmark that URL on your Tesla (or any device); sign in with the admin credentials you just created.
+
+## Adding sources
+
+Once signed in: **Settings → Sources → Pair new source**. Scan the QR from your phone, complete the Plex sign-in on the phone. Canvas remembers the source per-user; multi-user households can grant/revoke each source per-user in Settings → Users.
+
+## Adding users
+
+Admin: **Settings → Users → Add user** (label + initial password). Share with the family member; they sign in from any device with those credentials. Individual users see only sources the admin has granted them.
+
+## Changing deployment mode later
+
+**Settings → Deployment** (admin only). Same 4-mode picker as the wizard, plus current status + cert expiry. Changing modes triggers a ~10-second container restart.
+
+## Advanced: external reverse proxy
+
+If you'd rather run your own reverse proxy in front of canvas:
 
 ```bash
-curl http://localhost:8787/health
-# {"ok":true,"version":"..."}
+docker run -d --restart unless-stopped \
+  -e CANVAS_EXTERNAL_PROXY=1 \
+  -p 8787:8787 \
+  -v canvas-data:/data \
+  ghcr.io/dherzfeld/canvas:latest
 ```
 
-Then pick a reverse-proxy recipe from [`docs/reverse-proxy-examples/`](docs/reverse-proxy-examples/) to get HTTPS in front. Recipes assume canvas is already running on `:8787` and add a proxy in front.
+Canvas skips its bundled Caddy + cloudflared and runs HTTP-only on `:8787`. Point your existing nginx / Traefik / Caddy / Cloudflare Tunnel / Tailscale at that. Settings → Deployment shows "Managed externally."
 
-## Why do I need a reverse proxy?
+## Updating
 
-Canvas uses the browser's **WebCodecs API** to render video onto a canvas element — that's how it bypasses Tesla's video-in-motion restriction. WebCodecs is a **secure-context API**; it only works over HTTPS or on `localhost`. Real-world use — Tesla, phone, another laptop — requires HTTPS.
+```bash
+docker pull ghcr.io/dherzfeld/canvas:latest
+docker restart canvas
+```
 
-Canvas doesn't ship its own TLS story so we don't dictate infrastructure decisions or bloat the image. If you already have nginx / Caddy / Traefik / Cloudflare Tunnel / Tailscale in your stack, point it at `canvas:8787`. If you don't, the recipes give you a working stack in minutes.
-
-## First login
-
-Once you have HTTPS in front and can reach canvas from a browser:
-
-1. `docker logs canvas` shows the admin claim token on first run (also written to `./canvas-data/admin-claim-token.txt`).
-2. Open canvas → `/#/claim` → paste the token → set a password.
-3. Subsequent logins use username + password at `/#/sign-in`.
-
-Additional users are created from Settings → Users; admin picks their initial password.
+Volume state (`canvas-data`) survives updates: SQLite DB, deployment config, Caddy certs (if applicable).
 
 ## Environment variables
 
 | Var | Default | Description |
 |---|---|---|
-| `CANVAS_PORT` | `8787` | HTTP port |
+| `CANVAS_PORT` | `8787` | Internal Bun server port |
 | `CANVAS_DB_PATH` | `/data/canvas.db` | SQLite path |
-| `CANVAS_WEB_DIR` | `/app/web` | Static frontend directory (set only for local dev) |
-| `CANVAS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated CORS allowlist. Rarely needed when reverse-proxied same-origin. |
-
-## Updating
-
-```bash
-docker compose pull && docker compose up -d
-```
-
-`./canvas-data/` (SQLite database, admin claim token file) survives updates.
+| `CANVAS_WEB_DIR` | `/app/web` | Static frontend dir (rarely changed) |
+| `CANVAS_DATA_DIR` | `/data` | Persistent state root |
+| `CANVAS_EXTERNAL_PROXY` | (unset) | `1` = disable bundled Caddy/cloudflared |
+| `CANVAS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated CORS allowlist (dev only; ignored in bundled-proxy modes since everything is same-origin) |
 
 ## Layout
 
 - `server/` — Bun + Hono + Drizzle + SQLite backend. See `server/README.md` for dev commands.
-- `web/` — Vite + React + MUI frontend. `cd web && npm run dev` for hot reload; set `VITE_CANVAS_API=http://localhost:8787` in `web/.env.local` to point at a separately-running server.
+- `web/` — Vite + React + MUI frontend. Built + bundled into the Docker image; `cd web && npm run dev` for hot-reload dev.
 - `worker/` — Frozen legacy Cloudflare Worker.
 
-Design + implementation docs: `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+Design docs: `docs/superpowers/specs/`. Implementation plans: `docs/superpowers/plans/`.
