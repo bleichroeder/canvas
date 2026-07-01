@@ -25,16 +25,16 @@ import { logger } from '../log';
  */
 export function refreshDeploymentSync(db: Db, dataDir: string): DeploymentConfig {
   const dc = getDeploymentConfig(db);
-  let patch: Partial<{ status: DeploymentConfig['status']; publicUrl: string | null }> = {};
+  const patch: Partial<{ status: DeploymentConfig['status']; publicUrl: string | null }> = {};
 
-  // Status: pending/applying -> ready. If entrypoint failed to spawn something
-  // it would have exit(1)'d and Bun wouldn't have booted at all.
-  if (dc.status === 'pending' || dc.status === 'applying') {
-    patch.status = 'ready';
-  }
-
-  // Compute publicUrl.
+  // Compute publicUrl per mode.
+  //   local     — null
+  //   domain    — from config.domain (Caddy will hit LE; URL is knowable up front)
+  //   cf-named  — from config.domain (user sets it in CF dashboard)
+  //   cf-quick  — from the sidecar file written by entrypoint's stdout parser
+  //                once cloudflared connects. May be null on early polls.
   let nextUrl: string | null | undefined = undefined;
+  let cfQuickUrlReady = false;
   switch (dc.mode) {
     case 'local':
       nextUrl = null;
@@ -43,9 +43,6 @@ export function refreshDeploymentSync(db: Db, dataDir: string): DeploymentConfig
       nextUrl = dc.domain ? `https://${dc.domain}/` : null;
       break;
     case 'cf-named':
-      // Named tunnels expose the URL the user configured in CF dashboard;
-      // we don't know the exact hostname unless the user saved it into
-      // `domain`. Fall back to null when no domain is stored.
       nextUrl = dc.domain ? `https://${dc.domain}/` : null;
       break;
     case 'cf-quick': {
@@ -53,22 +50,34 @@ export function refreshDeploymentSync(db: Db, dataDir: string): DeploymentConfig
       if (existsSync(p)) {
         try {
           const raw = readFileSync(p, 'utf8').trim();
-          nextUrl = raw.length > 0 ? raw : null;
+          if (raw.length > 0) {
+            nextUrl = raw;
+            cfQuickUrlReady = true;
+          }
         } catch (e) {
           logger.warn({ err: (e as Error).message, path: p }, 'deployment-sync: sidecar read failed');
-          nextUrl = null;
         }
-      } else {
-        // File may appear soon (cloudflared still connecting); leave whatever
-        // is in DB and let the next poll try again.
-        nextUrl = undefined;
       }
+      // else: cloudflared still connecting; leave whatever is in DB (probably null).
       break;
     }
   }
 
   if (nextUrl !== undefined && nextUrl !== dc.publicUrl) {
     patch.publicUrl = nextUrl;
+  }
+
+  // Status: pending/applying -> ready. Special case for cf-quick — hold in
+  // 'applying' until the URL sidecar file lands, so the wizard keeps polling
+  // and doesn't advance to step 4 with publicUrl=null.
+  if (dc.status === 'pending' || dc.status === 'applying') {
+    if (dc.mode === 'cf-quick' && !cfQuickUrlReady) {
+      // Force status='applying' if it's still 'pending' — keeps the wizard in
+      // its spinner state accurately.
+      if (dc.status === 'pending') patch.status = 'applying';
+    } else {
+      patch.status = 'ready';
+    }
   }
 
   if (Object.keys(patch).length === 0) return dc;
