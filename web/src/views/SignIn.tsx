@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type FormEvent } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -18,18 +18,23 @@ function defaultDeviceName(): string {
   return 'Web';
 }
 
-export function Claim() {
-  const [token, setToken] = useState('');
+export function SignIn() {
+  const [label, setLabel] = useState('');
+  const [password, setPassword] = useState('');
   const [deviceLabel, setDeviceLabel] = useState(defaultDeviceName());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const res = await api.authClaim(token.trim(), deviceLabel.trim() || defaultDeviceName());
+      const res = await api.authLogin(
+        label.trim(),
+        password,
+        deviceLabel.trim() || defaultDeviceName(),
+      );
       setSession(res.bearer, res.user);
       if (!res.user.hasPassword) {
         navigate('/set-password');
@@ -37,11 +42,13 @@ export function Claim() {
         navigate('/');
       }
     } catch (e) {
-      const msg = (e as Error).message;
-      if (msg.includes('unauthorized') || msg.includes('410') || msg.includes('invalid or expired')) {
-        setError('Invalid or expired claim token. Ask the admin to regenerate it.');
+      const msg = (e as Error).message ?? '';
+      if (msg.includes('401') || msg.toLowerCase().includes('invalid-credentials') || msg.toLowerCase().includes('invalid credentials')) {
+        setError('Invalid username or password.');
+      } else if (msg.includes('400') || msg.toLowerCase().includes('password-not-set') || msg.toLowerCase().includes('password not set')) {
+        setError('This account does not have a password yet. Use a claim token or ask the admin to reset.');
       } else {
-        setError(msg);
+        setError(`Sign in failed: ${msg}`);
       }
     } finally {
       setBusy(false);
@@ -49,7 +56,7 @@ export function Claim() {
   }
 
   return (
-    <ClaimShell>
+    <SignInShell>
       <Paper sx={cardSx}>
         <Typography
           component="h1"
@@ -70,15 +77,25 @@ export function Claim() {
 
         <Box component="form" onSubmit={submit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
-            label="Claim token"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
+            label="Username"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
             required
             autoFocus
             disabled={busy}
             fullWidth
-            placeholder="Paste token from admin"
+            autoComplete="username"
             inputProps={{ spellCheck: false, autoCapitalize: 'none', autoCorrect: 'off' }}
+          />
+          <TextField
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            disabled={busy}
+            fullWidth
+            autoComplete="current-password"
           />
           <TextField
             label="Device name"
@@ -93,14 +110,23 @@ export function Claim() {
             type="submit"
             variant="contained"
             size="large"
-            disabled={busy || !token.trim()}
+            disabled={busy || !label.trim() || !password}
             sx={{ py: 1.5, fontSize: 15, fontWeight: 600 }}
           >
             {busy ? <CircularProgress size={22} color="inherit" /> : 'Sign in'}
           </Button>
+          <Button
+            variant="text"
+            size="small"
+            disabled={busy}
+            onClick={() => navigate('/claim')}
+            sx={{ color: 'text.secondary' }}
+          >
+            I have a claim token
+          </Button>
         </Box>
       </Paper>
-    </ClaimShell>
+    </SignInShell>
   );
 }
 
@@ -115,7 +141,7 @@ const cardSx = {
   boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
 } as const;
 
-function ClaimShell({ children }: { children: ReactNode }) {
+function SignInShell({ children }: { children: ReactNode }) {
   return (
     <Box
       sx={{

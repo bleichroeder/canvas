@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type FormEvent } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -7,49 +7,51 @@ import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import { api } from '../api';
-import { setSession } from '../lib/session';
+import { getUser, getBearer, setSession } from '../lib/session';
 import { navigate } from '../router';
 
-function defaultDeviceName(): string {
-  const ua = navigator.userAgent;
-  if (/Tesla/i.test(ua)) return 'Tesla';
-  if (/iPhone/i.test(ua)) return 'iPhone';
-  if (/Android/i.test(ua)) return 'Android';
-  return 'Web';
-}
-
-export function Claim() {
-  const [token, setToken] = useState('');
-  const [deviceLabel, setDeviceLabel] = useState(defaultDeviceName());
+export function SetPassword() {
+  const user = getUser();
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(e: React.FormEvent) {
+  if (!user) {
+    navigate('/sign-in');
+    return null;
+  }
+  if (user.hasPassword) {
+    navigate('/');
+    return null;
+  }
+
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setError(null);
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    if (password !== confirm) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setBusy(true);
     try {
-      const res = await api.authClaim(token.trim(), deviceLabel.trim() || defaultDeviceName());
-      setSession(res.bearer, res.user);
-      if (!res.user.hasPassword) {
-        navigate('/set-password');
-      } else {
-        navigate('/');
-      }
+      await api.authSetPassword(password);
+      const bearer = getBearer()!;
+      setSession(bearer, { ...user!, hasPassword: true });
+      navigate('/');
     } catch (e) {
-      const msg = (e as Error).message;
-      if (msg.includes('unauthorized') || msg.includes('410') || msg.includes('invalid or expired')) {
-        setError('Invalid or expired claim token. Ask the admin to regenerate it.');
-      } else {
-        setError(msg);
-      }
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <ClaimShell>
+    <SetPasswordShell>
       <Paper sx={cardSx}>
         <Typography
           component="h1"
@@ -58,7 +60,7 @@ export function Claim() {
             fontWeight: 500,
             letterSpacing: '4px',
             lineHeight: 1,
-            mb: 4,
+            mb: 3,
             textAlign: 'center',
             color: 'text.primary',
           }}
@@ -68,39 +70,48 @@ export function Claim() {
           <Box component="span" sx={{ color: 'primary.main' }}>&gt;</Box>
         </Typography>
 
+        <Typography variant="h6" sx={{ mb: 0.5, fontWeight: 600 }}>
+          Set your password
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
+          Welcome, {user.label}. Choose a password to use for future sign-ins on any device.
+        </Typography>
+
         <Box component="form" onSubmit={submit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
-            label="Claim token"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
+            label="New password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             required
             autoFocus
             disabled={busy}
             fullWidth
-            placeholder="Paste token from admin"
-            inputProps={{ spellCheck: false, autoCapitalize: 'none', autoCorrect: 'off' }}
+            autoComplete="new-password"
           />
           <TextField
-            label="Device name"
-            value={deviceLabel}
-            onChange={(e) => setDeviceLabel(e.target.value)}
+            label="Confirm password"
+            type="password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            required
             disabled={busy}
             fullWidth
-            helperText="Helps identify this session in account settings"
+            autoComplete="new-password"
           />
           {error && <Alert severity="error" sx={{ py: 0.5 }}>{error}</Alert>}
           <Button
             type="submit"
             variant="contained"
             size="large"
-            disabled={busy || !token.trim()}
+            disabled={busy || !password || !confirm}
             sx={{ py: 1.5, fontSize: 15, fontWeight: 600 }}
           >
-            {busy ? <CircularProgress size={22} color="inherit" /> : 'Sign in'}
+            {busy ? <CircularProgress size={22} color="inherit" /> : 'Save password'}
           </Button>
         </Box>
       </Paper>
-    </ClaimShell>
+    </SetPasswordShell>
   );
 }
 
@@ -115,7 +126,7 @@ const cardSx = {
   boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
 } as const;
 
-function ClaimShell({ children }: { children: ReactNode }) {
+function SetPasswordShell({ children }: { children: ReactNode }) {
   return (
     <Box
       sx={{

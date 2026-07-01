@@ -5,6 +5,7 @@ export interface SessionUser {
   id: number;
   label: string;
   role: 'admin' | 'member';
+  hasPassword: boolean;
 }
 
 export function getBearer(): string | null {

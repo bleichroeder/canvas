@@ -271,7 +271,7 @@ function AddUserModal({ open, onClose, onCreated }: AddUserModalProps) {
     setError(null);
     try {
       const { claimToken } = await api.adminCreateUser(label.trim());
-      onCreated(claimToken);
+      onCreated(claimToken ?? '');
       setLabel('');
       onClose();
     } catch (e) {

@@ -17,6 +17,8 @@ import { Pair } from './views/Pair';
 import { PhonePair } from './views/PhonePair';
 import { Player } from './views/Player';
 import { Claim } from './views/Claim';
+import { SignIn } from './views/SignIn';
+import { SetPassword } from './views/SetPassword';
 import { Users } from './views/Users';
 import { Devices } from './views/Devices';
 import { NowPlayingStrip } from './components/NowPlayingStrip';
@@ -36,15 +38,21 @@ function NotFound() {
 
 // Routes accessible without a canvas account. /pair is the phone-side
 // helper for the Tesla's QR — anyone holding the short-lived pair code is
-// authorized for THAT pairing. /claim is the auth entry point.
-const PUBLIC_ROUTES = new Set(['/claim', '/pair']);
+// authorized for THAT pairing. /claim and /sign-in are auth entry points.
+// /set-password is public so newly-claimed users can set their password
+// before the session fully resolves.
+const PUBLIC_ROUTES = new Set(['/claim', '/sign-in', '/set-password', '/pair']);
 
 function App() {
   const route = useRoute();
   const user = getUser();
   const isPublicRoute = PUBLIC_ROUTES.has(route.path);
-  const needsClaimRedirect = !isPublicRoute && !user;
-  const needsHomeRedirect = route.path === '/claim' && !!user;
+  const needsSignInRedirect = !isPublicRoute && !user;
+  // Authenticated user without a password must finish setup before going anywhere else.
+  const needsSetPasswordRedirect = !!user && !user.hasPassword && route.path !== '/set-password';
+  const needsHomeRedirect = (route.path === '/claim' || route.path === '/sign-in') && !!user && user.hasPassword;
+  // Keep old alias for clarity in effects below.
+  const needsClaimRedirect = needsSignInRedirect;
 
   // Defer the entire route render until the splash leaves the DOM. Without
   // this, the Claim form mounts behind the splash and password-manager
@@ -71,9 +79,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (needsClaimRedirect) navigate('/claim');
+    if (needsClaimRedirect) navigate('/sign-in');
+    else if (needsSetPasswordRedirect) navigate('/set-password');
     else if (needsHomeRedirect) navigate('/');
-  }, [needsClaimRedirect, needsHomeRedirect]);
+  }, [needsClaimRedirect, needsSetPasswordRedirect, needsHomeRedirect]);
 
   const routes: Array<[string, (params: Record<string, string>) => React.JSX.Element]> = [
     ['/', () => <Home />],
@@ -89,12 +98,14 @@ function App() {
     ['/settings/devices', () => <Devices />],
     ['/pair', () => <PhonePair />],
     ['/claim', () => <Claim />],
+    ['/sign-in', () => <SignIn />],
+    ['/set-password', () => <SetPassword />],
   ];
 
   // While the splash is still up, don't mount the visible tree.
   if (!splashGone) return null;
   // During the brief window after redirect fires but before the hash update lands.
-  if (needsClaimRedirect || needsHomeRedirect) return null;
+  if (needsClaimRedirect || needsSetPasswordRedirect || needsHomeRedirect) return null;
 
   let element: React.JSX.Element = <NotFound />;
   for (const [pattern, renderFn] of routes) {

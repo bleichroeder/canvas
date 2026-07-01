@@ -9,7 +9,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (res.status === 401) {
     clearSession();
-    if (location.hash !== '#/claim') location.hash = '#/claim';
+    if (location.hash !== '#/sign-in') location.hash = '#/sign-in';
     throw new Error('unauthorized');
   }
   if (!res.ok) {
@@ -22,6 +22,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 import type { HomeRow, Item, ItemDetail, BrowseResult, PlayResolution, SourceHomeResponse } from './types';
 import type { StoredSource } from './storage';
+import type { SessionUser } from './lib/session';
 
 export const api = {
   home: () => request<{ rows: (HomeRow & { source: string })[]; errors: { source: string; status: number; message: string }[]; libraryCounts: Record<string, number> }>('/api/home'),
@@ -104,7 +105,7 @@ export const api = {
     const res = await fetch(`${API_BASE}${relativeUrl}`, { headers });
     if (res.status === 401) {
       clearSession();
-      if (location.hash !== '#/claim') location.hash = '#/claim';
+      if (location.hash !== '#/sign-in') location.hash = '#/sign-in';
       throw new Error('unauthorized');
     }
     if (!res.ok) {
@@ -116,18 +117,42 @@ export const api = {
 
   // Auth endpoints
   authClaim: (token: string, deviceLabel: string) =>
-    request<{ bearer: string; user: { id: number; label: string; role: 'admin' | 'member' } }>('/api/auth/claim', {
+    request<{ bearer: string; user: SessionUser }>('/api/auth/claim', {
       method: 'POST', body: JSON.stringify({ token, deviceLabel }),
     }),
-  authMe: () => request<{ user: { id: number; label: string; role: 'admin' | 'member' }; devices: { id: string; label: string; lastSeenAt: number; current: boolean }[] }>('/api/auth/me'),
+  authMe: () => request<{ user: SessionUser; devices: { id: string; label: string; lastSeenAt: number; current: boolean }[] }>('/api/auth/me'),
   authLogout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   authRevokeDevice: (id: string) => request<void>(`/api/auth/devices/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  authLogin: (label: string, password: string, deviceLabel: string) =>
+    request<{ bearer: string; user: SessionUser }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ label, password, deviceLabel }),
+    }),
+  authSetPassword: (newPassword: string) =>
+    request<void>('/api/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify({ newPassword }),
+    }),
+  authChangePassword: (currentPassword: string, newPassword: string) =>
+    request<void>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 
   // Admin endpoints
   adminListUsers: () => request<{ id: number; label: string; role: 'admin' | 'member'; deviceCount: number; sourceAccessCount: number | null; createdAt: number }[]>('/api/admin/users'),
-  adminCreateUser: (label: string) => request<{ user: { id: number; label: string; role: 'admin' | 'member' }; claimToken: string }>('/api/admin/users', { method: 'POST', body: JSON.stringify({ label }) }),
+  adminCreateUser: (label: string, password?: string) =>
+    request<{ user: SessionUser; claimToken?: string }>('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(password ? { label, password } : { label }),
+    }),
   adminDeleteUser: (id: number) => request<void>(`/api/admin/users/${id}`, { method: 'DELETE' }),
   adminRegenerateClaim: (userId: number) => request<{ claimToken: string }>(`/api/admin/users/${userId}/claim-token`, { method: 'POST' }),
+  adminResetPassword: (userId: number, newPassword: string) =>
+    request<void>(`/api/admin/users/${userId}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ newPassword }),
+    }),
   adminGrantSource: (userId: number, sourceId: number) => request<void>(`/api/admin/users/${userId}/sources/${sourceId}`, { method: 'POST' }),
   adminRevokeSource: (userId: number, sourceId: number) => request<void>(`/api/admin/users/${userId}/sources/${sourceId}`, { method: 'DELETE' }),
 
