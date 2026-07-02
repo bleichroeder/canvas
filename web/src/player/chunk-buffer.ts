@@ -81,8 +81,13 @@ export class ChunkBuffer {
     if (tailPtsSec === null) return;
     const clock = this.opts.getClock();
     const lead = tailPtsSec - clock;
-    if (this.state === 'flowing' && lead >= this.opts.pauseLeadSec) {
-      this.state = 'paused';
+    if (lead >= this.opts.pauseLeadSec) {
+      // Always re-emit pause while over threshold — the fetcher may have been
+      // unpaused by VideoSink's onBackpressure signal even while our internal
+      // state is still 'paused'. Fetcher.pause() is idempotent so repeated calls
+      // are cheap; this ensures we can't get stuck with the fetcher running
+      // unrestrained while our internal state thinks it's paused.
+      if (this.state === 'flowing') this.state = 'paused';
       this.opts.onBackpressure('pause');
     } else if (this.state === 'paused' && lead <= this.opts.resumeLeadSec) {
       this.state = 'flowing';
