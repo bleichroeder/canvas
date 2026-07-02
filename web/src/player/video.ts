@@ -36,6 +36,13 @@ const LOW_WATER = 16;
 // is the one closest to the clock and most likely to be the next one drawn.
 const HARD_CAP = 60;
 
+// If the queue head is more than this many seconds past the audio clock,
+// close head frames and iterate. Without this, a burst of far-future
+// frames (e.g., after fetcher pause/resume delivers a TCP-buffered burst)
+// pins the queue at HARD_CAP; drawDue rejects the head every tick, and
+// video visibly freezes until the clock catches up (10+ seconds).
+const MAX_HEAD_LEAD_SEC = 2.0;
+
 // Draw cadence in ms. ~16ms ≈ 60Hz, more than enough for 24-30fps streams.
 // We use setInterval rather than requestAnimationFrame because Tesla's
 // browser throttles RAF whenever the car's UI overlays our tab (climate
@@ -161,6 +168,25 @@ export class VideoSink {
   private drawDue(): void {
     const clockSec = this.clock();
     const clockUs = clockSec * 1_000_000;
+
+    const maxLeadUs = MAX_HEAD_LEAD_SEC * 1_000_000;
+
+    // Skip-ahead: close head frames whose pts is way past the clock.
+    // Prevents the queue from pinning at HARD_CAP with unreachable frames.
+    let flushed = 0;
+    while (this.frames.length > 0 && this.frames[0]!.timestamp > clockUs + maxLeadUs) {
+      const f = this.frames.shift()!;
+      f.close();
+      flushed++;
+    }
+    if (flushed > 0) {
+      emit('frame_flush', {
+        closedCount: flushed,
+        clockSec,
+        remainingQueue: this.frames.length,
+      });
+    }
+
     let drawn: VideoFrame | null = null;
     while (this.frames.length > 0) {
       const f = this.frames[0]!;

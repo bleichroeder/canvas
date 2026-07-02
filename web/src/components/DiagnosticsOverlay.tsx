@@ -32,6 +32,7 @@ const KIND_COLOR: Record<string, string> = {
   stall_detected: 'warning',
   frame_stall: 'warning',
   frame_recovery: 'success',
+  frame_flush: 'warning',
   browser_error: 'error',
 };
 
