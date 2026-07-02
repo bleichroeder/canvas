@@ -43,6 +43,16 @@ describe('runRetention', () => {
     expect(countErrorReports(db)).toBe(3);
   });
 
+  test('prunes correctly when rows share a createdAt timestamp', () => {
+    const db = makeDb();
+    const now = 1_000_000_000_000;
+    // 5 rows all at the same timestamp — reproduces the collision case that
+    // trips a `createdAt < boundary` filter.
+    for (let i = 0; i < 5; i++) insertAt(db, now, `same-${i}`);
+    runRetention(db, { retentionDays: 30, maxRows: 3, nowMs: now });
+    expect(countErrorReports(db)).toBe(3);
+  });
+
   test('does nothing when under both limits', () => {
     const db = makeDb();
     const now = 1_000_000_000_000;

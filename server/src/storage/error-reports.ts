@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, notInArray, sql } from 'drizzle-orm';
 import type { Db } from '../db';
 import { errorReports, type ErrorReport, type NewErrorReport } from '../db/schema';
 
@@ -48,15 +48,18 @@ export function pruneErrorReportsByAge(db: Db, olderThanMs: number): number {
 }
 
 export function pruneErrorReportsByCap(db: Db, keepNewest: number): number {
-  // Delete rows where createdAt is older than the Nth-newest row's createdAt.
-  const boundary = db
-    .select({ createdAt: errorReports.createdAt })
+  // Identify the rows to keep by id, then delete everything else.
+  // Using id-based exclusion avoids the timestamp-collision bug where multiple
+  // rows share the boundary createdAt and a `createdAt < boundary` filter
+  // would retain all of them, leaving the table above keepNewest.
+  const keepIds = db
+    .select({ id: errorReports.id })
     .from(errorReports)
     .orderBy(desc(errorReports.createdAt))
-    .limit(1)
-    .offset(keepNewest - 1)
-    .get();
-  if (!boundary) return 0;
-  const res = db.delete(errorReports).where(lt(errorReports.createdAt, boundary.createdAt)).run();
+    .limit(keepNewest)
+    .all()
+    .map((r) => r.id);
+  if (keepIds.length < keepNewest) return 0; // fewer rows than cap; nothing to prune
+  const res = db.delete(errorReports).where(notInArray(errorReports.id, keepIds)).run();
   return res.changes;
 }
