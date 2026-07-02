@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { emit, reportFatal } from '../player/diagnostics';
+import { createStallWatchdog } from '../player/watchdog';
 import { api } from '../api';
 import { navigate, useRoute } from '../router';
 import { PlayerControls } from '../components/PlayerControls';
@@ -95,6 +96,7 @@ export function Player({ source, id }: Props) {
   const videoRef = useRef<VideoSink | null>(null);
   const audioRef = useRef<AudioSink | null>(null);
   const engineRef = useRef<EngineHandle | null>(null);
+  const watchdogRef = useRef<ReturnType<typeof createStallWatchdog> | null>(null);
   const pendingVideoRef = useRef<EncodedVideoChunk[]>([]);
   const pendingAudioRef = useRef<EncodedAudioChunk[]>([]);
   const snapshotIntervalRef = useRef<number | null>(null);
@@ -277,6 +279,13 @@ export function Player({ source, id }: Props) {
               audio.setVolume(volume);
               audio.setMuted(muted);
               audioRef.current = audio;
+              // Start the stall watchdog once the audio sink is ready.
+              watchdogRef.current?.stop();
+              const watchdog = createStallWatchdog({
+                getAudioClockSec: () => audioRef.current?.currentTime() ?? 0,
+              });
+              watchdog.start();
+              watchdogRef.current = watchdog;
             }
             sessionBaseRef.current = fromSec;
             setStatus('');
@@ -349,6 +358,8 @@ export function Player({ source, id }: Props) {
           clearInterval(snapshotIntervalRef.current);
           snapshotIntervalRef.current = null;
         }
+        watchdogRef.current?.stop();
+        watchdogRef.current = null;
       },
     };
   };
@@ -374,6 +385,8 @@ export function Player({ source, id }: Props) {
       videoRef.current = null;
       audioRef.current?.stop();
       audioRef.current = null;
+      watchdogRef.current?.stop();
+      watchdogRef.current = null;
       // Clean unmount — clear the session marker. If we crashed before
       // reaching here, the marker survives and checkForPreviousCrash() on
       // the next cold load logs it.

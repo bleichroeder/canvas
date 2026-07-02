@@ -147,6 +147,14 @@ export async function reportFatal(
 }
 
 // ---------------------------------------------------------------------------
+// Test-only: allows tests to reset the module singleton between cases.
+// Only zeroes the ring buffer — nothing else.
+// ---------------------------------------------------------------------------
+export function __resetForTests(): void {
+  (ring as unknown as { buf: unknown[] }).buf = [];
+}
+
+// ---------------------------------------------------------------------------
 // installGlobalErrorHandlers — hooks window.onerror + unhandledrejection.
 // No-op in non-DOM environments (Bun tests, SSR).
 // ---------------------------------------------------------------------------
