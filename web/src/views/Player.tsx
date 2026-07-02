@@ -5,6 +5,7 @@ import { api } from '../api';
 import { navigate, useRoute } from '../router';
 import { PlayerControls } from '../components/PlayerControls';
 import { CaptionsLayer } from '../components/CaptionsLayer';
+import { DiagnosticsOverlay } from '../components/DiagnosticsOverlay';
 import { bootEngine, type EngineHandle } from '../player/engine';
 import { VideoSink } from '../player/video';
 import { AudioSink } from '../player/audio';
@@ -79,6 +80,7 @@ export function Player({ source, id }: Props) {
   });
   const [muted, setMuted] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
 
   const [subtitleTracks, setSubtitleTracks] = useState<PlayResolution['subtitleTracks']>([]);
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string | null>(null);
@@ -111,6 +113,7 @@ export function Player({ source, id }: Props) {
   const wasPlayingRef = useRef(true);
   const seekTokenRef = useRef(0);
   const sessionBaseRef = useRef(0);
+  const tapStateRef = useRef<{ times: number[] }>({ times: [] });
 
   useEffect(() => {
     let t: number | undefined;
@@ -127,6 +130,14 @@ export function Player({ source, id }: Props) {
       window.removeEventListener('pointerdown', reset);
       window.removeEventListener('keydown', reset);
     };
+  }, []);
+
+  // Auto-open diagnostics overlay when ?diag=1 is present in the hash query.
+  useEffect(() => {
+    try {
+      if (route.query['diag'] === '1') setDiagOpen(true);
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -487,6 +498,17 @@ export function Player({ source, id }: Props) {
     if (v > 0 && muted) setMuted(false);
   }
 
+  function onCornerTap() {
+    const now = performance.now();
+    const times = tapStateRef.current.times.filter((t) => now - t <= 1500);
+    times.push(now);
+    tapStateRef.current.times = times;
+    if (times.length >= 3) {
+      tapStateRef.current.times = [];
+      setDiagOpen(true);
+    }
+  }
+
   async function onClose() {
     const a = audioRef.current;
     if (a && startedRef.current) {
@@ -644,6 +666,12 @@ export function Player({ source, id }: Props) {
           <Typography color="common.white">Seeking…</Typography>
         </Stack>
       </Backdrop>
+      <div
+        onClick={onCornerTap}
+        style={{ position: 'fixed', top: 0, right: 0, width: 100, height: 100, zIndex: 9998, cursor: 'default' }}
+        aria-hidden="true"
+      />
+      <DiagnosticsOverlay open={diagOpen} onClose={() => setDiagOpen(false)} sourceType={source ?? 'unknown'} />
     </div>
   );
 }
