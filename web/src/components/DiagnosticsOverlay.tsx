@@ -27,6 +27,7 @@ const KIND_COLOR: Record<string, string> = {
   audio_error: 'error',
   backpressure: 'default',
   queue_snapshot: 'default',
+  chunk_buffer_snapshot: 'default',
   session_start: 'success',
   user_gesture: 'default',
   stall_detected: 'warning',

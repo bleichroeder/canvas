@@ -266,6 +266,7 @@ export function Player({ source, id }: Props) {
         const canvas = canvasRef.current!;
         engineRef.current = bootEngine({
           url: resolution.url,
+          getClock: () => audioRef.current?.currentTime() ?? 0,
           onReady: (info) => {
             if (cancelled) return;
             if (!info.videoConfig && !info.audioConfig) {
