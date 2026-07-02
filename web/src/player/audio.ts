@@ -13,6 +13,7 @@ export class AudioSink {
   private sampleRate: number;
   private channelCount: number;
   private framesPlayed = 0;
+  private currentPtsSec = 0;
   private currentVolume = 1;
   private muted = false;
 
@@ -50,7 +51,12 @@ export class AudioSink {
       outputChannelCount: [this.channelCount],
     });
     this.worklet.port.onmessage = (e) => {
-      if (e.data?.type === 'progress') this.framesPlayed = e.data.framesPlayed;
+      if (e.data?.type === 'progress') {
+        this.framesPlayed = e.data.framesPlayed;
+        if (typeof e.data.currentPtsSec === 'number') {
+          this.currentPtsSec = e.data.currentPtsSec;
+        }
+      }
     };
     this.gain = this.ctx.createGain();
     this.gain.gain.value = this.muted ? 0 : this.currentVolume;
@@ -72,7 +78,11 @@ export class AudioSink {
   get queueLength(): number { return 0; }
 
   currentTime(): number {
-    return this.framesPlayed / this.sampleRate;
+    return this.currentPtsSec;
+  }
+
+  getFramesPlayed(): number {
+    return this.framesPlayed;
   }
 
   setVolume(v: number): void {
@@ -103,7 +113,8 @@ export class AudioSink {
       channels.push(buf);
     }
     (channels as unknown as { offset: number }).offset = 0;
-    this.worklet.port.postMessage({ type: 'samples', channels });
+    const startPtsSec = data.timestamp / 1_000_000;
+    this.worklet.port.postMessage({ type: 'samples', channels, startPtsSec });
     data.close();
   }
 }
