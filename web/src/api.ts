@@ -199,4 +199,40 @@ export const api = {
     }),
   adminApplyDeployment: () =>
     request<void>('/api/admin/deployment/apply', { method: 'POST' }),
+
+  adminTelemetry: {
+    list: (opts: { cursor?: string; kind?: string; since?: number } = {}) => {
+      const p = new URLSearchParams();
+      if (opts.cursor) p.set('cursor', opts.cursor);
+      if (opts.kind) p.set('kind', opts.kind);
+      if (opts.since != null) p.set('since', String(opts.since));
+      const q = p.toString();
+      return request<{
+        rows: Array<{
+          id: string;
+          created_at: number;
+          error_kind: string | null;
+          error_message: string | null;
+          source_type: string | null;
+          canvas_version: string | null;
+          user_agent: string | null;
+        }>;
+        nextCursor: string | null;
+      }>(`/api/admin/telemetry/errors${q ? '?' + q : ''}`);
+    },
+    get: (id: string) =>
+      request<{
+        id: string;
+        created_at: number;
+        user_id: number | null;
+        canvas_version: string | null;
+        user_agent: string | null;
+        error_message: string | null;
+        error_kind: string | null;
+        source_type: string | null;
+        report_json: string;
+      }>(`/api/admin/telemetry/errors/${encodeURIComponent(id)}`),
+    delete: (id: string) =>
+      request<void>(`/api/admin/telemetry/errors/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  },
 };
