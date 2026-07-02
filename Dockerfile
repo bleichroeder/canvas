@@ -53,6 +53,8 @@ VOLUME ["/data"]
 ENV CANVAS_DB_PATH=/data/canvas.db
 ENV CANVAS_WEB_DIR=/app/web
 ENV CANVAS_DATA_DIR=/data
+ARG VERSION=dev
+ENV CANVAS_VERSION=$VERSION
 
 # 80/443 for Caddy (mode=domain); 8787 for Bun (mode=local, admin access
 # regardless of mode). Cloudflared modes don't need any external ports.

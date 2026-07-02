@@ -15,6 +15,7 @@ const ConfigSchema = z.object({
   TELEMETRY_ENABLED: z.string().optional().transform((v) => v !== 'false'),
   TELEMETRY_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
   TELEMETRY_MAX_ROWS: z.coerce.number().int().min(1).default(1000),
+  CANVAS_VERSION: z.string().optional().default('dev'),
 });
 
 export type Config = z.infer<typeof ConfigSchema> & { version: string };
