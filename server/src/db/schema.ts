@@ -148,3 +148,27 @@ export const deploymentConfig = sqliteTable('deployment_config', {
 
 export type DeploymentConfig = typeof deploymentConfig.$inferSelect;
 export type NewDeploymentConfig = typeof deploymentConfig.$inferInsert;
+
+// ── Sub-project G tables ──────────────────────────────────────────────────────
+
+export const errorReports = sqliteTable(
+  'error_reports',
+  {
+    id: text('id').primaryKey(),
+    createdAt: integer('created_at').notNull(),
+    userId: integer('user_id'),
+    canvasVersion: text('canvas_version'),
+    userAgent: text('user_agent'),
+    errorMessage: text('error_message'),
+    errorKind: text('error_kind'),
+    sourceType: text('source_type'),
+    reportJson: text('report_json').notNull(),
+  },
+  (t) => ({
+    createdIdx: index('idx_error_reports_created').on(t.createdAt),
+    kindCreatedIdx: index('idx_error_reports_kind_created').on(t.errorKind, t.createdAt),
+  }),
+);
+
+export type ErrorReport = typeof errorReports.$inferSelect;
+export type NewErrorReport = typeof errorReports.$inferInsert;
