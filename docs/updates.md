@@ -72,3 +72,23 @@ docker run -d --restart unless-stopped --name canvas \
 ```
 
 This works but you don't get auto-updates. Watchtower can still work with `docker run` deployments — see [Watchtower docs](https://containrrr.dev/watchtower/).
+
+## Migrating from an older canvas deployment
+
+If you used an earlier `docker-compose.yml` (pre-v0.8.0) with a bind-mount data directory like `./canvas-data:/data`, the new compose file uses a named Docker volume instead. To carry your existing data across:
+
+```
+# Stop the old deployment
+docker-compose down
+
+# Copy bind-mounted data into the named volume canvas will now use
+docker run --rm \
+  -v "$(pwd)/canvas-data:/src:ro" \
+  -v canvas-data:/dst \
+  alpine sh -c "cp -a /src/. /dst/"
+
+# Bring the new compose file up
+docker-compose up -d
+```
+
+If you were running canvas via plain `docker run -v canvas-data:/data …`, your named `canvas-data` volume is already picked up automatically — the new compose file declares the volume with `name: canvas-data` to preserve the literal name. No migration needed.

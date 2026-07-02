@@ -66,6 +66,7 @@ export function AboutTab() {
   const [diagOpen, setDiagOpen] = useState(false);
   const [crashes, setCrashes] = useState<CrashRecord[]>(() => getCrashLog());
   const buildSha = import.meta.env.VITE_BUILD_SHA ?? 'dev';
+  const canvasVersion = import.meta.env.VITE_CANVAS_VERSION ?? 'dev';
 
   const [updates, setUpdates] = useState<Awaited<ReturnType<typeof api.adminUpdates.status>> | null>(null);
   const [updatesLoading, setUpdatesLoading] = useState(true);
@@ -82,7 +83,7 @@ export function AboutTab() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <ElevatedCard>
-        <SettingRow label="Version" control={<Typography color="text.secondary">v1.2.0 · build {buildSha}</Typography>} />
+        <SettingRow label="Version" control={<Typography color="text.secondary">{canvasVersion} · build {buildSha}</Typography>} />
         <SettingRow label="Player engine" control={<Typography color="text.secondary">canvas / WebCodecs</Typography>} />
         <SettingRow
           label="Signed in as"

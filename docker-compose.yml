@@ -33,4 +33,10 @@ services:
       WATCHTOWER_CLEANUP: "true"
 
 volumes:
+  # `name: canvas-data` overrides docker-compose's default project-prefixed
+  # naming (e.g. "canvas_canvas-data") to use the literal name. This is what
+  # lets existing users who created `canvas-data` via `docker run -v canvas-data:/data`
+  # keep their DB when switching to compose. Fresh installs just create it.
   canvas-data:
+    name: canvas-data
+
