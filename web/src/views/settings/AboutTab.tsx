@@ -1,16 +1,42 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import Alert from '@mui/material/Alert';
+import Divider from '@mui/material/Divider';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { ElevatedCard } from '../../components/ElevatedCard';
 import { SettingRow } from '../../components/SettingRow';
 import { getUser } from '../../lib/session';
 import { getCrashLog, clearCrashLog } from '../../lib/crash-telemetry';
+import { api } from '../../api';
 import type { CrashRecord } from '../../lib/crash-telemetry';
+
+// Configure marked once at module load.
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+});
+
+function renderReleaseNotes(md: string): string {
+  const html = marked.parse(md, { async: false }) as string;
+  return DOMPurify.sanitize(html);
+}
+
+function relativeTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  const seconds = Math.round((now - then) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
+  return `${Math.round(seconds / 86400)}d ago`;
+}
 
 function formatTimestamp(ms: number): string {
   try { return new Date(ms).toLocaleString(); } catch { return String(ms); }
@@ -41,6 +67,18 @@ export function AboutTab() {
   const [crashes, setCrashes] = useState<CrashRecord[]>(() => getCrashLog());
   const buildSha = import.meta.env.VITE_BUILD_SHA ?? 'dev';
 
+  const [updates, setUpdates] = useState<Awaited<ReturnType<typeof api.adminUpdates.status>> | null>(null);
+  const [updatesLoading, setUpdatesLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.adminUpdates.status()
+      .then((s) => { if (!cancelled) setUpdates(s); })
+      .catch(() => { if (!cancelled) setUpdates(null); })
+      .finally(() => { if (!cancelled) setUpdatesLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <ElevatedCard>
@@ -55,6 +93,79 @@ export function AboutTab() {
             </Typography>
           }
         />
+      </ElevatedCard>
+
+      <ElevatedCard>
+        <Box sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Updates</Typography>
+
+          {updatesLoading && (
+            <Typography color="text.secondary">Checking for updates…</Typography>
+          )}
+
+          {!updatesLoading && updates?.error && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Update information unavailable — {updates.error}.
+            </Alert>
+          )}
+
+          {!updatesLoading && updates && !updates.error && (
+            <>
+              <Typography variant="body2">
+                Current: <strong>{updates.currentVersion}</strong>
+              </Typography>
+              {updates.latestVersion && (
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  Latest: <strong>{updates.latestVersion}</strong>
+                  {updates.publishedAt && ` · published ${relativeTime(updates.publishedAt)}`}
+                </Typography>
+              )}
+
+              {updates.updateAvailable && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  Watchtower will apply this update within 5 minutes.
+                </Alert>
+              )}
+              {!updates.updateAvailable && updates.latestVersion && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  You're on the latest version.
+                </Typography>
+              )}
+
+              {updates.releaseNotes && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>What's new</Typography>
+                  <Box
+                    sx={{
+                      '& p': { my: 1 },
+                      '& ul, & ol': { pl: 3 },
+                      '& code': { bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5, fontSize: '0.875em' },
+                      '& pre': { bgcolor: 'action.hover', p: 1, borderRadius: 1, overflowX: 'auto', fontSize: '0.875em' },
+                      '& a': { color: 'primary.main' },
+                      fontSize: '0.875rem',
+                    }}
+                    dangerouslySetInnerHTML={{ __html: renderReleaseNotes(updates.releaseNotes) }}
+                  />
+                </>
+              )}
+
+              {updates.htmlUrl && (
+                <Button
+                  size="small"
+                  variant="text"
+                  sx={{ mt: 2 }}
+                  component="a"
+                  href={updates.htmlUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View on GitHub →
+                </Button>
+              )}
+            </>
+          )}
+        </Box>
       </ElevatedCard>
 
       {crashes.length > 0 && (

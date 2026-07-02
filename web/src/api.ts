@@ -200,6 +200,19 @@ export const api = {
   adminApplyDeployment: () =>
     request<void>('/api/admin/deployment/apply', { method: 'POST' }),
 
+  adminUpdates: {
+    status: () => request<{
+      currentVersion: string;
+      latestVersion: string | null;
+      updateAvailable: boolean;
+      publishedAt: string | null;
+      releaseNotes: string | null;
+      htmlUrl: string | null;
+      checkedAt: string;
+      error: string | null;
+    }>('/api/admin/updates/status'),
+  },
+
   adminTelemetry: {
     list: (opts: { cursor?: string; kind?: string; since?: number } = {}) => {
       const p = new URLSearchParams();
