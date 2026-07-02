@@ -23,7 +23,7 @@ Admin → **Settings → Diagnostics**. Table of recent reports; click a row for
 
 Two ways to open the live event overlay without needing the admin UI:
 
-- Triple-tap the top-right corner of the player within 1.5 seconds.
+- Triple-tap the top-left corner of the player within 1.5 seconds.
 - Add `?diag=1` to the URL and reload.
 
 ## Configuration

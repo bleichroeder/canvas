@@ -238,12 +238,23 @@ export function Player({ source, id }: Props) {
   const bootSession = (fromSec: number): { cancel: () => void } => {
     let cancelled = false;
     let cancelTimer: number | undefined;
-    emit('session_start', {
-      sourceType: source,
-      canvasVersion:
-        (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_CANVAS_VERSION ?? 'dev',
-    });
     void (async () => {
+      // Resolve source name (id -> type) for readable diagnostics.
+      // On failure, fall back to the raw source ID.
+      let sourceType: string = source;
+      try {
+        const list = await api.listSources();
+        const match = list.find((s) => String(s.id) === source);
+        if (match) sourceType = match.type;
+      } catch {
+        // listSources failed — keep the raw ID. Never let this crash bootSession.
+      }
+
+      emit('session_start', {
+        sourceType,
+        canvasVersion:
+          (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_CANVAS_VERSION ?? 'dev',
+      });
       try {
         setStatus(fromSec > 0 ? 'Seeking…' : 'Resolving stream…');
         const resolution = await api.play(source, id, fromSec);
@@ -668,7 +679,7 @@ export function Player({ source, id }: Props) {
       </Backdrop>
       <div
         onClick={onCornerTap}
-        style={{ position: 'fixed', top: 0, right: 0, width: 100, height: 100, zIndex: 9998, cursor: 'default' }}
+        style={{ position: 'fixed', top: 0, left: 0, width: 100, height: 100, zIndex: 9998, cursor: 'default' }}
         aria-hidden="true"
       />
       <DiagnosticsOverlay open={diagOpen} onClose={() => setDiagOpen(false)} sourceType={source ?? 'unknown'} />
