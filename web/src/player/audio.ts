@@ -12,7 +12,6 @@ export class AudioSink {
   private decoder: AudioDecoder;
   private sampleRate: number;
   private channelCount: number;
-  private framesPlayed = 0;
   private currentPtsSec = 0;
   private currentVolume = 1;
   private muted = false;
@@ -52,7 +51,10 @@ export class AudioSink {
     });
     this.worklet.port.onmessage = (e) => {
       if (e.data?.type === 'progress') {
-        this.framesPlayed = e.data.framesPlayed;
+        // The worklet still reports framesPlayed in the progress payload
+        // (preserving the wire protocol) but nothing on the main thread
+        // reads it after the shift to pts-based clocking — spec's
+        // "kept in both files" is satisfied by the worklet's own use.
         if (typeof e.data.currentPtsSec === 'number') {
           this.currentPtsSec = e.data.currentPtsSec;
         }
@@ -79,10 +81,6 @@ export class AudioSink {
 
   currentTime(): number {
     return this.currentPtsSec;
-  }
-
-  getFramesPlayed(): number {
-    return this.framesPlayed;
   }
 
   setVolume(v: number): void {
