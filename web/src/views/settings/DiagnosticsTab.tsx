@@ -52,7 +52,7 @@ export function DiagnosticsTab() {
         kind: kind ?? undefined,
         since: since ?? undefined,
       });
-      setRows(reset ? res.rows : [...rows, ...res.rows]);
+      setRows((prev) => (reset ? res.rows : [...prev, ...res.rows]));
       setNextCursor(res.nextCursor);
     } finally {
       setLoading(false);
