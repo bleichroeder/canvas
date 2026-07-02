@@ -21,6 +21,7 @@ import { makeSourcesMgmtRoutes } from './routes/sources-mgmt';
 import { makeDeploymentRoutes } from './routes/deployment';
 import { makeSetupRoutes } from './routes/setup';
 import { makeTelemetryRoutes } from './routes/telemetry';
+import { makeAdminTelemetryRoutes } from './routes/admin-telemetry';
 import { registerAdapter } from './sources/registry';
 import { plexAdapter } from './sources/plex';
 import { flixifyAdapter } from './sources/flixify';
@@ -87,6 +88,7 @@ export function buildApp(
   app.route('/api/source-status',  makeSourceStatusRoutes(() => db));
   app.route('/api/subtitles',      makeSubtitlesRoutes(() => db));
   app.route('/api/admin',          makeAdminRoutes(() => db));
+  app.route('/api/admin',          makeAdminTelemetryRoutes(() => db));
   app.route('/api/sources',        makeSourcesMgmtRoutes(() => db));
 
   // Anything under /api/* that didn't match a mounted route returns a JSON
