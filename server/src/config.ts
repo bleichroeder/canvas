@@ -12,6 +12,9 @@ const ConfigSchema = z.object({
     .transform((s) => s.split(',').map((t) => t.trim()).filter(Boolean)),
   CANVAS_EXTERNAL_PROXY: z.string().optional().transform((v) => v === '1' || v === 'true'),
   CANVAS_DATA_DIR: z.string().default('/data'),
+  TELEMETRY_ENABLED: z.string().optional().transform((v) => v !== 'false'),
+  TELEMETRY_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
+  TELEMETRY_MAX_ROWS: z.coerce.number().int().min(1).default(1000),
 });
 
 export type Config = z.infer<typeof ConfigSchema> & { version: string };

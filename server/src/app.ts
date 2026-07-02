@@ -20,6 +20,7 @@ import { makeSubtitlesRoutes } from './routes/subtitles';
 import { makeSourcesMgmtRoutes } from './routes/sources-mgmt';
 import { makeDeploymentRoutes } from './routes/deployment';
 import { makeSetupRoutes } from './routes/setup';
+import { makeTelemetryRoutes } from './routes/telemetry';
 import { registerAdapter } from './sources/registry';
 import { plexAdapter } from './sources/plex';
 import { flixifyAdapter } from './sources/flixify';
@@ -51,6 +52,13 @@ export function buildApp(
   // Public deployment status (no auth required).
   // /api/deployment/status — mounted before admin middleware to avoid accidental auth catch.
   app.route('/api', makeDeploymentRoutes(() => db));
+
+  // Public telemetry endpoint — no auth required, mounted before any auth middleware.
+  app.route('/api', makeTelemetryRoutes(() => db, {
+    enabled: config.TELEMETRY_ENABLED,
+    retentionDays: config.TELEMETRY_RETENTION_DAYS,
+    maxRows: config.TELEMETRY_MAX_ROWS,
+  }));
 
   // Everything else under /api/* requires a valid bearer token.
   app.use('/api/pair/*',        requireUser(() => db));
