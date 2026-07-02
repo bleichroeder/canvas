@@ -1,3 +1,5 @@
+import { emit } from './diagnostics';
+
 export interface VideoSinkOptions {
   canvas: HTMLCanvasElement;
   config: VideoDecoderConfig;
@@ -53,6 +55,17 @@ export class VideoSink {
   private droppedFrames = 0;
   private backpressureState: 'flowing' | 'paused' = 'flowing';
 
+  private emitFrame = (() => {
+    let last = 0;
+    return (ptsSec: number) => {
+      const now = performance.now();
+      if (now - last >= 1000) {
+        last = now;
+        emit('video_frame', { ptsSec });
+      }
+    };
+  })();
+
   constructor(opts: VideoSinkOptions) {
     this.canvas = opts.canvas;
     this.canvas.width = opts.config.codedWidth ?? 1280;
@@ -65,9 +78,17 @@ export class VideoSink {
     this.onBackpressure = opts.onBackpressure;
     this.decoder = new VideoDecoder({
       output: (frame) => this.onFrame(frame),
-      error: (e) => opts.onError(e as unknown as Error),
+      error: (e) => {
+        emit('video_error', { message: (e as unknown as Error).message });
+        opts.onError(e as unknown as Error);
+      },
     });
     this.decoder.configure(opts.config);
+    emit('video_configure', {
+      codec: opts.config.codec,
+      width: opts.config.codedWidth ?? null,
+      height: opts.config.codedHeight ?? null,
+    });
   }
 
   feed(chunk: EncodedVideoChunk): void {
@@ -104,6 +125,7 @@ export class VideoSink {
   }
 
   get queuedFrames(): number { return this.frames.length; }
+  get queueLength(): number { return this.frames.length; }
   get droppedFrameCount(): number { return this.droppedFrames; }
 
   private onFrame(frame: VideoFrame): void {
@@ -120,9 +142,11 @@ export class VideoSink {
     }
     this.frames.push(frame);
     this.frames.sort((a, b) => a.timestamp - b.timestamp);
+    this.emitFrame(frame.timestamp / 1_000_000);
     // Signal the fetcher to pause once we've buffered enough video ahead.
     if (this.frames.length >= HIGH_WATER && this.backpressureState === 'flowing') {
       this.backpressureState = 'paused';
+      emit('backpressure', { direction: 'pause', queueDepth: this.frames.length });
       if (this.onBackpressure) this.onBackpressure('pause');
     }
   }
@@ -151,6 +175,7 @@ export class VideoSink {
     // Resume the fetcher when the queue has drained enough.
     if (this.frames.length <= LOW_WATER && this.backpressureState === 'paused') {
       this.backpressureState = 'flowing';
+      emit('backpressure', { direction: 'resume', queueDepth: this.frames.length });
       if (this.onBackpressure) this.onBackpressure('resume');
     }
   }

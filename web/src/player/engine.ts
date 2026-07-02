@@ -1,3 +1,4 @@
+import { emit } from './diagnostics';
 import { RangeFetcher } from './range-fetcher';
 import { AutoSource } from './stream-source';
 import type { StreamInfo } from './stream-source';
@@ -51,6 +52,9 @@ export function bootEngine(opts: BootEngineOptions): EngineHandle {
       if (disposed) return;
       disposed = true;
       fetcher.abort();
+      // Fetch was aborted — emit a terminal fetch_end so the ring has a
+      // record that this session's network transfer ended (status 0 = aborted).
+      emit('fetch_end', { totalBytes: fetcher.currentOffset, durationMs: 0, status: 0 });
     },
     pause(): void {
       if (disposed) return;

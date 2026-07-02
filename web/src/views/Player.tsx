@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { emit, reportFatal } from '../player/diagnostics';
 import { api } from '../api';
 import { navigate, useRoute } from '../router';
 import { PlayerControls } from '../components/PlayerControls';
@@ -31,6 +32,15 @@ import PauseIcon from '@mui/icons-material/Pause';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 
 interface Props { source: string; id: string }
+
+function classifyError(e: Error): string {
+  const m = (e.message ?? '').toLowerCase();
+  if (m.includes('decoder') || m.includes('video')) return 'video';
+  if (m.includes('audio')) return 'audio';
+  if (m.includes('fetch') || m.includes('network')) return 'fetch';
+  if (m.includes('demux') || m.includes('container') || m.includes('mkv') || m.includes('mp4')) return 'demux';
+  return 'unknown';
+}
 
 const PROGRESS_INTERVAL_MS = 15_000;
 
@@ -87,6 +97,7 @@ export function Player({ source, id }: Props) {
   const engineRef = useRef<EngineHandle | null>(null);
   const pendingVideoRef = useRef<EncodedVideoChunk[]>([]);
   const pendingAudioRef = useRef<EncodedAudioChunk[]>([]);
+  const snapshotIntervalRef = useRef<number | null>(null);
   const startedRef = useRef(false);
   const reportRef = useRef(0);
   const resolutionRef = useRef<PlayResolution | null>(null);
@@ -214,6 +225,11 @@ export function Player({ source, id }: Props) {
   const bootSession = (fromSec: number): { cancel: () => void } => {
     let cancelled = false;
     let cancelTimer: number | undefined;
+    emit('session_start', {
+      sourceType: source,
+      canvasVersion:
+        (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_CANVAS_VERSION ?? 'dev',
+    });
     void (async () => {
       try {
         setStatus(fromSec > 0 ? 'Seeking…' : 'Resolving stream…');
@@ -296,9 +312,24 @@ export function Player({ source, id }: Props) {
               }
             }
           },
-          onFatal: (e) => { setErrMsg(e.message); setReseeking(false); },
+          onFatal: (e) => {
+            const kind = classifyError(e);
+            reportFatal({ message: e.message, kind, stack: e.stack }, source).catch(() => {});
+            setErrMsg(e.message);
+            setReseeking(false);
+          },
           onDone: () => { videoRef.current?.flush().catch(() => {}); },
         });
+        // Emit a queue_snapshot every 2 seconds for diagnostics ring.
+        if (snapshotIntervalRef.current !== null) clearInterval(snapshotIntervalRef.current);
+        snapshotIntervalRef.current = window.setInterval(() => {
+          emit('queue_snapshot', {
+            videoQueue: videoRef.current?.queueLength ?? 0,
+            audioQueue: audioRef.current?.queueLength ?? 0,
+            pendingV: pendingVideoRef.current.length,
+            pendingA: pendingAudioRef.current.length,
+          });
+        }, 2000);
       } catch (e) {
         if (!cancelled) {
           setErrMsg((e as Error).message);
@@ -306,7 +337,16 @@ export function Player({ source, id }: Props) {
         }
       }
     })();
-    return { cancel: () => { cancelled = true; if (cancelTimer) clearTimeout(cancelTimer); } };
+    return {
+      cancel: () => {
+        cancelled = true;
+        if (cancelTimer) clearTimeout(cancelTimer);
+        if (snapshotIntervalRef.current !== null) {
+          clearInterval(snapshotIntervalRef.current);
+          snapshotIntervalRef.current = null;
+        }
+      },
+    };
   };
 
   useEffect(() => {
@@ -320,6 +360,10 @@ export function Player({ source, id }: Props) {
     const handle = bootSession(fromQuery);
     return () => {
       handle.cancel();
+      if (snapshotIntervalRef.current !== null) {
+        clearInterval(snapshotIntervalRef.current);
+        snapshotIntervalRef.current = null;
+      }
       engineRef.current?.dispose();
       engineRef.current = null;
       videoRef.current?.close();
@@ -353,6 +397,7 @@ export function Player({ source, id }: Props) {
   async function onPlayPause() {
     if (errMsg) return;
     if (!startedRef.current) {
+      emit('user_gesture', { kind: 'play' });
       wasPlayingRef.current = true;
       try {
         await autoStartPlayback();
@@ -368,11 +413,13 @@ export function Player({ source, id }: Props) {
     }
     const a = audioRef.current;
     if (!paused) {
+      emit('user_gesture', { kind: 'pause' });
       videoRef.current?.stop();
       await a?.ctx.suspend();
       setPaused(true);
       wasPlayingRef.current = false;
     } else {
+      emit('user_gesture', { kind: 'play' });
       await a?.ctx.resume();
       videoRef.current?.start();
       setPaused(false);
@@ -382,6 +429,7 @@ export function Player({ source, id }: Props) {
 
   async function reseek(targetSec: number): Promise<void> {
     if (errMsg) return;
+    emit('user_gesture', { kind: 'seek' });
     const target = Math.max(0, Math.min(targetSec, duration > 0 ? duration - 1 : targetSec));
     setReseeking(true);
     const myToken = ++seekTokenRef.current;

@@ -1,3 +1,5 @@
+import { emit } from './diagnostics';
+
 export interface RangeFetcherOptions {
   url: string;
   chunkSize?: number;
@@ -16,6 +18,20 @@ export class RangeFetcher {
   private controller: AbortController | null = null;
   private running = false;
   private paused = false;
+  private totalRead = 0;
+  private startedAtMs = 0;
+  private lastStatus = 0;
+
+  private emitChunk = (() => {
+    let last = 0;
+    return (offset: number, size: number) => {
+      const now = performance.now();
+      if (now - last >= 1000) {
+        last = now;
+        emit('fetch_chunk', { offset, size });
+      }
+    };
+  })();
 
   constructor(opts: RangeFetcherOptions) {
     this.url = opts.url;
@@ -52,13 +68,21 @@ export class RangeFetcher {
     // as 200) work too — we just stream the whole body as it arrives. Either
     // way, onChunk fires per network read, not after the response completes.
     this.controller = new AbortController();
+    this.startedAtMs = performance.now();
+    this.totalRead = 0;
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
+      emit('fetch_start', {
+        rangeStart: this.offset,
+        rangeEnd: this.totalSize ?? null,
+        hostname: new URL(this.url).hostname,
+      });
       const res = await fetch(this.url, {
         headers: this.offset > 0 ? { Range: `bytes=${this.offset}-` } : {},
         signal: this.controller.signal,
         referrerPolicy: 'no-referrer',
       });
+      this.lastStatus = res.status;
       if (!res.ok && res.status !== 206 && res.status !== 200) {
         throw new Error(`HTTP ${res.status}`);
       }
@@ -92,15 +116,27 @@ export class RangeFetcher {
         if (!value || value.length === 0) continue;
         const offsetForChunk = this.offset;
         this.offset += value.length;
+        this.totalRead += value.length;
+        this.emitChunk(offsetForChunk, value.length);
         await this.onChunk(offsetForChunk, value);
       }
       if (this.running) {
         this.running = false;
+        emit('fetch_end', {
+          totalBytes: this.totalRead,
+          durationMs: Math.round(performance.now() - this.startedAtMs),
+          status: this.lastStatus,
+        });
         this.onDone();
       }
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
       this.running = false;
+      emit('fetch_error', {
+        message: (e as Error).message,
+        offset: this.offset,
+        status: this.lastStatus,
+      });
       this.onError(e as Error);
     } finally {
       try { reader?.releaseLock(); } catch { /* ignore */ }

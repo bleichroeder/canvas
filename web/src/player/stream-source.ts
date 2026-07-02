@@ -3,6 +3,7 @@
  * MKV (custom EBML) demuxer implement this. The Player view talks only to the
  * common interface and doesn't care which container is on the wire.
  */
+import { emit } from './diagnostics';
 import { Demuxer } from './demux';
 import { MkvSource } from './mkv-source';
 import { Mp3Source } from './mp3-source';
@@ -62,7 +63,23 @@ export class AutoSource implements StreamSource {
   private head: Uint8Array = new Uint8Array(0);
 
   constructor(opts: StreamSourceCallbacks) {
-    this.opts = opts;
+    // Wrap onReady to emit demux_ready before forwarding to the caller.
+    // Wrap onError to emit demux_error before forwarding to the caller.
+    this.opts = {
+      ...opts,
+      onReady: (info) => {
+        emit('demux_ready', {
+          videoCodec: info.videoConfig?.codec ?? null,
+          audioCodec: info.audioConfig?.codec ?? null,
+          duration: info.duration,
+        });
+        opts.onReady(info);
+      },
+      onError: (err) => {
+        emit('demux_error', { message: err.message });
+        opts.onError(err);
+      },
+    };
   }
 
   appendChunk(offset: number, bytes: Uint8Array): void {
@@ -88,6 +105,7 @@ export class AutoSource implements StreamSource {
       } else if (format === 'mp3') {
         this.inner = new Mp3SourceAdapter(this.opts);
       } else {
+        // demux_error is emitted by the wrapped this.opts.onError below.
         this.opts.onError(new Error(`Unrecognised container; first bytes: ${[...this.head].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join(' ')}`));
         return;
       }

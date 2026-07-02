@@ -1,3 +1,5 @@
+import { emit } from './diagnostics';
+
 export interface AudioSinkOptions {
   config: AudioDecoderConfig;
   onError: (err: Error) => void;
@@ -20,9 +22,17 @@ export class AudioSink {
     this.ctx = new AudioContext({ sampleRate: this.sampleRate });
     this.decoder = new AudioDecoder({
       output: (data) => this.onData(data),
-      error: (e) => opts.onError(e as unknown as Error),
+      error: (e) => {
+        emit('audio_error', { message: (e as unknown as Error).message });
+        opts.onError(e as unknown as Error);
+      },
     });
     this.decoder.configure(opts.config);
+    emit('audio_configure', {
+      codec: opts.config.codec,
+      sampleRate: opts.config.sampleRate,
+      channels: opts.config.numberOfChannels,
+    });
   }
 
   feed(chunk: EncodedAudioChunk): void {
@@ -57,6 +67,9 @@ export class AudioSink {
     if (this.decoder.state !== 'closed') this.decoder.close();
     void this.ctx.close();
   }
+
+  /** AudioSink decodes synchronously into the worklet; no internal queue. */
+  get queueLength(): number { return 0; }
 
   currentTime(): number {
     return this.framesPlayed / this.sampleRate;
