@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import Alert from '@mui/material/Alert';
 import Drawer from '@mui/material/Drawer';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -42,11 +43,13 @@ export function DiagnosticsTab() {
   const [kind, setKind] = useState<string | null>(null);
   const [since, setSince] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
 
   async function load(reset: boolean) {
     setLoading(true);
     try {
+      setLoadError(null);
       const res = await api.adminTelemetry.list({
         cursor: reset ? undefined : nextCursor ?? undefined,
         kind: kind ?? undefined,
@@ -54,6 +57,8 @@ export function DiagnosticsTab() {
       });
       setRows((prev) => (reset ? res.rows : [...prev, ...res.rows]));
       setNextCursor(res.nextCursor);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -64,14 +69,15 @@ export function DiagnosticsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, since]);
 
-  function testTelemetry() {
+  async function testTelemetry() {
     // Call reportFatal directly so the button exercises the full end-to-end
     // pipeline: ring snapshot → POST /api/telemetry/error → stored in DB →
     // visible in this list after a refresh.
-    void reportFatal(
+    await reportFatal(
       { message: 'canvas: test telemetry ping', kind: 'browser' },
       'test',
     );
+    await load(true);
   }
 
   async function del(id: string) {
@@ -91,7 +97,7 @@ export function DiagnosticsTab() {
       <Box sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6">Diagnostics</Typography>
-          <Button size="small" variant="outlined" onClick={testTelemetry}>Test telemetry</Button>
+          <Button size="small" variant="outlined" onClick={() => void testTelemetry()}>Test telemetry</Button>
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -131,6 +137,8 @@ export function DiagnosticsTab() {
             />
           ))}
         </Box>
+
+        {loadError && <Alert severity="error" sx={{ mb: 2 }}>{loadError}</Alert>}
 
         {rows.length === 0 ? (
           <Typography color="text.secondary">

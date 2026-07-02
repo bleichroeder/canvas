@@ -5,7 +5,15 @@
 //   All DOM accesses (window, location, screen, navigator, localStorage) are guarded.
 // - tsMs is monotonic since module load via performance.now(), NOT wall clock.
 // - Kill switches: ?diag=off URL param OR localStorage.canvas.diag.disabled === '1'.
-// - POST failures to /api/telemetry/error are swallowed silently (keepalive: true).
+// - POST failures to /api/telemetry/error are swallowed silently.
+
+// ---------------------------------------------------------------------------
+// sanitizeMessage — strips URL-shaped substrings from error messages/stacks
+// before emitting telemetry, so token-bearing or path-revealing URLs don't leak.
+// ---------------------------------------------------------------------------
+export function sanitizeMessage(s: string): string {
+  return s.replace(/https?:\/\/[^\s"]+/gi, '[url]');
+}
 
 export class Ring<T> {
   private buf: T[] = [];
@@ -129,17 +137,21 @@ export async function reportFatal(
   sourceType: string,
 ): Promise<void> {
   if (!isEnabled()) return;
+  const sanitizedErr = {
+    ...err,
+    message: sanitizeMessage(err.message),
+    stack: err.stack !== undefined ? sanitizeMessage(err.stack) : undefined,
+  };
   const payload = {
     events: ring.snapshot(),
     session: getSessionContext(sourceType),
-    error: err,
+    error: sanitizedErr,
   };
   try {
     await fetch('/api/telemetry/error', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
-      keepalive: true,
     });
   } catch {
     // Never let a telemetry failure cascade to the calling code.
@@ -154,6 +166,11 @@ export function __resetForTests(): void {
   (ring as unknown as { buf: unknown[] }).buf = [];
 }
 
+// Module-level debounce for global fatal reports — prevents report storms from
+// error loops. Only fires reportFatal if more than 5 s have elapsed since the
+// last global-handler invocation.
+let lastGlobalFatalMs = 0;
+
 // ---------------------------------------------------------------------------
 // installGlobalErrorHandlers — hooks window.onerror + unhandledrejection.
 // No-op in non-DOM environments (Bun tests, SSR).
@@ -162,11 +179,23 @@ export function installGlobalErrorHandlers(): void {
   if (typeof window === 'undefined') return;
 
   window.addEventListener('error', (ev) => {
+    const msg = ev.message ?? 'unknown error';
     emit('browser_error', {
-      message: ev.message,
+      message: msg,
       filename: ev.filename,
       lineno: ev.lineno,
     });
+    const now = performance.now();
+    if (now - lastGlobalFatalMs > 5000) {
+      lastGlobalFatalMs = now;
+      const sanitizedStack = ev.error?.stack
+        ? sanitizeMessage(ev.error.stack)
+        : undefined;
+      reportFatal(
+        { message: sanitizeMessage(msg), kind: 'browser', stack: sanitizedStack },
+        'unknown',
+      ).catch(() => {});
+    }
   });
 
   window.addEventListener('unhandledrejection', (ev) => {
@@ -178,5 +207,17 @@ export function installGlobalErrorHandlers(): void {
           ? reason.message
           : 'unhandled rejection';
     emit('browser_error', { message: msg, kind: 'unhandledrejection' });
+    const now = performance.now();
+    if (now - lastGlobalFatalMs > 5000) {
+      lastGlobalFatalMs = now;
+      const sanitizedStack =
+        reason instanceof Error && reason.stack
+          ? sanitizeMessage(reason.stack)
+          : undefined;
+      reportFatal(
+        { message: sanitizeMessage(msg), kind: 'browser', stack: sanitizedStack },
+        'unknown',
+      ).catch(() => {});
+    }
   });
 }

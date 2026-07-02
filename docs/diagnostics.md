@@ -34,6 +34,12 @@ Two ways to open the live event overlay without needing the admin UI:
 | `TELEMETRY_RETENTION_DAYS` | `30` | Reports older than this are pruned on every insert. |
 | `TELEMETRY_MAX_ROWS` | `1000` | Global cap. When exceeded, oldest reports are pruned. |
 
+> **Note:** `TELEMETRY_ENABLED=false` disables **new** recording only — existing rows persist in the database until you delete them via the admin UI or directly in the DB.
+
+### Deployment note
+
+Rate limiting keys off the `X-Forwarded-For` header. This is trustworthy when canvas is behind a reverse proxy (Caddy or cloudflared, the default self-hosting path) because the proxy sets the header to the real client IP. If you expose the canvas container directly to the internet — without a proxy in front — an attacker can spoof `X-Forwarded-For` and bypass the rate limit. In that configuration you should set `TELEMETRY_ENABLED=false` or firewall the telemetry endpoint to trusted networks.
+
 ## Disabling for one session
 
 If you don't want a specific playback session tracked:

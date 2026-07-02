@@ -55,7 +55,15 @@ export function DiagnosticsOverlay({ open, onClose, sourceType }: Props) {
     try {
       await navigator.clipboard.writeText(payload);
     } catch {
-      // Fallback: select textarea (skip on Tesla)
+      // Fallback for Tesla / restricted clipboard: create a textarea, select + copy.
+      const ta = document.createElement('textarea');
+      ta.value = payload;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* nothing else to try */ }
+      document.body.removeChild(ta);
     }
   };
 
