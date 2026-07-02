@@ -35,6 +35,11 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=canvas
+            org.opencontainers.image.description=Self-hosted Tesla-in-car streaming client. Plays from Plex and Flixify sources via a canvas + WebCodecs pipeline.
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.vendor=bleichroeder
 
       - name: Build and push
         uses: docker/build-push-action@v5
