@@ -9,7 +9,7 @@ jobs:
     name: multi-arch build + push to ghcr.io
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - uses: actions/checkout@v4
@@ -54,3 +54,12 @@ jobs:
             GIT_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: canvas ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false

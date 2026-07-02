@@ -7,17 +7,32 @@ Self-hosted Tesla-in-car streaming client. Bypasses Tesla's `<video>`-while-not-
 
 > Passenger entertainment only — not for the driver, not for a moving vehicle.
 
-## Quick start
+## Quick start (recommended)
 
-```bash
-docker run -d --restart unless-stopped \
-  --name canvas \
-  -p 80:80 -p 443:443 -p 8787:8787 \
+1. Download the compose file:
+   ```
+   curl -O https://raw.githubusercontent.com/bleichroeder/canvas/main/docker-compose.yml
+   ```
+2. Start canvas + auto-updater:
+   ```
+   docker-compose up -d
+   ```
+3. Open http://localhost:8787/setup and follow the wizard.
+
+Canvas keeps itself up to date via [Watchtower](https://containrrr.dev/watchtower/), bundled in the compose file. See [docs/updates.md](docs/updates.md) for details.
+
+### Advanced — plain `docker run`
+
+If you'd rather not use compose (or Watchtower), you can run canvas directly:
+
+```
+docker run -d --restart unless-stopped --name canvas \
+  -p 8787:8787 -p 80:80 -p 443:443 \
   -v canvas-data:/data \
   ghcr.io/bleichroeder/canvas:latest
 ```
 
-Or with `docker compose` — download [`docker-compose.yml`](docker-compose.yml) alongside it and `docker compose up -d`.
+You'll be responsible for pulling updates. See [docs/updates.md](docs/updates.md).
 
 Then open **`http://localhost:8787/`** in a browser. The setup wizard walks you through:
 

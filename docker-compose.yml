@@ -1,29 +1,36 @@
-# canvas — one-command install with browser-configured deployment.
-#
-#   docker compose up -d
-#   docker compose logs -f canvas
-#
-# Then open http://localhost:8787/ in a browser and follow the setup wizard:
-# create your admin account and pick how canvas is exposed (Cloudflare Quick
-# Tunnel is the recommended default — no signup or domain required).
-
 services:
   canvas:
     image: ghcr.io/bleichroeder/canvas:latest
     container_name: canvas
     restart: unless-stopped
     ports:
-      - "80:80"       # Caddy HTTP (mode=domain LE challenge + redirect)
-      - "443:443"     # Caddy HTTPS (mode=domain)
-      - "8787:8787"   # Bun canvas server (always; localhost admin fallback)
+      - "8787:8787"
+      - "80:80"
+      - "443:443"
     volumes:
-      - ./canvas-data:/data
+      - canvas-data:/data
+    # Diagnostic + telemetry knobs — see docs/diagnostics.md
     # environment:
-    #   # Diagnostics — records player errors to your local SQLite.
-    #   # See docs/diagnostics.md.
-    #   # TELEMETRY_ENABLED: "true"
-    #   # TELEMETRY_RETENTION_DAYS: "30"
-    #   # TELEMETRY_MAX_ROWS: "1000"
-    #
-    #   # For advanced users running their own reverse proxy in front:
-    #   # CANVAS_EXTERNAL_PROXY: "1"
+    #   TELEMETRY_ENABLED: "true"
+    #   TELEMETRY_RETENTION_DAYS: "30"
+    #   TELEMETRY_MAX_ROWS: "1000"
+    labels:
+      # Opt this container into Watchtower's auto-update watch.
+      com.centurylinklabs.watchtower.enable: "true"
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: canvas-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Only update containers explicitly labeled — don't touch other stuff.
+      WATCHTOWER_LABEL_ENABLE: "true"
+      # Check every 5 minutes.
+      WATCHTOWER_POLL_INTERVAL: "300"
+      # Remove old images after successful update to save disk.
+      WATCHTOWER_CLEANUP: "true"
+
+volumes:
+  canvas-data:
