@@ -1,5 +1,8 @@
+import { installGlobalErrorHandlers } from './player/diagnostics';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+
+installGlobalErrorHandlers();
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Fade from '@mui/material/Fade';

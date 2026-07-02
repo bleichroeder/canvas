@@ -8,6 +8,8 @@
 
 # --- Stage 1: build the React frontend ---
 FROM node:20-alpine AS web-build
+ARG VERSION=dev
+ENV VITE_CANVAS_VERSION=$VERSION
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
