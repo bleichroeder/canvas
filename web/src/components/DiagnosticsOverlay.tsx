@@ -30,6 +30,8 @@ const KIND_COLOR: Record<string, string> = {
   session_start: 'success',
   user_gesture: 'default',
   stall_detected: 'warning',
+  frame_stall: 'warning',
+  frame_recovery: 'success',
   browser_error: 'error',
 };
 

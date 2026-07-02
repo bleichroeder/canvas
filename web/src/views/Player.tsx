@@ -358,11 +358,16 @@ export function Player({ source, id }: Props) {
         // Emit a queue_snapshot every 2 seconds for diagnostics ring.
         if (snapshotIntervalRef.current !== null) clearInterval(snapshotIntervalRef.current);
         snapshotIntervalRef.current = window.setInterval(() => {
+          const videoSink = videoRef.current;
+          const audioSink = audioRef.current;
           emit('queue_snapshot', {
-            videoQueue: videoRef.current?.queueLength ?? 0,
-            audioQueue: audioRef.current?.queueLength ?? 0,
+            videoQueue: videoSink?.queueLength ?? 0,
+            audioQueue: audioSink?.queueLength ?? 0,
             pendingV: pendingVideoRef.current.length,
             pendingA: pendingAudioRef.current.length,
+            clockSec: audioSink?.currentTime() ?? 0,
+            videoHeadPtsSec: videoSink?.headPtsSec ?? null,
+            droppedTotal: videoSink?.droppedFrameCount ?? 0,
           });
         }, 2000);
       } catch (e) {

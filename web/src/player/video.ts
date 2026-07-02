@@ -22,17 +22,19 @@ export interface VideoSinkOptions {
 // Backpressure thresholds (in queued frames).
 //   HIGH_WATER: pause the fetcher when we've buffered this many frames
 //   LOW_WATER:  resume when we drain back to this many
-// At 24 fps, 12 frames ≈ 0.5 sec of buffered video — plenty of headroom for
-// the draw loop without committing a lot of memory.
-const HIGH_WATER = 12;
-const LOW_WATER = 4;
+// At 24 fps, 48 frames ≈ 2 sec of buffered video — enough headroom for a
+// fast desktop decoder that overshoots the pause signal, without going wild
+// on memory (raised from 12/4/18 in v0.4.0 after traces showed the tighter
+// caps caused HARD_CAP saturation within 15ms of first frame).
+const HIGH_WATER = 48;
+const LOW_WATER = 16;
 // Defense-in-depth cap. If backpressure doesn't take effect quickly enough
 // (the fetcher is still in flight when we signal pause, demuxer still has
 // chunks to emit, decoder still has chunks to consume), we drop the
 // INCOMING frame rather than the oldest. Dropping oldest is wrong when the
 // decoder races ahead — every queued frame is in the future and the oldest
 // is the one closest to the clock and most likely to be the next one drawn.
-const HARD_CAP = 18;
+const HARD_CAP = 60;
 
 // Draw cadence in ms. ~16ms ≈ 60Hz, more than enough for 24-30fps streams.
 // We use setInterval rather than requestAnimationFrame because Tesla's
@@ -54,6 +56,8 @@ export class VideoSink {
   private firstFrameDispatched = false;
   private droppedFrames = 0;
   private backpressureState: 'flowing' | 'paused' = 'flowing';
+  private stallTicks = 0;        // consecutive drawDue calls that didn't draw
+  private stallActive = false;   // have we emitted frame_stall (waiting for recovery)?
 
   private emitFrame = (() => {
     let last = 0;
@@ -127,6 +131,9 @@ export class VideoSink {
   get queuedFrames(): number { return this.frames.length; }
   get queueLength(): number { return this.frames.length; }
   get droppedFrameCount(): number { return this.droppedFrames; }
+  get headPtsSec(): number | null {
+    return this.frames.length > 0 ? this.frames[0]!.timestamp / 1_000_000 : null;
+  }
 
   private onFrame(frame: VideoFrame): void {
     if (frame.duration) {
@@ -177,6 +184,27 @@ export class VideoSink {
       this.backpressureState = 'flowing';
       emit('backpressure', { direction: 'resume', queueDepth: this.frames.length });
       if (this.onBackpressure) this.onBackpressure('resume');
+    }
+    if (drawn) {
+      if (this.stallActive) {
+        this.stallActive = false;
+        emit('frame_recovery', {
+          clockSec,
+          queueDepth: this.frames.length,
+        });
+      }
+      this.stallTicks = 0;
+    } else {
+      this.stallTicks += 1;
+      const STALL_THRESHOLD = 30; // ~500ms at 16ms drawDue cadence
+      if (!this.stallActive && this.stallTicks >= STALL_THRESHOLD) {
+        this.stallActive = true;
+        emit('frame_stall', {
+          clockSec,
+          queueDepth: this.frames.length,
+          headPtsSec: this.frames.length > 0 ? this.frames[0]!.timestamp / 1_000_000 : null,
+        });
+      }
     }
   }
 }
