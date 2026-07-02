@@ -33,8 +33,8 @@ export function getErrorReport(db: Db, id: string): ErrorReport | null {
 }
 
 export function deleteErrorReport(db: Db, id: string): boolean {
-  const res = db.delete(errorReports).where(eq(errorReports.id, id)).run();
-  return res.changes > 0;
+  const rows = db.delete(errorReports).where(eq(errorReports.id, id)).returning({ id: errorReports.id }).all();
+  return rows.length > 0;
 }
 
 export function countErrorReports(db: Db): number {
@@ -43,8 +43,8 @@ export function countErrorReports(db: Db): number {
 }
 
 export function pruneErrorReportsByAge(db: Db, olderThanMs: number): number {
-  const res = db.delete(errorReports).where(lt(errorReports.createdAt, olderThanMs)).run();
-  return res.changes;
+  const rows = db.delete(errorReports).where(lt(errorReports.createdAt, olderThanMs)).returning({ id: errorReports.id }).all();
+  return rows.length;
 }
 
 export function pruneErrorReportsByCap(db: Db, keepNewest: number): number {
@@ -60,6 +60,6 @@ export function pruneErrorReportsByCap(db: Db, keepNewest: number): number {
     .all()
     .map((r) => r.id);
   if (keepIds.length < keepNewest) return 0; // fewer rows than cap; nothing to prune
-  const res = db.delete(errorReports).where(notInArray(errorReports.id, keepIds)).run();
-  return res.changes;
+  const rows = db.delete(errorReports).where(notInArray(errorReports.id, keepIds)).returning({ id: errorReports.id }).all();
+  return rows.length;
 }
