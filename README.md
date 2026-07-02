@@ -66,7 +66,9 @@ docker restart canvas
 
 Volume state (`canvas-data`) survives updates: SQLite DB, deployment config, Caddy certs (if applicable).
 
-## Environment variables
+## Configuration
+
+### Environment variables
 
 | Var | Default | Description |
 |---|---|---|
@@ -76,6 +78,12 @@ Volume state (`canvas-data`) survives updates: SQLite DB, deployment config, Cad
 | `CANVAS_DATA_DIR` | `/data` | Persistent state root |
 | `CANVAS_EXTERNAL_PROXY` | (unset) | `1` = disable bundled Caddy/cloudflared |
 | `CANVAS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated CORS allowlist (dev only; ignored in bundled-proxy modes since everything is same-origin) |
+
+### Diagnostics
+
+Canvas records player errors locally to help you debug playback issues. Everything stays on your server — no third-party data collection. See [docs/diagnostics.md](docs/diagnostics.md).
+
+Env: `TELEMETRY_ENABLED` (default `true`), `TELEMETRY_RETENTION_DAYS` (default `30`), `TELEMETRY_MAX_ROWS` (default `1000`).
 
 ## Layout
 

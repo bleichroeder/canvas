@@ -18,6 +18,12 @@ services:
       - "8787:8787"   # Bun canvas server (always; localhost admin fallback)
     volumes:
       - ./canvas-data:/data
-    # For advanced users running their own reverse proxy in front:
     # environment:
-    #   CANVAS_EXTERNAL_PROXY: "1"
+    #   # Diagnostics — records player errors to your local SQLite.
+    #   # See docs/diagnostics.md.
+    #   # TELEMETRY_ENABLED: "true"
+    #   # TELEMETRY_RETENTION_DAYS: "30"
+    #   # TELEMETRY_MAX_ROWS: "1000"
+    #
+    #   # For advanced users running their own reverse proxy in front:
+    #   # CANVAS_EXTERNAL_PROXY: "1"
