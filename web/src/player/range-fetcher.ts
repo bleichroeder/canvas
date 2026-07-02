@@ -140,8 +140,10 @@ export class RangeFetcher {
       reader = body.getReader();
       while (this.running) {
         if (this.paused) {
-          // Stop pulling but keep the stream alive for resume(); browsers will
-          // back-pressure the underlying network connection when we stop reading.
+          // Stop pulling but keep the stream alive for resume(). TCP flow
+          // control will eventually slow the server as our socket buffer
+          // fills; content already in the OS/browser buffer will burst
+          // through on resume (why ChunkBuffer's feed throttling exists).
           await new Promise<void>((resolve) => {
             const tick = () => {
               if (!this.running || !this.paused) resolve();

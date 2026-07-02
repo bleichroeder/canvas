@@ -26,6 +26,11 @@ export interface VideoSinkOptions {
 // fast desktop decoder that overshoots the pause signal, without going wild
 // on memory (raised from 12/4/18 in v0.4.0 after traces showed the tighter
 // caps caused HARD_CAP saturation within 15ms of first frame).
+//
+// Since v0.7.0, ChunkBuffer (chunk-buffer.ts) is the primary feed-rate
+// throttle — decoders only get chunks within ~1.5s of the audio clock. The
+// HIGH_WATER/LOW_WATER pressure here is now a safety net for edge cases
+// where the decoder outputs more frames than ChunkBuffer's headroom implies.
 const HIGH_WATER = 48;
 const LOW_WATER = 16;
 // Defense-in-depth cap. If backpressure doesn't take effect quickly enough

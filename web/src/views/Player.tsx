@@ -46,12 +46,14 @@ function classifyError(e: Error): string {
 
 const PROGRESS_INTERVAL_MS = 15_000;
 
-// Pre-gesture pending-sample caps. The engine fetches at line rate as soon as
-// it boots; if the user takes a while to tap Play, encoded chunks pile up in
-// these arrays and can swallow hundreds of MB of heap. When either exceeds
-// its cap, we pause the fetcher. Once the user starts playback, the arrays
-// drain into the decoders and the fetcher resumes.
-// 240 video chunks ≈ 10 sec @ 24fps; 480 audio chunks ≈ 10 sec @ 47 packets/sec (AAC).
+// Pre-gesture pending-sample caps. Since v0.7.0 the ChunkBuffer in engine.ts
+// throttles feed rate based on pts lead (~1.5s ahead of clock), so in normal
+// operation these arrays hold at most a few hundred KB. These caps remain as
+// a defensive backstop: if a user tabs away for 10+ seconds before hitting
+// Play and the fetcher fills the ChunkBuffer to its own pause-lead threshold,
+// chunks still eventually reach these arrays. Hitting the cap pauses the
+// fetcher. Once the user starts playback the arrays drain into the decoders.
+// 240 video chunks ≈ 10 sec @ 24fps; 480 audio chunks ≈ 10 sec @ 47 packets/sec.
 const MAX_PENDING_VIDEO_CHUNKS = 240;
 const MAX_PENDING_AUDIO_CHUNKS = 480;
 

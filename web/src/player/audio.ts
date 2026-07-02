@@ -51,10 +51,8 @@ export class AudioSink {
     });
     this.worklet.port.onmessage = (e) => {
       if (e.data?.type === 'progress') {
-        // The worklet still reports framesPlayed in the progress payload
-        // (preserving the wire protocol) but nothing on the main thread
-        // reads it after the shift to pts-based clocking — spec's
-        // "kept in both files" is satisfied by the worklet's own use.
+        // Worklet also sends framesPlayed; unused on the main thread since
+        // the clock is pts-driven.
         if (typeof e.data.currentPtsSec === 'number') {
           this.currentPtsSec = e.data.currentPtsSec;
         }
@@ -79,6 +77,10 @@ export class AudioSink {
   /** AudioSink decodes synchronously into the worklet; no internal queue. */
   get queueLength(): number { return 0; }
 
+  /** PTS (in seconds) of the audio sample the worklet is currently outputting.
+   *  This is the master playback clock for video sync — NOT cumulative playback
+   *  duration. When the worklet's internal FIFO crosses batch boundaries with a
+   *  pts discontinuity, this value jumps accordingly. */
   currentTime(): number {
     return this.currentPtsSec;
   }
