@@ -1,5 +1,16 @@
 import { emit } from './diagnostics';
 
+/**
+ * Strip URL-shaped substrings from error messages before emitting telemetry,
+ * so token-bearing or path-revealing URLs in downstream throws don't leak.
+ * Applied to fetch_error only; demux_error/video_error/audio_error messages
+ * come exclusively from WebCodecs error events or our own throws and never
+ * embed URLs, so they are left as-is.
+ */
+function sanitizeMessage(m: string): string {
+  return m.replace(/https?:\/\/[^\s"]+/gi, '[url]');
+}
+
 export interface RangeFetcherOptions {
   url: string;
   chunkSize?: number;
@@ -133,7 +144,7 @@ export class RangeFetcher {
       if ((e as Error).name === 'AbortError') return;
       this.running = false;
       emit('fetch_error', {
-        message: (e as Error).message,
+        message: sanitizeMessage((e as Error).message),
         offset: this.offset,
         status: this.lastStatus,
       });

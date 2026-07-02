@@ -61,6 +61,7 @@ export class AutoSource implements StreamSource {
   private pending: { offset: number; bytes: Uint8Array }[] = [];
   private sniffed = false;
   private head: Uint8Array = new Uint8Array(0);
+  private format: StreamFormat = 'unknown';
 
   constructor(opts: StreamSourceCallbacks) {
     // Wrap onReady to emit demux_ready before forwarding to the caller.
@@ -69,9 +70,10 @@ export class AutoSource implements StreamSource {
       ...opts,
       onReady: (info) => {
         emit('demux_ready', {
+          format: this.format,
           videoCodec: info.videoConfig?.codec ?? null,
           audioCodec: info.audioConfig?.codec ?? null,
-          duration: info.duration,
+          tracks: (info.videoConfig ? 1 : 0) + (info.audioConfig ? 1 : 0),
         });
         opts.onReady(info);
       },
@@ -98,6 +100,7 @@ export class AutoSource implements StreamSource {
     if (!this.sniffed && this.head.length >= 8) {
       const format = sniffFormat(this.head);
       this.sniffed = true;
+      this.format = format;
       if (format === 'mkv') {
         this.inner = new MkvSourceAdapter(this.opts);
       } else if (format === 'mp4') {

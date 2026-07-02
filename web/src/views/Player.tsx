@@ -312,6 +312,10 @@ export function Player({ source, id }: Props) {
               }
             }
           },
+          // Note: we do NOT re-emit the fatal here. Every path into onFatal is
+          // preceded by a specific *_error emit at the point of failure
+          // (fetch_error / demux_error / video_error / audio_error), so the ring
+          // snapshot inside reportFatal already contains the error event.
           onFatal: (e) => {
             const kind = classifyError(e);
             reportFatal({ message: e.message, kind, stack: e.stack }, source).catch(() => {});
