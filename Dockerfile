@@ -56,4 +56,17 @@ ENV CANVAS_DATA_DIR=/data
 # regardless of mode). Cloudflared modes don't need any external ports.
 EXPOSE 80 443 8787
 
+# OCI image metadata — populates registry listings + `docker inspect`.
+# VERSION + GIT_SHA are passed by the release workflow; local `docker build`
+# uses the defaults, which is fine.
+ARG VERSION=dev
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="canvas"
+LABEL org.opencontainers.image.description="Self-hosted Tesla-in-car streaming client. Plays from Plex and Flixify sources via a canvas + WebCodecs pipeline."
+LABEL org.opencontainers.image.source="https://github.com/bleichroeder/canvas"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.vendor="bleichroeder"
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
+LABEL org.opencontainers.image.version="${VERSION}"
+
 ENTRYPOINT ["/sbin/tini", "--", "/app/docker/entrypoint.sh"]

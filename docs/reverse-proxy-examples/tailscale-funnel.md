@@ -39,7 +39,7 @@ Save as `docker-compose.yml`:
 ```yaml
 services:
   canvas:
-    image: ghcr.io/dherzfeld/canvas:latest
+    image: ghcr.io/bleichroeder/canvas:latest
     container_name: canvas
     restart: unless-stopped
     network_mode: "service:canvas-tailscale"

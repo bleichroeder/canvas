@@ -1,5 +1,8 @@
 # canvas
 
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![Build Status](https://github.com/bleichroeder/canvas/actions/workflows/ci.yml/badge.svg)
+
 Self-hosted Tesla-in-car streaming client. Bypasses Tesla's `<video>`-while-not-in-Park restriction via a canvas + WebCodecs pipeline. Plays from Plex and Flixify sources.
 
 > Passenger entertainment only — not for the driver, not for a moving vehicle.
@@ -11,7 +14,7 @@ docker run -d --restart unless-stopped \
   --name canvas \
   -p 80:80 -p 443:443 -p 8787:8787 \
   -v canvas-data:/data \
-  ghcr.io/dherzfeld/canvas:latest
+  ghcr.io/bleichroeder/canvas:latest
 ```
 
 Or with `docker compose` — download [`docker-compose.yml`](docker-compose.yml) alongside it and `docker compose up -d`.
@@ -49,7 +52,7 @@ docker run -d --restart unless-stopped \
   -e CANVAS_EXTERNAL_PROXY=1 \
   -p 8787:8787 \
   -v canvas-data:/data \
-  ghcr.io/dherzfeld/canvas:latest
+  ghcr.io/bleichroeder/canvas:latest
 ```
 
 Canvas skips its bundled Caddy + cloudflared and runs HTTP-only on `:8787`. Point your existing nginx / Traefik / Caddy / Cloudflare Tunnel / Tailscale at that. Settings → Deployment shows "Managed externally."
@@ -57,7 +60,7 @@ Canvas skips its bundled Caddy + cloudflared and runs HTTP-only on `:8787`. Poin
 ## Updating
 
 ```bash
-docker pull ghcr.io/dherzfeld/canvas:latest
+docker pull ghcr.io/bleichroeder/canvas:latest
 docker restart canvas
 ```
 
