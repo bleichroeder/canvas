@@ -48,7 +48,7 @@ export class RangeFetcher {
   }
 
   pause(): void { this.paused = true; }
-  resume(): void { if (this.running && this.paused) { this.paused = false; void this.loop(); } }
+  resume(): void { if (this.paused) this.paused = false; }
   seek(byteOffset: number): void { this.abort(); this.offset = byteOffset; this.start(); }
 
   abort(): void {
@@ -62,11 +62,51 @@ export class RangeFetcher {
   get total(): number | null { return this.totalSize; }
 
   private async loop(): Promise<void> {
-    // One fetch, streamed via response.body. Range header is still sent so
-    // servers that support Partial Content (206) can resume from `this.offset`
-    // after a seek; servers that don't (Plex's transcoder serves the full file
-    // as 200) work too — we just stream the whole body as it arrives. Either
-    // way, onChunk fires per network read, not after the response completes.
+    // Retry backoff for attempts 2, 3, 4. Attempt 1 runs immediately.
+    const RETRY_DELAYS_MS = [200, 500, 2000];
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      if (!this.running) return;
+      if (attempt > 0) {
+        const delayMs = RETRY_DELAYS_MS[attempt - 1]!;
+        emit('fetch_retry', {
+          attempt,
+          delayMs,
+          reason: sanitizeMessage(lastError?.message ?? 'unknown'),
+        });
+        await new Promise<void>((r) => setTimeout(r, delayMs));
+        if (!this.running) return;
+      }
+      try {
+        await this.attemptFetch();
+        return; // clean completion — attemptFetch emitted fetch_end + called onDone.
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+        lastError = e as Error;
+        // Non-retryable: HTTP status error (server-side rejection).
+        if (this.lastStatus >= 400) break;
+      }
+    }
+
+    // All attempts exhausted or non-retryable failure.
+    this.running = false;
+    if (lastError) {
+      emit('fetch_error', {
+        message: sanitizeMessage(lastError.message),
+        offset: this.offset,
+        status: this.lastStatus,
+      });
+      this.onError(lastError);
+    }
+  }
+
+  private async attemptFetch(): Promise<void> {
+    // Body of the original loop(): one HTTP fetch, streamed via response.body.
+    // On any exception (network error, reader.read throw, missing body), we
+    // throw so the outer loop() decides retry vs. fatal. AbortError propagates
+    // to loop() which returns silently. HTTP 4xx/5xx are thrown as Error and
+    // become non-retryable via lastStatus check in loop().
     this.controller = new AbortController();
     this.startedAtMs = performance.now();
     this.totalRead = 0;
@@ -129,15 +169,6 @@ export class RangeFetcher {
         });
         this.onDone();
       }
-    } catch (e) {
-      if ((e as Error).name === 'AbortError') return;
-      this.running = false;
-      emit('fetch_error', {
-        message: sanitizeMessage((e as Error).message),
-        offset: this.offset,
-        status: this.lastStatus,
-      });
-      this.onError(e as Error);
     } finally {
       try { reader?.releaseLock(); } catch { /* ignore */ }
     }

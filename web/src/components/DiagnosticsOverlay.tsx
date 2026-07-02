@@ -16,6 +16,7 @@ const KIND_COLOR: Record<string, string> = {
   fetch_start: 'info',
   fetch_chunk: 'default',
   fetch_end: 'info',
+  fetch_retry: 'warning',
   fetch_error: 'error',
   demux_ready: 'success',
   demux_error: 'error',
