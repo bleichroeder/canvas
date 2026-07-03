@@ -670,6 +670,7 @@ export function Player({ source, id }: Props) {
         onVolumeChange={onVolumeChange}
         onMuteToggle={onMuteToggle}
         onFullscreenToggle={onFullscreenToggle}
+        onOpenDiagnostics={() => setDiagOpen(true)}
         onSubtitleChange={onSubtitleChange}
         onCaptionsOffsetChange={onCaptionsOffsetChange}
       />

@@ -24,6 +24,8 @@ import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import ClosedCaptionOutlinedIcon from '@mui/icons-material/ClosedCaptionOutlined';
 import ClosedCaptionIcon from '@mui/icons-material/ClosedCaption';
 import CheckIcon from '@mui/icons-material/Check';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import BugReportIcon from '@mui/icons-material/BugReport';
 
 export interface SubtitleTrackOption {
   id: string;
@@ -50,6 +52,7 @@ interface PlayerControlsProps {
   onVolumeChange(v: number): void;
   onMuteToggle(): void;
   onFullscreenToggle(): void;
+  onOpenDiagnostics(): void;
   onSubtitleChange(id: string | null): void;
   onCaptionsOffsetChange(ms: number): void;
 }
@@ -115,6 +118,7 @@ export function PlayerControls(p: PlayerControlsProps) {
   const [previewPos, setPreviewPos] = useState<number | null>(null);
   const [previewBroken, setPreviewBroken] = useState(false);
   const [ccAnchor, setCcAnchor] = useState<HTMLElement | null>(null);
+  const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const hasTracks = p.subtitleTracks.length > 0;
   const captionsOn = p.selectedSubtitleId !== null;
 
@@ -263,6 +267,15 @@ export function PlayerControls(p: PlayerControlsProps) {
                 </IconButton>
               </Tooltip>
             )}
+            <Tooltip title="More">
+              <IconButton
+                onClick={(e) => setMoreAnchor(e.currentTarget)}
+                aria-label="more"
+                sx={{ ml: 1 }}
+              >
+                <MoreVertIcon />
+              </IconButton>
+            </Tooltip>
             <Tooltip title={p.fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
               <IconButton onClick={p.onFullscreenToggle} aria-label="fullscreen toggle" sx={{ ml: 1.5 }}>
                 {p.fullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
@@ -323,6 +336,23 @@ export function PlayerControls(p: PlayerControlsProps) {
             sx={{ color: 'primary.main' }}
           />
         </Box>
+      </Menu>
+      <Menu
+        anchorEl={moreAnchor}
+        open={Boolean(moreAnchor)}
+        onClose={() => setMoreAnchor(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        slotProps={{ paper: { sx: { minWidth: 200, mb: 1 } } }}
+      >
+        <MenuItem
+          onClick={() => { setMoreAnchor(null); p.onOpenDiagnostics(); }}
+        >
+          <ListItemIcon sx={{ minWidth: 36 }}>
+            <BugReportIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Diagnostics" />
+        </MenuItem>
       </Menu>
     </Box>
   );
