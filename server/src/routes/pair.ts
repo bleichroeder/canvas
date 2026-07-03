@@ -30,7 +30,7 @@ const PAIR_TTL_SEC = 10 * 60;
 const SUPPORTED_TYPES = ['plex', 'flixify'] as const;
 type SupportedType = (typeof SUPPORTED_TYPES)[number];
 
-// Flixify-specific shared bits (ported from worker/src/routes/pair-flixify.ts).
+// Flixify-specific shared bits (ported from the pre-self-host Cloudflare Worker).
 const FLIXIFY_USER_AGENT = 'PP-base Kodi plugin 2.1.17';
 const FLIXIFY_DEFAULT_MIRROR = 'thecalm.site';
 
@@ -97,7 +97,7 @@ async function flixifySiteSettings(auth: FlixifyAuth): Promise<{ asset_host?: st
   return (await res.json().catch(() => ({}))) as { asset_host?: string };
 }
 
-// /plex-servers helpers (ported from worker/src/routes/pair-plex-servers.ts).
+// /plex-servers helpers (ported from the pre-self-host Cloudflare Worker).
 interface PlexConnection { protocol: string; uri: string; local: boolean; relay: boolean }
 interface PlexResource {
   name: string;

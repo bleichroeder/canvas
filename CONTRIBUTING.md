@@ -4,11 +4,10 @@ Thanks for the interest. Canvas is a hobby project I share with friends and a fe
 
 ## Local development
 
-Canvas has two runtime pieces + a legacy worker:
+Canvas has two runtime pieces:
 
 - `server/` — Bun + Hono + Drizzle + SQLite backend
 - `web/` — Vite + React + MUI frontend
-- `worker/` — frozen Cloudflare Worker (retiring; ignore for new work)
 
 **Prereqs:** [Bun 1.3+](https://bun.sh) for the server, Node 20+ for the web build.
 

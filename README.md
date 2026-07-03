@@ -104,6 +104,5 @@ Env: `TELEMETRY_ENABLED` (default `true`), `TELEMETRY_RETENTION_DAYS` (default `
 
 - `server/` — Bun + Hono + Drizzle + SQLite backend. See `server/README.md` for dev commands.
 - `web/` — Vite + React + MUI frontend. Built + bundled into the Docker image; `cd web && npm run dev` for hot-reload dev.
-- `worker/` — Frozen legacy Cloudflare Worker.
 
 Design docs: `docs/superpowers/specs/`. Implementation plans: `docs/superpowers/plans/`.

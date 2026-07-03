@@ -1,8 +1,9 @@
 # canvas-server
 
-Self-hosted backend for canvas. Bun + Hono + Drizzle + SQLite. Ports the
-former Cloudflare Worker (`worker/`) 1:1 — same URL contract; the React
-frontend (`web/`) talks to either backend by setting `VITE_CANVAS_API`.
+Self-hosted backend for canvas. Bun + Hono + Drizzle + SQLite. Ported 1:1
+from the former Cloudflare Worker implementation, keeping the same URL
+contract; the React frontend (`web/`) talks to it by setting
+`VITE_CANVAS_API` in dev or via the same-origin Docker image in prod.
 
 ## Status
 
