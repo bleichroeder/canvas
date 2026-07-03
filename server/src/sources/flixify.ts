@@ -397,13 +397,18 @@ export const flixifyAdapter: SourceAdapter = {
       const eps = resp?.data?.episodes ?? [];
       return eps.map((ep) => {
         const epPoster = imageUrl(auth, ep.images?.preview);
+        // Use encodeFlixifyItemId here to match the id shape home rows emit
+        // (`${rawId}~${encodedUrl}`), so the same episode has ONE canvas id
+        // regardless of entry path. Enables cross-entry-path features like
+        // ?ep=… highlight and unified progress records.
+        const epViewOffset = ep.watched_position ?? ep.watch_progress;
         return {
-          id: String(ep.id),
+          id: encodeFlixifyItemId(ep.id, ep.url),
           title: ep.title,
           season: ep.parent_seq ?? season?.parent_seq ?? idx + 1,
           episode: ep.seq ?? 0,
           ...(ep.duration !== undefined ? { durationSec: ep.duration } : {}),
-          ...(ep.watch_progress !== undefined ? { viewOffsetSec: ep.watch_progress } : {}),
+          ...(epViewOffset !== undefined ? { viewOffsetSec: epViewOffset } : {}),
           ...(ep.description !== undefined ? { synopsis: ep.description } : {}),
           ...(epPoster !== undefined ? { poster: epPoster } : {}),
         };
