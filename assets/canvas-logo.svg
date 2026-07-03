@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" role="img" aria-label="canvas" preserveAspectRatio="xMidYMid meet">
+  <title>canvas</title>
+  <style>
+    .chev { fill: none; stroke: #4f8ef7; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+    .word { fill: #24272e; font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 44px; font-weight: 500; letter-spacing: 3px; }
+    @media (prefers-color-scheme: dark) {
+      .word { fill: #f4f5f7; }
+    }
+  </style>
+  <path class="chev" d="M 168 62 L 142 88 L 168 114" />
+  <path class="chev" d="M 352 62 L 378 88 L 352 114" />
+  <text class="word" x="260" y="100" text-anchor="middle">canvas</text>
+</svg>

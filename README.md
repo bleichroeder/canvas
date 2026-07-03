@@ -1,11 +1,30 @@
-# canvas
+<p align="center">
+  <img src="assets/canvas-logo.svg" alt="canvas" width="360" />
+</p>
 
-![License: MIT](https://img.shields.io/badge/license-MIT-blue)
-![Build Status](https://github.com/bleichroeder/canvas/actions/workflows/ci.yml/badge.svg)
+<p align="center">
+  Self-hosted streaming client for constrained in-vehicle browser environments.<br/>
+  Plays Plex and Flixify sources via a canvas + WebCodecs pipeline instead of <code>&lt;video&gt;</code>,<br/>
+  so it works where native HTML5 playback is restricted.
+</p>
 
-Self-hosted streaming client for constrained in-vehicle browser environments. Plays from Plex and Flixify sources via a canvas + WebCodecs pipeline instead of `<video>`, so it works where native HTML5 playback is restricted.
+<p align="center">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue" />
+  <img alt="Build Status" src="https://github.com/bleichroeder/canvas/actions/workflows/ci.yml/badge.svg" />
+</p>
+
+---
 
 > Passenger entertainment only — not for the driver, not for a moving vehicle.
+
+## Highlights
+
+- **Docker-first.** One `docker-compose up -d` and you're running.
+- **Auto-updating.** Bundled [Watchtower](https://containrrr.dev/watchtower/) checks ghcr every 5 minutes and rolls forward without downtime.
+- **Multi-user with per-source access control.** Plex-Home-style — admins add sources, share what they want per household member.
+- **Deploy modes for any network posture.** Local, Cloudflare Quick Tunnel, Cloudflare Named Tunnel, or your own domain with automatic Let's Encrypt certs.
+- **Diagnostics-first.** Every player event lands in a ring buffer; fatal errors surface in a local admin viewer with a full trace.
+- **MIT licensed.**
 
 ## Quick start (recommended)
 
