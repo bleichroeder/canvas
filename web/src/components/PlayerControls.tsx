@@ -123,7 +123,10 @@ export function PlayerControls(p: PlayerControlsProps) {
   const captionsOn = p.selectedSubtitleId !== null;
 
   useEffect(() => {
-    if (!p.visible) setPreviewPos(null);
+    if (!p.visible) {
+      setPreviewPos(null);
+      setMoreAnchor(null);
+    }
   }, [p.visible]);
 
   useEffect(() => {
