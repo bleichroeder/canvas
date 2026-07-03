@@ -66,7 +66,7 @@ EXPOSE 80 443 8787
 ARG VERSION=dev
 ARG GIT_SHA=unknown
 LABEL org.opencontainers.image.title="canvas"
-LABEL org.opencontainers.image.description="Self-hosted Tesla-in-car streaming client. Plays from Plex and Flixify sources via a canvas + WebCodecs pipeline."
+LABEL org.opencontainers.image.description="Self-hosted browser-based streaming client for in-car entertainment. Plays Plex and Flixify via a canvas + WebCodecs pipeline."
 LABEL org.opencontainers.image.source="https://github.com/bleichroeder/canvas"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.vendor="bleichroeder"

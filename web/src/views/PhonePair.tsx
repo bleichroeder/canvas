@@ -161,7 +161,7 @@ export function PhonePair() {
       <Typography variant="h2" sx={{ mb: 2 }}>canvas · phone pair</Typography>
       {stage.kind === 'enter-code' && (
         <Box>
-          <Typography sx={{ mb: 1 }}>Enter the code shown on your Tesla:</Typography>
+          <Typography sx={{ mb: 1 }}>Enter the code shown on your car's browser:</Typography>
           <TextField
             fullWidth
             value={code}
@@ -191,7 +191,7 @@ export function PhonePair() {
                 try {
                   const poll = await api.pairPoll(code);
                   if (poll.status === 'expired') {
-                    setStage({ kind: 'error', message: 'Pair code expired. Try again on your Tesla.' });
+                    setStage({ kind: 'error', message: 'Pair code expired. Try again on your car\'s browser.' });
                     return;
                   }
                   if (poll.sourceType === 'flixify') { void startFlixify(); return; }
@@ -278,7 +278,7 @@ export function PhonePair() {
       {stage.kind === 'done' && (
         <Box>
           <Typography variant="h3" color="success.main" sx={{ mb: 1 }}>✓ Linked</Typography>
-          <Typography>Return to your Tesla — it should pick up the source within a few seconds.</Typography>
+          <Typography>Return to your car — it should pick up the source within a few seconds.</Typography>
         </Box>
       )}
       {stage.kind === 'error' && (

@@ -12,4 +12,4 @@ If you're already running nginx / Traefik / HAProxy / whatever, canvas is just a
 
 ## Local testing
 
-You don't need any of these for local development. Canvas works fine over HTTP on `localhost` because browsers treat `localhost` as a secure context. Real deployments — Tesla, phone off wifi, another room's laptop — require the HTTPS setup covered by the recipes.
+You don't need any of these for local development. Canvas works fine over HTTP on `localhost` because browsers treat `localhost` as a secure context. Real deployments — in-car browser, phone off wifi, another room's laptop — require the HTTPS setup covered by the recipes.

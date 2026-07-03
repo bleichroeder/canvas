@@ -11,11 +11,11 @@ Canvas ships four modes for how it's exposed to the internet. Pick during the fi
 
 ## Cloudflare Quick Tunnel
 
-**How it works.** Canvas runs `cloudflared` in the background with no config; Cloudflare's edge assigns your instance a random `<hash>.trycloudflare.com` subdomain and tunnels traffic to it via an outbound connection. TLS terminates at Cloudflare (real cert, no warnings). Video streams from Plex to Tesla still go direct via plex.direct — only API + HTML + subtitles go through CF.
+**How it works.** Canvas runs `cloudflared` in the background with no config; Cloudflare's edge assigns your instance a random `<hash>.trycloudflare.com` subdomain and tunnels traffic to it via an outbound connection. TLS terminates at Cloudflare (real cert, no warnings). Video streams from Plex to the client still go direct via plex.direct — only API + HTML + subtitles go through CF.
 
 **Prerequisites.** None. Container needs outbound internet.
 
-**Trade-off.** The URL is officially "temporary." In practice it persists while cloudflared stays running, but a container restart typically produces a new URL. If you rely on a Tesla bookmark, changes require re-bookmarking.
+**Trade-off.** The URL is officially "temporary." In practice it persists while cloudflared stays running, but a container restart typically produces a new URL. If you rely on an in-car bookmark, changes require re-bookmarking.
 
 **Recommended for.** Anyone trying canvas for the first time. Households who don't mind the occasional URL rotation.
 

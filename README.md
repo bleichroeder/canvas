@@ -3,7 +3,7 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Build Status](https://github.com/bleichroeder/canvas/actions/workflows/ci.yml/badge.svg)
 
-Self-hosted Tesla-in-car streaming client. Bypasses Tesla's `<video>`-while-not-in-Park restriction via a canvas + WebCodecs pipeline. Plays from Plex and Flixify sources.
+Self-hosted streaming client for constrained in-vehicle browser environments. Plays from Plex and Flixify sources via a canvas + WebCodecs pipeline instead of `<video>`, so it works where native HTML5 playback is restricted.
 
 > Passenger entertainment only — not for the driver, not for a moving vehicle.
 
@@ -44,7 +44,7 @@ Then open **`http://localhost:8787/`** in a browser. The setup wizard walks you 
    - **Local only** — HTTP on 8787, LAN-only access
 3. **Apply** — canvas restarts, obtains TLS certs / opens the tunnel (~5-30 seconds), then shows your public URL
 
-Bookmark that URL on your Tesla (or any device); sign in with the admin credentials you just created.
+Bookmark that URL on your in-car browser (or any device); sign in with the admin credentials you just created.
 
 ## Adding sources
 

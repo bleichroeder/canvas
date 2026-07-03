@@ -66,7 +66,7 @@ docker compose up -d
 docker compose logs -f canvas-caddy
 ```
 
-Watch for `certificate obtained`. Then open your hostname in Tesla.
+Watch for `certificate obtained`. Then open your hostname in your car's browser.
 
 ## Notes
 

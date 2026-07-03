@@ -102,7 +102,7 @@ sleep 10
 docker exec canvas-tailscale tailscale funnel status
 ```
 
-That last command prints your public URL: `https://canvas.<yourtailnet>.ts.net`. Open it on Tesla.
+That last command prints your public URL: `https://canvas.<yourtailnet>.ts.net`. Open it in your car's browser.
 
 ## Notes
 

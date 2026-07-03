@@ -37,7 +37,7 @@ jobs:
             type=raw,value=latest
           labels: |
             org.opencontainers.image.title=canvas
-            org.opencontainers.image.description=Self-hosted Tesla-in-car streaming client. Plays from Plex and Flixify sources via a canvas + WebCodecs pipeline.
+            org.opencontainers.image.description=Self-hosted browser-based streaming client for in-car entertainment. Plays Plex and Flixify via a canvas + WebCodecs pipeline.
             org.opencontainers.image.licenses=MIT
             org.opencontainers.image.vendor=bleichroeder
 

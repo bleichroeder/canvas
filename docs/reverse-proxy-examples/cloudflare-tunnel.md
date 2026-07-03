@@ -59,6 +59,6 @@ Once cloudflared logs `Registered tunnel connection`, your canvas is live at `ht
 
 ## Notes
 
-- Only API + HTML traffic passes through CF's edge. Video streams direct from Plex to Tesla via plex.direct (Plex's own TLS), bypassing CF entirely. Your CF bandwidth stays tiny.
+- Only API + HTML traffic passes through CF's edge. Video streams direct from Plex to the client via plex.direct (Plex's own TLS), bypassing CF entirely. Your CF bandwidth stays tiny.
 - If you want a custom subdomain later, edit the Public Hostname mapping in the CF Zero Trust dashboard — no docker restart needed.
 - Cloudflare Tunnel free tier is generous but not unlimited; heavy production use should check their fair-use policy.
