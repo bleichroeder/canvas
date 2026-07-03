@@ -177,6 +177,7 @@ export function Player({ source, id }: Props) {
         !endReachedRef.current &&
         startedRef.current &&
         !paused &&
+        !errMsg &&
         dur > 0 &&
         p >= dur - 0.5
       ) {
@@ -192,7 +193,7 @@ export function Player({ source, id }: Props) {
       }
     }, 250);
     return () => clearInterval(t);
-  }, [source, id, queue, paused]);
+  }, [source, id, queue, paused, errMsg]);
 
   useEffect(() => {
     audioRef.current?.setVolume(volume);
