@@ -81,10 +81,18 @@ interface FlixifyMetadata {
   description?: string;
   rating?: number;
   duration?: number;            // seconds
-  watch_progress?: number;
+  watch_progress?: number;      // seconds — sometimes present; some list shapes use watched_position instead
+  watched_position?: number;    // seconds — continue-watching / on-deck list shape
   parent_seq?: number;          // season number for episodes
   seq?: number;                 // episode number for episodes
-  tvshow_title?: string;
+  tvshow_title?: string;        // legacy; newer responses use mroot.title
+  /** Root parent for nested items — the show for episodes / seasons, an album for tracks, etc. */
+  mroot?: {
+    id: string | number;
+    type: string;
+    title?: string;
+    url?: string;
+  };
   images?: FlixifyImages;
   url?: string;
 }
@@ -146,6 +154,10 @@ function mapItem(auth: FlixifyAuth, m: FlixifyListItem): Item {
   const isEpisode = type === 'episode';
   const title = m.title ?? m.name ?? '';
   const poster = pickPoster(auth, m);
+  // Continue-watching list uses watched_position; other shapes use watch_progress.
+  const viewOffsetSec = m.watched_position ?? m.watch_progress;
+  // Prefer mroot.title (present on newer list responses) over legacy tvshow_title.
+  const parentShowTitle = m.mroot?.title ?? m.tvshow_title;
   return {
     id: encodeFlixifyItemId(m.id, m.url),
     type,
@@ -153,9 +165,12 @@ function mapItem(auth: FlixifyAuth, m: FlixifyListItem): Item {
     ...(m.year !== undefined ? { year: m.year } : {}),
     ...(poster !== undefined ? { poster } : {}),
     ...(m.duration !== undefined ? { durationSec: m.duration } : {}),
-    ...(m.watch_progress !== undefined ? { viewOffsetSec: m.watch_progress } : {}),
+    ...(viewOffsetSec !== undefined ? { viewOffsetSec } : {}),
     ...(m.rating !== undefined ? { rating: m.rating } : {}),
-    ...(isEpisode && m.tvshow_title ? { showTitle: m.tvshow_title } : {}),
+    ...(isEpisode && parentShowTitle ? { showTitle: parentShowTitle } : {}),
+    ...(isEpisode && m.mroot?.id !== undefined
+      ? { showId: encodeFlixifyItemId(m.mroot.id, m.mroot.url) }
+      : {}),
     ...(isEpisode && m.parent_seq !== undefined ? { season: m.parent_seq } : {}),
     ...(isEpisode && m.seq !== undefined ? { episode: m.seq } : {}),
   };
