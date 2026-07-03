@@ -51,6 +51,18 @@ export interface SessionContext {
 const RING_CAP = 500;
 export const ring = new Ring<DiagEvent>(RING_CAP);
 
+// Module-level session identifier — stable for the lifetime of this JS module
+// (i.e. a single browser session / page load). Used by PlayerErrorDialog to
+// surface a correlation handle in the error detail panel.
+const sessionId: string =
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+
+export function getSessionId(): string {
+  return sessionId;
+}
+
 // Monotonic offset since module load — safe against Tesla clock skew.
 const sessionBootMark =
   typeof performance !== 'undefined' ? performance.now() : 0;

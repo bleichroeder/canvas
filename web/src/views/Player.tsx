@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { emit, reportFatal } from '../player/diagnostics';
+import { emit, reportFatal, getSessionId } from '../player/diagnostics';
 import { createStallWatchdog } from '../player/watchdog';
 import { api } from '../api';
 import { navigate, useRoute } from '../router';
 import { PlayerControls } from '../components/PlayerControls';
 import { CaptionsLayer } from '../components/CaptionsLayer';
 import { DiagnosticsOverlay } from '../components/DiagnosticsOverlay';
+import { PlayerErrorDialog } from '../components/PlayerErrorDialog';
 import { bootEngine, type EngineHandle } from '../player/engine';
 import { VideoSink } from '../player/video';
 import { AudioSink } from '../player/audio';
@@ -502,6 +503,34 @@ export function Player({ source, id }: Props) {
     }, 100);
   }
 
+  function restartSession(fromSec: number): void {
+    emit('user_gesture', { kind: 'retry' });
+    setErrMsg(null);
+    const myToken = ++seekTokenRef.current;
+    wasPlayingRef.current = false;  // splash's Play button becomes the manual restart affordance
+    engineRef.current?.dispose();
+    engineRef.current = null;
+    videoRef.current?.close();
+    videoRef.current = null;
+    audioRef.current?.stop();
+    audioRef.current = null;
+    pendingVideoRef.current = [];
+    pendingAudioRef.current = [];
+    startedRef.current = false;
+    setHasEverStarted(false);
+    setReseeking(false);
+    setStatus('Loading…');
+    const handle = bootSession(fromSec);
+    const interval = window.setInterval(() => {
+      if (myToken !== seekTokenRef.current) {
+        handle.cancel();
+        clearInterval(interval);
+      } else if (engineRef.current) {
+        clearInterval(interval);
+      }
+    }, 100);
+  }
+
   function onSeek(sec: number): void { void reseek(sec); }
   function onSeekRelative(delta: number): void { void reseek(pos + delta); }
 
@@ -641,16 +670,6 @@ export function Player({ source, id }: Props) {
           </Stack>
         </Box>
       </Fade>
-      {errMsg && (
-        <div style={{
-          position: 'fixed', top: 12, left: 12,
-          color: '#f88',
-          background: 'rgba(0,0,0,0.5)', padding: '6px 10px', borderRadius: 4, fontSize: 13,
-          zIndex: 12,
-        }}>
-          {errMsg}
-        </div>
-      )}
       <PlayerControls
         paused={paused}
         posSec={pos}
@@ -679,6 +698,21 @@ export function Player({ source, id }: Props) {
         posSec={pos}
         offsetMs={captionsOffsetMs}
         controlsVisible={controlsVisible}
+      />
+      <PlayerErrorDialog
+        open={!!errMsg}
+        message={errMsg ?? ''}
+        sessionId={getSessionId()}
+        onRetry={() => restartSession(pos)}
+        onShowDiagnostics={() => setDiagOpen(true)}
+        onBackToBrowse={() => {
+          setErrMsg(null);
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
+          }
+        }}
       />
       <Backdrop open={reseeking} sx={{ zIndex: 5, bgcolor: 'rgba(0,0,0,0.6)' }}>
         <Stack alignItems="center" spacing={2}>
