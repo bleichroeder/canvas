@@ -191,20 +191,22 @@ For movies / non-TV items, no context is passed (call `navigate` without a state
 
 ---
 
-## Testing
+## Verification
 
-**Unit tests (`web/tests/`):**
-- Season-grouping + default-tab-selection logic (pure function): shows with 1 / 2 / N seasons, in-progress default, no-in-progress default, specials (S0) present, all seasons watched.
-- Queue construction (sort by `(season asc, episode asc)`; locate `currentIndex`).
-- Prev-button decision (seek vs load previous based on `currentPlaybackSec` threshold).
+Canvas ships without a test suite (matches existing project practice across sub-projects A–M). Per-task verification is:
 
-**E2E tests (Playwright, `web/tests/e2e/`):**
-- Fixture: a Plex TV show with 3 seasons, 5 episodes each.
-- Show detail renders 3 tabs and defaults to S1 (no in-progress episodes in fixture).
+- `npm --prefix web run build` succeeds (runs `tsc --noEmit && vite build`) — catches type errors and build failures.
+- Manual dev-server smoke test in a browser: `npm --prefix web run dev`, walk the feature.
+
+**Behavioral verification checklist before the v0.9.0 tag:**
+- Multi-season show renders season tabs; selecting a tab filters the episode list; default-selected tab is the season of the furthest-along in-progress episode.
+- Single-season show renders no tabs (flat list preserved).
 - Clicking Next on the last episode of a season loads the first episode of the next season.
 - Prev-early-in-episode (<5s) navigates to previous episode; Prev-mid-episode (>5s) seeks to 0 without navigating.
-- Triggering end-of-stream mounts `UpNextOverlay` with correct next-episode metadata; Cancel closes it and returns to `ItemDetail`.
-- Kebab menu opens; clicking Diagnostics opens the `DiagnosticsOverlay`.
+- Reaching end-of-stream mounts `UpNextOverlay` with correct next-episode metadata; Cancel closes it and returns to `ItemDetail`; countdown auto-advances at t+10s.
+- Kebab menu opens; Diagnostics item opens the `DiagnosticsOverlay`.
+- Triple-tap corner zone still opens `DiagnosticsOverlay` (fallback preserved).
+- `?diag=1` URL param still opens `DiagnosticsOverlay`.
 - Injected fatal error opens `PlayerErrorDialog`; Retry re-invokes `bootSession`; Back-to-browse navigates to `ItemDetail`.
 
 **Manual in-vehicle validation before release:**
