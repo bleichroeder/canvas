@@ -10,6 +10,28 @@ interface MediaContainer<T> {
   };
 }
 
+/**
+ * Route home-row items to the surface a user expects. Plex's onDeck and
+ * recentlyAdded return SEASON items for TV; without remapping they'd become
+ * folder items and route to /lib/... (grid view) instead of the show's
+ * tabbed ItemDetail. Remap season → parent show so the click lands on the
+ * show detail with its season tabs (default-selected to the recently-added
+ * season via viewOffsetSec heuristics).
+ */
+function homeRowItem(ctx: SourceContext, m: PlexMetadata): Item {
+  if (m.type === 'season' && m.parentRatingKey && m.parentTitle) {
+    const poster = transcodeImage(ctx, m.parentThumb ?? m.thumb, PLEX_POSTER_WIDTH);
+    return {
+      id: m.parentRatingKey,
+      type: 'show' as const,
+      title: m.parentTitle,
+      ...(m.year !== undefined ? { year: m.year } : {}),
+      ...(poster !== undefined ? { poster } : {}),
+    };
+  }
+  return mapMetadata(ctx, m);
+}
+
 export const plexAdapter: SourceAdapter = {
   type: 'plex',
 
@@ -26,9 +48,9 @@ export const plexAdapter: SourceAdapter = {
       plexFetch<MediaContainer<PlexMetadata>>(ctx, '/library/recentlyAdded?X-Plex-Container-Size=20&includeStreams=1'),
     ]);
     const rows: HomeRow[] = [];
-    const onDeckItems = (onDeck.MediaContainer.Metadata ?? []).map((m) => mapMetadata(ctx, m));
+    const onDeckItems = (onDeck.MediaContainer.Metadata ?? []).map((m) => homeRowItem(ctx, m));
     if (onDeckItems.length) rows.push({ kind: 'continue', title: 'Continue Watching', items: onDeckItems });
-    const recentItems = (recent.MediaContainer.Metadata ?? []).map((m) => mapMetadata(ctx, m));
+    const recentItems = (recent.MediaContainer.Metadata ?? []).map((m) => homeRowItem(ctx, m));
     if (recentItems.length) rows.push({ kind: 'recent', title: 'Recently Added', items: recentItems });
     return rows;
   },

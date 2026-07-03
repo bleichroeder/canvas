@@ -60,6 +60,7 @@ export interface PlexMetadata {
   parentTitle?: string;       // album title (for tracks) / artist name (for albums)
   parentThumb?: string;       // album cover (for tracks) / artist image (for albums)
   parentYear?: number;
+  parentRatingKey?: string;   // parent id (season's show, track's album, etc.)
 }
 
 /**
