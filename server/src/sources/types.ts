@@ -19,6 +19,10 @@ export interface Item {
   hasCC?: boolean;
   /** Episode-only: parent show name. */
   showTitle?: string;
+  /** Episode-only: parent show's id. When set, PosterCard on the frontend
+   *  routes to the show's ItemDetail instead of the episode's. Used by
+   *  home rows so continue-watching lands in queue context. */
+  showId?: string;
   /** Episode-only: season number. */
   season?: number;
   /** Episode-only: episode number within the season. */

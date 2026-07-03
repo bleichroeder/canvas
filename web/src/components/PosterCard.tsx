@@ -25,9 +25,13 @@ function formatEpisodeSubtitle(item: Item): string | undefined {
 export function PosterCard({ item, source, width = 220, showSourceBadge = false }: PosterCardProps) {
   const { sources } = useSources();
   const isFolder = item.type === 'folder';
+  // Episode home-row items carry a showId — route to the show's tabbed
+  // ItemDetail so users land in queue context rather than on a single
+  // episode page.
+  const detailId = item.showId ?? item.id;
   const href = isFolder
     ? `/lib/${source}/${item.id}`
-    : `/item/${source}/${item.id}`;
+    : `/item/${source}/${detailId}`;
   // Music items use 1:1 (album covers are square); everything else is 2:3
   // poster. Episodes carry the show's poster, so they're visually uniform
   // with movies/shows.

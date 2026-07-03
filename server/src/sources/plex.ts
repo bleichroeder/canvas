@@ -11,12 +11,15 @@ interface MediaContainer<T> {
 }
 
 /**
- * Route home-row items to the surface a user expects. Plex's onDeck and
- * recentlyAdded return SEASON items for TV; without remapping they'd become
- * folder items and route to /lib/... (grid view) instead of the show's
- * tabbed ItemDetail. Remap season → parent show so the click lands on the
- * show detail with its season tabs (default-selected to the recently-added
- * season via viewOffsetSec heuristics).
+ * Route home-row items to the surface a user expects. Plex's onDeck returns
+ * EPISODE items (for continue-watching) and recentlyAdded returns SEASON
+ * items; both should land users on the show's tabbed ItemDetail rather than
+ * on a lone episode page or the Library grid.
+ *
+ * - Season → remap type to 'show' with the parent id; poster + title from show.
+ * - Episode → keep as 'episode' (preserves S{n}·E{n} card subtitle) but set
+ *   showId so PosterCard routes to the show. Clicking the resume-marked
+ *   episode in the show's tab then builds the playback queue naturally.
  */
 function homeRowItem(ctx: SourceContext, m: PlexMetadata): Item {
   if (m.type === 'season' && m.parentRatingKey && m.parentTitle) {
@@ -29,7 +32,11 @@ function homeRowItem(ctx: SourceContext, m: PlexMetadata): Item {
       ...(poster !== undefined ? { poster } : {}),
     };
   }
-  return mapMetadata(ctx, m);
+  const item = mapMetadata(ctx, m);
+  if (m.type === 'episode' && m.grandparentRatingKey) {
+    return { ...item, showId: m.grandparentRatingKey };
+  }
+  return item;
 }
 
 export const plexAdapter: SourceAdapter = {

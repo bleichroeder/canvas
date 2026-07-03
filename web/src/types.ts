@@ -14,6 +14,10 @@ export interface Item {
   hasCC?: boolean;
   /** Episode-only: parent show name. */
   showTitle?: string;
+  /** Episode-only: parent show's id. When set, PosterCard navigates to the
+   *  show's ItemDetail instead of the episode's, so home-row clicks land on
+   *  the tabbed show view with queue-building on episode click. */
+  showId?: string;
   /** Episode-only: season number. */
   season?: number;
   /** Episode-only: episode number within the season. */

@@ -54,6 +54,7 @@ export interface PlexMetadata {
   // Episode-only fields:
   grandparentTitle?: string;  // show name (also: artist name for music tracks)
   grandparentThumb?: string;  // show 2:3 poster (also: artist image for music)
+  grandparentRatingKey?: string;  // show id (also: artist id for music tracks)
   parentIndex?: number;       // season number (also: disc number for music)
   index?: number;             // episode number (also: track number for music)
   // Music-only / shared fields:
