@@ -1,0 +1,5 @@
+# Shell scripts must use LF endings — CRLF breaks the shebang inside Linux
+# Docker containers (`/bin/sh\r` is not a valid interpreter path). Enforce LF
+# regardless of the checkout's core.autocrlf setting, so Windows contributors
+# can `docker build` without a manual dos2unix step.
+*.sh text eol=lf
