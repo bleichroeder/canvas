@@ -10,12 +10,15 @@ import ListItemButton from '@mui/material/ListItemButton';
 import Avatar from '@mui/material/Avatar';
 import LinearProgress from '@mui/material/LinearProgress';
 import Skeleton from '@mui/material/Skeleton';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StarIcon from '@mui/icons-material/Star';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
 import { navigate } from '../router';
 import { setItemTitle, setNowPlaying } from '../storage';
+import { groupBySeason, pickDefaultSeason, seasonLabel } from '../lib/season-grouping';
 import type { ItemDetail } from '../types';
 
 interface Props { source: string; id: string }
@@ -43,6 +46,7 @@ export function ItemDetailView({ source, id }: Props) {
     | { kind: 'ok'; item: ItemDetail }
     | { kind: 'error'; message: string }
   >({ kind: 'loading' });
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
 
   useEffect(() => {
     setState({ kind: 'loading' });
@@ -54,6 +58,14 @@ export function ItemDetailView({ source, id }: Props) {
       (e: Error) => setState({ kind: 'error', message: e.message }),
     );
   }, [source, id]);
+
+  useEffect(() => {
+    if (state.kind === 'ok' && state.item.episodes && state.item.episodes.length > 0) {
+      setSelectedSeason(pickDefaultSeason(state.item.episodes));
+    } else {
+      setSelectedSeason(null);
+    }
+  }, [state]);
 
   if (state.kind === 'loading') {
     return (
@@ -174,72 +186,94 @@ export function ItemDetailView({ source, id }: Props) {
           </Box>
         </Box>
 
-        {item.episodes && item.episodes.length > 0 && (
-          <Box sx={{ mt: 4 }}>
-            <Typography variant="h3" sx={{ mb: 1.5 }}>Episodes</Typography>
-            <List sx={{ p: 0 }}>
-              {item.episodes.map((ep) => {
-                const pct = ep.durationSec && ep.viewOffsetSec
-                  ? Math.min(100, Math.round((ep.viewOffsetSec / ep.durationSec) * 100))
-                  : 0;
-                const resumeEp = (ep.viewOffsetSec ?? 0) > 60;
-                return (
-                  <ListItemButton
-                    key={ep.id}
-                    onClick={() => {
-                      const fromSec = Math.floor(ep.viewOffsetSec ?? 0);
-                      const epTitle = `${item.title} · S${ep.season}E${ep.episode}: ${ep.title}`;
-                      setNowPlaying({
-                        src: source, id: ep.id, title: epTitle,
-                        poster: ep.poster, posSec: fromSec,
-                        durationSec: ep.durationSec ?? 0,
-                        ts: Date.now(),
-                      });
-                      navigate(`/play/${source}/${ep.id}?from=${fromSec}`);
-                    }}
-                    sx={{
-                      position: 'relative',
-                      mb: 1, p: 1.5,
-                      backgroundColor: 'background.paper',
-                      border: '1px solid', borderColor: 'divider',
-                      borderRadius: 1,
-                      gap: 2, alignItems: 'flex-start',
-                    }}
-                  >
-                    {ep.poster && (
-                      <Avatar
-                        variant="rounded"
-                        src={ep.poster}
-                        sx={{ width: 160, height: 90, flexShrink: 0 }}
-                      />
-                    )}
-                    <Box sx={{ flex: 1 }}>
-                      <Typography sx={{ fontWeight: 600 }}>
-                        S{ep.season}·E{ep.episode} · {ep.title}
-                      </Typography>
-                      <Stack direction="row" spacing={1.5} divider={<Dot />} sx={{ mt: 0.5, color: 'text.secondary' }}>
-                        {ep.durationSec && <Typography variant="caption">{formatRuntime(ep.durationSec)}</Typography>}
-                        {resumeEp && <Typography variant="caption">Resume {formatPos(ep.viewOffsetSec!)}</Typography>}
-                      </Stack>
-                      {ep.synopsis && (
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                          {ep.synopsis}
-                        </Typography>
+        {item.episodes && item.episodes.length > 0 && (() => {
+          const seasons = groupBySeason(item.episodes);
+          const seasonKeys = [...seasons.keys()];
+          const showTabs = seasonKeys.length > 1;
+          const activeSeason = selectedSeason !== null && seasons.has(selectedSeason)
+            ? selectedSeason
+            : seasonKeys[0]!;
+          const visibleEpisodes = seasons.get(activeSeason) ?? [];
+          return (
+            <Box sx={{ mt: 4 }}>
+              <Typography variant="h3" sx={{ mb: 1.5 }}>Episodes</Typography>
+              {showTabs && (
+                <Tabs
+                  value={activeSeason}
+                  onChange={(_, v) => setSelectedSeason(v)}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                  sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
+                >
+                  {seasonKeys.map((s) => (
+                    <Tab key={s} value={s} label={seasonLabel(s)} />
+                  ))}
+                </Tabs>
+              )}
+              <List sx={{ p: 0 }}>
+                {visibleEpisodes.map((ep) => {
+                  const pct = ep.durationSec && ep.viewOffsetSec
+                    ? Math.min(100, Math.round((ep.viewOffsetSec / ep.durationSec) * 100))
+                    : 0;
+                  const resumeEp = (ep.viewOffsetSec ?? 0) > 60;
+                  return (
+                    <ListItemButton
+                      key={ep.id}
+                      onClick={() => {
+                        const fromSec = Math.floor(ep.viewOffsetSec ?? 0);
+                        const epTitle = `${item.title} · S${ep.season}E${ep.episode}: ${ep.title}`;
+                        setNowPlaying({
+                          src: source, id: ep.id, title: epTitle,
+                          poster: ep.poster, posSec: fromSec,
+                          durationSec: ep.durationSec ?? 0,
+                          ts: Date.now(),
+                        });
+                        navigate(`/play/${source}/${ep.id}?from=${fromSec}`);
+                      }}
+                      sx={{
+                        position: 'relative',
+                        mb: 1, p: 1.5,
+                        backgroundColor: 'background.paper',
+                        border: '1px solid', borderColor: 'divider',
+                        borderRadius: 1,
+                        gap: 2, alignItems: 'flex-start',
+                      }}
+                    >
+                      {ep.poster && (
+                        <Avatar
+                          variant="rounded"
+                          src={ep.poster}
+                          sx={{ width: 160, height: 90, flexShrink: 0 }}
+                        />
                       )}
-                    </Box>
-                    {resumeEp && (
-                      <LinearProgress
-                        variant="determinate"
-                        value={pct}
-                        sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, borderRadius: 0 }}
-                      />
-                    )}
-                  </ListItemButton>
-                );
-              })}
-            </List>
-          </Box>
-        )}
+                      <Box sx={{ flex: 1 }}>
+                        <Typography sx={{ fontWeight: 600 }}>
+                          S{ep.season}·E{ep.episode} · {ep.title}
+                        </Typography>
+                        <Stack direction="row" spacing={1.5} divider={<Dot />} sx={{ mt: 0.5, color: 'text.secondary' }}>
+                          {ep.durationSec && <Typography variant="caption">{formatRuntime(ep.durationSec)}</Typography>}
+                          {resumeEp && <Typography variant="caption">Resume {formatPos(ep.viewOffsetSec!)}</Typography>}
+                        </Stack>
+                        {ep.synopsis && (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            {ep.synopsis}
+                          </Typography>
+                        )}
+                      </Box>
+                      {resumeEp && (
+                        <LinearProgress
+                          variant="determinate"
+                          value={pct}
+                          sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, borderRadius: 0 }}
+                        />
+                      )}
+                    </ListItemButton>
+                  );
+                })}
+              </List>
+            </Box>
+          );
+        })()}
       </Box>
     </AppShell>
   );
