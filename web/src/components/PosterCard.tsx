@@ -26,12 +26,14 @@ export function PosterCard({ item, source, width = 220, showSourceBadge = false 
   const { sources } = useSources();
   const isFolder = item.type === 'folder';
   // Episode home-row items carry a showId — route to the show's tabbed
-  // ItemDetail so users land in queue context rather than on a single
-  // episode page.
+  // ItemDetail with ?ep=... so ItemDetail can point the season tab at (and
+  // scroll to) the specific episode the user clicked. Non-home cards leave
+  // showId unset and route to item.id as before.
   const detailId = item.showId ?? item.id;
+  const detailQuery = item.showId ? `?ep=${encodeURIComponent(item.id)}` : '';
   const href = isFolder
     ? `/lib/${source}/${item.id}`
-    : `/item/${source}/${detailId}`;
+    : `/item/${source}/${detailId}${detailQuery}`;
   // Music items use 1:1 (album covers are square); everything else is 2:3
   // poster. Episodes carry the show's poster, so they're visually uniform
   // with movies/shows.

@@ -20,13 +20,24 @@ export function groupBySeason(episodes: Episode[]): Map<number, Episode[]> {
 }
 
 /**
- * Return the season number to select by default. Prefers the season of the
- * furthest-along in-progress episode (highest index in the whole-show queue
- * with viewOffsetSec > 0). If nothing is in progress, returns the lowest
- * season number present. Returns 0 for an empty list.
+ * Return the season number to select by default.
+ *
+ * Priority:
+ *   1. If `highlightEpisodeId` is given and matches an episode, that episode's season.
+ *      Used when arriving from a Continue Watching / recently-added click that
+ *      wants the tab pointed at a specific episode.
+ *   2. Otherwise, the season of the furthest-along in-progress episode (highest
+ *      index in the whole-show queue with viewOffsetSec > 0).
+ *   3. Otherwise, the lowest season number present.
+ *
+ * Returns 0 for an empty list.
  */
-export function pickDefaultSeason(episodes: Episode[]): number {
+export function pickDefaultSeason(episodes: Episode[], highlightEpisodeId?: string): number {
   if (episodes.length === 0) return 0;
+  if (highlightEpisodeId) {
+    const target = episodes.find((e) => e.id === highlightEpisodeId);
+    if (target) return target.season;
+  }
   const sorted = [...episodes].sort(
     (a, b) => a.season - b.season || a.episode - b.episode,
   );

@@ -16,7 +16,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StarIcon from '@mui/icons-material/Star';
 import { api } from '../api';
 import { AppShell } from '../components/AppShell';
-import { navigate } from '../router';
+import { navigate, useRoute } from '../router';
 import { setItemTitle, setNowPlaying } from '../storage';
 import { groupBySeason, pickDefaultSeason, seasonLabel } from '../lib/season-grouping';
 import { buildQueue, setQueue } from '../lib/playback-queue';
@@ -42,6 +42,8 @@ function Dot() {
 }
 
 export function ItemDetailView({ source, id }: Props) {
+  const route = useRoute();
+  const highlightEpisodeId = route.query.ep;
   const [state, setState] = useState<
     | { kind: 'loading' }
     | { kind: 'ok'; item: ItemDetail }
@@ -62,11 +64,23 @@ export function ItemDetailView({ source, id }: Props) {
 
   useEffect(() => {
     if (state.kind === 'ok' && state.item.episodes && state.item.episodes.length > 0) {
-      setSelectedSeason(pickDefaultSeason(state.item.episodes));
+      setSelectedSeason(pickDefaultSeason(state.item.episodes, highlightEpisodeId));
     } else {
       setSelectedSeason(null);
     }
-  }, [state]);
+  }, [state, highlightEpisodeId]);
+
+  // After the correct season tab renders, scroll the highlighted episode into
+  // view. Runs on the second paint (setTimeout 0) so the ListItemButton is
+  // mounted before scrollIntoView fires.
+  useEffect(() => {
+    if (!highlightEpisodeId || state.kind !== 'ok' || selectedSeason === null) return;
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(`ep-${highlightEpisodeId}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [highlightEpisodeId, state, selectedSeason]);
 
   if (state.kind === 'loading') {
     return (
@@ -217,9 +231,11 @@ export function ItemDetailView({ source, id }: Props) {
                     ? Math.min(100, Math.round((ep.viewOffsetSec / ep.durationSec) * 100))
                     : 0;
                   const resumeEp = (ep.viewOffsetSec ?? 0) > 60;
+                  const isHighlighted = ep.id === highlightEpisodeId;
                   return (
                     <ListItemButton
                       key={ep.id}
+                      id={`ep-${ep.id}`}
                       onClick={() => {
                         const fromSec = Math.floor(ep.viewOffsetSec ?? 0);
                         const epTitle = `${item.title} · S${ep.season}E${ep.episode}: ${ep.title}`;
@@ -242,7 +258,9 @@ export function ItemDetailView({ source, id }: Props) {
                         position: 'relative',
                         mb: 1, p: 1.5,
                         backgroundColor: 'background.paper',
-                        border: '1px solid', borderColor: 'divider',
+                        border: '1px solid',
+                        borderColor: isHighlighted ? 'primary.main' : 'divider',
+                        boxShadow: isHighlighted ? '0 0 0 2px rgba(79, 142, 247, 0.25)' : 'none',
                         borderRadius: 1,
                         gap: 2, alignItems: 'flex-start',
                       }}
