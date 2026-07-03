@@ -590,7 +590,7 @@ export function Player({ source, id }: Props) {
     const updated: PlaybackQueue = { ...queue, currentIndex: nextIndex };
     setQueue(updated);
     const fromSec = Math.floor(nextEp.viewOffsetSec ?? 0);
-    navigate(`/play/${source}/${nextEp.id}?from=${fromSec}`);
+    navigate(`/play/${source}/${nextEp.id}?from=${fromSec}`, { replace: true });
   }
 
   function onPrev(): void {

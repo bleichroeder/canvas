@@ -28,7 +28,19 @@ export function useRoute(): Route {
   return route;
 }
 
-export function navigate(to: string): void {
+export function navigate(to: string, options?: { replace?: boolean }): void {
+  if (options?.replace) {
+    // Replace the current hash entry without adding to history. Used for
+    // Next/Prev/autoplay episode transitions so the player back-stack
+    // collapses to a single entry — close should return to the show
+    // detail, not walk back through every episode played this session.
+    const newHash = to.startsWith('#') ? to : `#${to}`;
+    const fullUrl = `${window.location.pathname}${window.location.search}${newHash}`;
+    window.history.replaceState(null, '', fullUrl);
+    // replaceState doesn't fire hashchange; nudge useRoute() manually.
+    window.dispatchEvent(new Event('hashchange'));
+    return;
+  }
   if (to.startsWith('#')) { window.location.hash = to.slice(1); return; }
   window.location.hash = to;
 }
