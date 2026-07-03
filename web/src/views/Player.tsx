@@ -7,6 +7,7 @@ import { PlayerControls } from '../components/PlayerControls';
 import { CaptionsLayer } from '../components/CaptionsLayer';
 import { DiagnosticsOverlay } from '../components/DiagnosticsOverlay';
 import { PlayerErrorDialog } from '../components/PlayerErrorDialog';
+import { UpNextOverlay } from '../components/UpNextOverlay';
 import { bootEngine, type EngineHandle } from '../player/engine';
 import { VideoSink } from '../player/video';
 import { AudioSink } from '../player/audio';
@@ -75,6 +76,8 @@ export function Player({ source, id }: Props) {
   const [status, setStatus] = useState('Loading…');
   const [errMsg, setErrMsg] = useState<string | null>(null);
   const [queue, setQueueState] = useState<PlaybackQueue | null>(null);
+  const [upNextOpen, setUpNextOpen] = useState(false);
+  const endReachedRef = useRef(false);
   const [reseeking, setReseeking] = useState(false);
 
   const VOL_KEY = 'canvas.volume';
@@ -167,9 +170,29 @@ export function Player({ source, id }: Props) {
           droppedFrames: videoRef.current?.droppedFrameCount,
         });
       }
+      // End-of-stream detection: show UpNextOverlay or navigate away.
+      const p = a ? sessionBaseRef.current + a.currentTime() : 0;
+      const dur = resolutionRef.current?.durationSec ?? 0;
+      if (
+        !endReachedRef.current &&
+        startedRef.current &&
+        !paused &&
+        dur > 0 &&
+        p >= dur - 0.5
+      ) {
+        endReachedRef.current = true;
+        const q = queue;
+        if (q && q.currentIndex + 1 < q.episodes.length) {
+          setUpNextOpen(true);
+        } else {
+          // No queue OR at last episode — navigate back to browse (or item detail).
+          if (window.history.length > 1) window.history.back();
+          else navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
+        }
+      }
     }, 250);
     return () => clearInterval(t);
-  }, [source, id]);
+  }, [source, id, queue, paused]);
 
   useEffect(() => {
     audioRef.current?.setVolume(volume);
@@ -191,6 +214,8 @@ export function Player({ source, id }: Props) {
   }, [source, id]);
 
   useEffect(() => {
+    endReachedRef.current = false;
+    setUpNextOpen(false);
     const q = getQueue();
     if (q && q.sourceId === source && q.episodes[q.currentIndex]?.id === id) {
       setQueueState(q);
@@ -755,6 +780,22 @@ export function Player({ source, id }: Props) {
           }
         }}
       />
+      {queue && queue.currentIndex + 1 < queue.episodes.length && (
+        <UpNextOverlay
+          open={upNextOpen}
+          showTitle={queue.showTitle}
+          nextEpisode={queue.episodes[queue.currentIndex + 1]!}
+          onPlayNow={() => {
+            setUpNextOpen(false);
+            goToEpisode(queue.currentIndex + 1);
+          }}
+          onCancel={() => {
+            setUpNextOpen(false);
+            if (window.history.length > 1) window.history.back();
+            else navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(queue.showId)}`);
+          }}
+        />
+      )}
       <Backdrop open={reseeking} sx={{ zIndex: 5, bgcolor: 'rgba(0,0,0,0.6)' }}>
         <Stack alignItems="center" spacing={2}>
           <CircularProgress />
