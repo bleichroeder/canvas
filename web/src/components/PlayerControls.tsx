@@ -26,11 +26,20 @@ import ClosedCaptionIcon from '@mui/icons-material/ClosedCaption';
 import CheckIcon from '@mui/icons-material/Check';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import BugReportIcon from '@mui/icons-material/BugReport';
+import SkipPreviousIcon from '@mui/icons-material/SkipPrevious';
+import SkipNextIcon from '@mui/icons-material/SkipNext';
 
 export interface SubtitleTrackOption {
   id: string;
   label?: string;
   language?: string;
+}
+
+export interface QueueControlProps {
+  canPrev: boolean;
+  canNext: boolean;
+  onPrev(): void;
+  onNext(): void;
 }
 
 interface PlayerControlsProps {
@@ -53,6 +62,7 @@ interface PlayerControlsProps {
   onMuteToggle(): void;
   onFullscreenToggle(): void;
   onOpenDiagnostics(): void;
+  queueContext: QueueControlProps | null;
   onSubtitleChange(id: string | null): void;
   onCaptionsOffsetChange(ms: number): void;
 }
@@ -207,6 +217,20 @@ export function PlayerControls(p: PlayerControlsProps) {
             aria-label="Seek"
           />
           <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', mt: 0.5 }}>
+            {p.queueContext && (
+              <Tooltip title="Previous episode">
+                <span>
+                  <IconButton
+                    onClick={p.queueContext.onPrev}
+                    disabled={!p.queueContext.canPrev}
+                    aria-label="previous episode"
+                    size="large"
+                  >
+                    <SkipPreviousIcon sx={{ fontSize: 32 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
             <Tooltip title="Back 10 seconds">
               <IconButton onClick={() => p.onSeekRelative(-10)} aria-label="back 10s" size="large">
                 <Replay10Icon sx={{ fontSize: 32 }} />
@@ -232,6 +256,20 @@ export function PlayerControls(p: PlayerControlsProps) {
                 <Forward10Icon sx={{ fontSize: 32 }} />
               </IconButton>
             </Tooltip>
+            {p.queueContext && (
+              <Tooltip title="Next episode">
+                <span>
+                  <IconButton
+                    onClick={p.queueContext.onNext}
+                    disabled={!p.queueContext.canNext}
+                    aria-label="next episode"
+                    size="large"
+                  >
+                    <SkipNextIcon sx={{ fontSize: 32 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
             <Tooltip title={p.muted ? 'Unmute' : 'Mute'}>
               <IconButton onClick={p.onMuteToggle} aria-label="mute toggle" sx={{ ml: 3 }}>
                 <SpeakerIcon volume={p.volume} muted={p.muted} />

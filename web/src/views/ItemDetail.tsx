@@ -19,6 +19,7 @@ import { AppShell } from '../components/AppShell';
 import { navigate } from '../router';
 import { setItemTitle, setNowPlaying } from '../storage';
 import { groupBySeason, pickDefaultSeason, seasonLabel } from '../lib/season-grouping';
+import { buildQueue, setQueue } from '../lib/playback-queue';
 import type { ItemDetail } from '../types';
 
 interface Props { source: string; id: string }
@@ -228,6 +229,13 @@ export function ItemDetailView({ source, id }: Props) {
                           durationSec: ep.durationSec ?? 0,
                           ts: Date.now(),
                         });
+                        setQueue(buildQueue({
+                          showId: item.id,
+                          showTitle: item.title,
+                          sourceId: source,
+                          episodes: item.episodes!,
+                          playingEpisodeId: ep.id,
+                        }));
                         navigate(`/play/${source}/${ep.id}?from=${fromSec}`);
                       }}
                       sx={{

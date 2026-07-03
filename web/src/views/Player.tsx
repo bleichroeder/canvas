@@ -16,6 +16,7 @@ import {
   getCaptionsOffsetMs,
   setCaptionsOffsetMs,
 } from '../storage';
+import { getQueue, setQueue, type PlaybackQueue } from '../lib/playback-queue';
 import {
   startSession,
   updateSession,
@@ -73,6 +74,7 @@ export function Player({ source, id }: Props) {
   const [duration, setDuration] = useState(0);
   const [status, setStatus] = useState('Loading…');
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [queue, setQueueState] = useState<PlaybackQueue | null>(null);
   const [reseeking, setReseeking] = useState(false);
 
   const VOL_KEY = 'canvas.volume';
@@ -186,6 +188,15 @@ export function Player({ source, id }: Props) {
       () => { /* splash falls back to no-backdrop */ },
     );
     return () => { cancelled = true; };
+  }, [source, id]);
+
+  useEffect(() => {
+    const q = getQueue();
+    if (q && q.sourceId === source && q.episodes[q.currentIndex]?.id === id) {
+      setQueueState(q);
+    } else {
+      setQueueState(null);
+    }
   }, [source, id]);
 
   // Fetch and parse VTT for the currently-selected subtitle track. Depends on
@@ -546,6 +557,30 @@ export function Player({ source, id }: Props) {
     if (v > 0 && muted) setMuted(false);
   }
 
+  function goToEpisode(nextIndex: number): void {
+    if (!queue) return;
+    const nextEp = queue.episodes[nextIndex];
+    if (!nextEp) return;
+    const updated: PlaybackQueue = { ...queue, currentIndex: nextIndex };
+    setQueue(updated);
+    const fromSec = Math.floor(nextEp.viewOffsetSec ?? 0);
+    navigate(`/play/${source}/${nextEp.id}?from=${fromSec}`);
+  }
+
+  function onPrev(): void {
+    if (!queue) return;
+    if (pos > 5) {
+      void reseek(0);
+      return;
+    }
+    goToEpisode(queue.currentIndex - 1);
+  }
+
+  function onNext(): void {
+    if (!queue) return;
+    goToEpisode(queue.currentIndex + 1);
+  }
+
   function onCornerTap() {
     const now = performance.now();
     const times = tapStateRef.current.times.filter((t) => now - t <= 1500);
@@ -690,6 +725,12 @@ export function Player({ source, id }: Props) {
         onMuteToggle={onMuteToggle}
         onFullscreenToggle={onFullscreenToggle}
         onOpenDiagnostics={() => setDiagOpen(true)}
+        queueContext={queue ? {
+          canPrev: queue.currentIndex > 0 || pos > 5,
+          canNext: queue.currentIndex < queue.episodes.length - 1,
+          onPrev,
+          onNext,
+        } : null}
         onSubtitleChange={onSubtitleChange}
         onCaptionsOffsetChange={onCaptionsOffsetChange}
       />
