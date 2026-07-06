@@ -289,7 +289,7 @@ export function Setup() {
                   selected={mode === 'cf-quick'}
                   title="Cloudflare Quick Tunnel"
                   badge="Recommended"
-                  desc="Instantly get a public HTTPS URL — no signup, no domain, no port forwarding. URL may change on container restarts."
+                  desc="Instantly get a public HTTPS URL — no signup, no domain, no port forwarding. URL changes on every canvas restart; use Cloudflare Named Tunnel below for a stable URL."
                 />
                 <ModeCard
                   value="domain"

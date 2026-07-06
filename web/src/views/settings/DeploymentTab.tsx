@@ -35,6 +35,8 @@ interface DeploymentInfo {
   lastAppliedAt: number | null;
   hasCfNamedToken: boolean;
   externallyManaged: boolean;
+  publicUrlChangedAt: number | null;
+  previousPublicUrl: string | null;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -140,6 +142,21 @@ export function DeploymentTab() {
 
   // URL copy
   const [copied, setCopied] = useState(false);
+
+  // URL-change banner
+  const [urlChangeDismissed, setUrlChangeDismissed] = useState<number | null>(() => {
+    const raw = typeof localStorage !== 'undefined'
+      ? localStorage.getItem('canvas.publicUrlChangedDismissedAt')
+      : null;
+    return raw ? Number(raw) : null;
+  });
+
+  function dismissUrlChange(at: number): void {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('canvas.publicUrlChangedDismissedAt', String(at));
+    }
+    setUrlChangeDismissed(at);
+  }
 
   const abortRef = useRef(false);
   useEffect(() => {
@@ -311,6 +328,30 @@ export function DeploymentTab() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* URL-changed banner */}
+      {info?.publicUrlChangedAt !== undefined &&
+       info.publicUrlChangedAt !== null &&
+       urlChangeDismissed !== info.publicUrlChangedAt && (
+        <Alert
+          severity="info"
+          onClose={() => dismissUrlChange(info.publicUrlChangedAt!)}
+          sx={{ mb: 2 }}
+        >
+          <strong>Your public URL changed on {new Date(info.publicUrlChangedAt * 1000).toLocaleString()}.</strong>
+          {' '}Update any bookmarks on your car.
+          {info.previousPublicUrl && (
+            <>
+              {' '}Previous: <code>{info.previousPublicUrl}</code>.
+            </>
+          )}
+          {info.publicUrl && (
+            <>
+              {' '}Current: <code>{info.publicUrl}</code>.
+            </>
+          )}
+        </Alert>
+      )}
+
       {/* Externally managed banner */}
       {externallyManaged && (
         <Alert severity="info" icon={<WarningAmberIcon />}>
@@ -428,7 +469,7 @@ export function DeploymentTab() {
                   selected={mode === 'cf-quick'}
                   title="Cloudflare Quick Tunnel"
                   badge="Recommended"
-                  desc="Instantly get a public HTTPS URL — no signup, no domain, no port forwarding. URL may change on container restarts."
+                  desc="Instantly get a public HTTPS URL — no signup, no domain, no port forwarding. URL changes on every canvas restart; use Cloudflare Named Tunnel below for a stable URL."
                   disabled={isBusy || isApplyingOrPending}
                 />
                 <ModeCard

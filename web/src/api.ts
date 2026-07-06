@@ -191,6 +191,8 @@ export const api = {
       lastAppliedAt: number | null;
       hasCfNamedToken: boolean;
       externallyManaged: boolean;
+      publicUrlChangedAt: number | null;
+      previousPublicUrl: string | null;
     }>('/api/admin/deployment'),
   adminSetDeployment: (payload: {
     mode: string;
@@ -216,6 +218,13 @@ export const api = {
       checkedAt: string;
       error: string | null;
     }>('/api/admin/updates/status'),
+    preferences: () => request<{ autoUpdate: boolean; lastAutoCheckAt: number | null; watchtowerReachable: boolean }>('/api/admin/updates/preferences'),
+    updatePreferences: (patch: { autoUpdate?: boolean }) =>
+      request<{ autoUpdate: boolean; lastAutoCheckAt: number | null; watchtowerReachable: boolean }>('/api/admin/updates/preferences', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+    apply: () => request<void>('/api/admin/updates/apply', { method: 'POST' }),
   },
 
   adminTelemetry: {

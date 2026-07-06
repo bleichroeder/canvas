@@ -4,6 +4,13 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
 import Divider from '@mui/material/Divider';
+import Switch from '@mui/material/Switch';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogActions from '@mui/material/DialogActions';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
@@ -71,6 +78,11 @@ export function AboutTab() {
   const [updates, setUpdates] = useState<Awaited<ReturnType<typeof api.adminUpdates.status>> | null>(null);
   const [updatesLoading, setUpdatesLoading] = useState(true);
 
+  const [prefs, setPrefs] = useState<{ autoUpdate: boolean; lastAutoCheckAt: number | null; watchtowerReachable: boolean } | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     api.adminUpdates.status()
@@ -79,6 +91,37 @@ export function AboutTab() {
       .finally(() => { if (!cancelled) setUpdatesLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.adminUpdates.preferences()
+      .then((p) => { if (!cancelled) setPrefs(p); })
+      .catch(() => { if (!cancelled) setPrefs(null); });
+    return () => { cancelled = true; };
+  }, []);
+
+  async function togglePref(next: boolean): Promise<void> {
+    try {
+      const updated = await api.adminUpdates.updatePreferences({ autoUpdate: next });
+      setPrefs(updated);
+    } catch (err) {
+      // Best-effort revert on error
+      console.error('failed to toggle auto-update:', err);
+    }
+  }
+
+  async function applyUpdate(): Promise<void> {
+    setApplying(true);
+    setApplyError(null);
+    try {
+      await api.adminUpdates.apply();
+      // Canvas will die within seconds; browser will lose connection.
+      // Leave the dialog open with a "Restarting…" note.
+    } catch (err) {
+      setApplyError((err as Error).message);
+      setApplying(false);
+    }
+  }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -122,15 +165,57 @@ export function AboutTab() {
                 </Typography>
               )}
 
-              {updates.updateAvailable && (
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  Watchtower will apply this update within 5 minutes.
+              {updates.updateAvailable && prefs && !prefs.watchtowerReachable && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  Watchtower's HTTP API is unreachable. Update your compose per{' '}
+                  <a href="https://github.com/bleichroeder/canvas/blob/main/docs/updates.md" target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>docs/updates.md</a>{' '}
+                  to enable click-to-update.
                 </Alert>
+              )}
+              {updates.updateAvailable && prefs?.watchtowerReachable && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  {prefs.autoUpdate
+                    ? 'Auto-update is on — canvas will restart within 15 minutes.'
+                    : 'An update is available. Click below when you\'re ready.'}
+                </Alert>
+              )}
+              {updates.updateAvailable && prefs?.watchtowerReachable && (
+                <Button
+                  variant="contained"
+                  disabled={applying}
+                  onClick={() => setApplyOpen(true)}
+                  sx={{ mt: 2, mr: 1 }}
+                >
+                  Update now
+                </Button>
               )}
               {!updates.updateAvailable && updates.latestVersion && (
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   You're on the latest version.
                 </Typography>
+              )}
+              {prefs && (
+                <Box sx={{ mt: 2 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={prefs.autoUpdate}
+                        disabled={!prefs.watchtowerReachable}
+                        onChange={(e) => void togglePref(e.target.checked)}
+                      />
+                    }
+                    label="Auto-update"
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 5, mt: -0.5 }}>
+                    Automatically install updates when available. Restarts canvas immediately;
+                    your public URL will change if you're using Cloudflare Quick Tunnel.
+                  </Typography>
+                  {prefs.lastAutoCheckAt !== null && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 5, mt: 0.5 }}>
+                      Last checked: {new Date(prefs.lastAutoCheckAt * 1000).toLocaleString()}
+                    </Typography>
+                  )}
+                </Box>
               )}
 
               {updates.releaseNotes && (
@@ -167,6 +252,26 @@ export function AboutTab() {
             </>
           )}
         </Box>
+        <Dialog open={applyOpen} onClose={() => !applying && setApplyOpen(false)} fullWidth maxWidth="xs">
+          <DialogTitle>Update to {updates?.latestVersion}?</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Canvas will pull the new image and restart within ~10 seconds. Any active playback
+              session will be interrupted. If you're using Cloudflare Quick Tunnel, your public
+              URL will change — you'll see the new URL in Settings → Deployment once canvas is back.
+            </DialogContentText>
+            {applyError && (
+              <Alert severity="error" sx={{ mt: 2 }}>{applyError}</Alert>
+            )}
+            {applying && !applyError && (
+              <Alert severity="info" sx={{ mt: 2 }}>Restarting canvas…</Alert>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setApplyOpen(false)} disabled={applying}>Cancel</Button>
+            <Button variant="contained" onClick={() => void applyUpdate()} disabled={applying}>Update</Button>
+          </DialogActions>
+        </Dialog>
       </ElevatedCard>
 
       {crashes.length > 0 && (
