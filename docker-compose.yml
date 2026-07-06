@@ -9,14 +9,13 @@ services:
       - "443:443"
     volumes:
       - canvas-data:/data
-    # Diagnostic + telemetry knobs — see docs/diagnostics.md
-    # environment:
-    #   TELEMETRY_ENABLED: "true"
-    #   TELEMETRY_RETENTION_DAYS: "30"
-    #   TELEMETRY_MAX_ROWS: "1000"
     environment:
       WATCHTOWER_URL: "http://canvas-watchtower:8080"
       WATCHTOWER_TOKEN: "${WATCHTOWER_HTTP_API_TOKEN}"
+      # Diagnostic + telemetry knobs — see docs/diagnostics.md
+      # TELEMETRY_ENABLED: "true"
+      # TELEMETRY_RETENTION_DAYS: "30"
+      # TELEMETRY_MAX_ROWS: "1000"
     labels:
       # Opt this container into Watchtower's auto-update watch.
       com.centurylinklabs.watchtower.enable: "true"

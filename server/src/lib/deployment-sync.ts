@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 import type { Db } from '../db';
 import { getDeploymentConfig, updateDeploymentConfig } from '../storage/deployment-config';
-import type { DeploymentConfig } from '../db/schema';
+import { deploymentConfig, type DeploymentConfig } from '../db/schema';
 import { logger } from '../log';
 
 /**
@@ -65,6 +66,23 @@ export function refreshDeploymentSync(db: Db, dataDir: string): DeploymentConfig
 
   if (nextUrl !== undefined && nextUrl !== dc.publicUrl) {
     patch.publicUrl = nextUrl;
+  }
+
+  // cf-quick baseline seed: if publicUrl is transitioning null → non-null AND
+  // lastKnownPublicUrl is still null, seed lastKnownPublicUrl at the same time.
+  // This is a one-shot operation — once lastKnownPublicUrl is set, the boot-time
+  // detectPublicUrlDrift call handles all subsequent drift detection.
+  // Do NOT set publicUrlChangedAt — this is baseline seeding, not a drift event.
+  if (
+    patch.publicUrl !== undefined &&
+    patch.publicUrl !== null &&
+    dc.publicUrl === null &&
+    dc.lastKnownPublicUrl === null
+  ) {
+    db.update(deploymentConfig)
+      .set({ lastKnownPublicUrl: patch.publicUrl })
+      .where(eq(deploymentConfig.id, 1))
+      .run();
   }
 
   // Status: pending/applying -> ready. Special case for cf-quick — hold in

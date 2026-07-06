@@ -153,6 +153,14 @@ export function AboutTab() {
             </Alert>
           )}
 
+          {!updatesLoading && prefs && !prefs.watchtowerReachable && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Watchtower's HTTP API is unreachable. Update your compose per{' '}
+              <a href="https://github.com/bleichroeder/canvas/blob/main/docs/updates.md" target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>docs/updates.md</a>{' '}
+              to enable click-to-update.
+            </Alert>
+          )}
+
           {!updatesLoading && updates && !updates.error && (
             <>
               <Typography variant="body2">
@@ -165,13 +173,6 @@ export function AboutTab() {
                 </Typography>
               )}
 
-              {updates.updateAvailable && prefs && !prefs.watchtowerReachable && (
-                <Alert severity="warning" sx={{ mt: 2 }}>
-                  Watchtower's HTTP API is unreachable. Update your compose per{' '}
-                  <a href="https://github.com/bleichroeder/canvas/blob/main/docs/updates.md" target="_blank" rel="noreferrer" style={{ color: 'inherit' }}>docs/updates.md</a>{' '}
-                  to enable click-to-update.
-                </Alert>
-              )}
               {updates.updateAvailable && prefs?.watchtowerReachable && (
                 <Alert severity="info" sx={{ mt: 2 }}>
                   {prefs.autoUpdate
