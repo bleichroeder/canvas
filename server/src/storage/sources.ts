@@ -53,6 +53,24 @@ export function deleteSource(db: Db, id: number): void {
   db.delete(sources).where(eq(sources.id, id)).run();
 }
 
+/**
+ * Update mutable fields on a source. Only baseUrl and label can be patched —
+ * type, token, and pairing metadata are set at pair-time and immutable.
+ * Returns the updated row, or null if the id doesn't exist.
+ */
+export function updateSource(
+  db: Db,
+  id: number,
+  patch: { baseUrl?: string; label?: string },
+): Source | null {
+  const set: Partial<NewSource> = {};
+  if (patch.baseUrl !== undefined) set.baseUrl = patch.baseUrl;
+  if (patch.label !== undefined) set.label = patch.label;
+  if (Object.keys(set).length === 0) return getSource(db, id);
+  const updated = db.update(sources).set(set).where(eq(sources.id, id)).returning().get();
+  return updated ?? null;
+}
+
 export function grantSourceAccess(db: Db, userId: number, sourceId: number): void {
   // INSERT OR IGNORE so re-grant is a no-op.
   db.$client.prepare(

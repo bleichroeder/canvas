@@ -23,6 +23,15 @@ export function SourcesTab() {
     }
   }
 
+  async function editSource(id: number, patch: { label?: string; baseUrl?: string }) {
+    try {
+      await api.updateSource(id, patch);
+      await refresh();
+    } catch (e) {
+      console.error('Failed to update source:', e);
+    }
+  }
+
   if (loading && sourceList.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -64,7 +73,7 @@ export function SourcesTab() {
                 type={src.type}
                 baseUrl={src.baseUrl}
                 onUnpair={() => void unpair(src.id)}
-                onRename={undefined}
+                onEdit={(patch) => void editSource(src.id, patch)}
               />
             </ElevatedCard>
           ))}

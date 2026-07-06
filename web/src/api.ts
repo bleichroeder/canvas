@@ -159,6 +159,11 @@ export const api = {
   // Source management
   listSources: () => request<{ id: number; type: 'plex' | 'flixify'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number; usersWithAccess?: number[] }[]>('/api/sources'),
   deleteSource: (id: number) => request<void>(`/api/sources/${id}`, { method: 'DELETE' }),
+  updateSource: (id: number, patch: { baseUrl?: string; label?: string }) =>
+    request<{ id: number; type: 'plex' | 'flixify'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }>(
+      `/api/sources/${id}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    ),
 
   // Setup (first-run wizard)
   setupProbe: () =>

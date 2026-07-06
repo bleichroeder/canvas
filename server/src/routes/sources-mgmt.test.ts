@@ -111,4 +111,78 @@ describe('sources-mgmt routes', () => {
       expect('usersWithAccess' in row).toBe(false);
     }
   });
+
+  test('PATCH /:id by admin updates label and baseUrl', async () => {
+    const { app, adminBearer, s1 } = await makeFixture();
+    const res = await app.fetch(new Request(`http://test/api/sources/${s1.id}`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${adminBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ label: 'renamed', baseUrl: 'http://plex:32400' }),
+    }));
+    expect(res.status).toBe(200);
+    const body = await res.json() as { label: string; baseUrl: string };
+    expect(body.label).toBe('renamed');
+    expect(body.baseUrl).toBe('http://plex:32400');
+  });
+
+  test('PATCH /:id strips trailing slash from baseUrl', async () => {
+    const { app, adminBearer, s1 } = await makeFixture();
+    const res = await app.fetch(new Request(`http://test/api/sources/${s1.id}`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${adminBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ baseUrl: 'http://plex:32400///' }),
+    }));
+    const body = await res.json() as { baseUrl: string };
+    expect(body.baseUrl).toBe('http://plex:32400');
+  });
+
+  test('PATCH /:id by member on their own paired source succeeds', async () => {
+    const { app, memberBearer, s2 } = await makeFixture();
+    const res = await app.fetch(new Request(`http://test/api/sources/${s2.id}`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${memberBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ label: 'my rename' }),
+    }));
+    expect(res.status).toBe(200);
+  });
+
+  test('PATCH /:id by member on someone else\'s source returns 403', async () => {
+    const { app, memberBearer, s1 } = await makeFixture();
+    const res = await app.fetch(new Request(`http://test/api/sources/${s1.id}`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${memberBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ label: 'nope' }),
+    }));
+    expect(res.status).toBe(403);
+  });
+
+  test('PATCH /:id with invalid baseUrl returns 400', async () => {
+    const { app, adminBearer, s1 } = await makeFixture();
+    const res = await app.fetch(new Request(`http://test/api/sources/${s1.id}`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${adminBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ baseUrl: 'not a url' }),
+    }));
+    expect(res.status).toBe(400);
+  });
+
+  test('PATCH /:id with empty body returns 400', async () => {
+    const { app, adminBearer, s1 } = await makeFixture();
+    const res = await app.fetch(new Request(`http://test/api/sources/${s1.id}`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${adminBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    }));
+    expect(res.status).toBe(400);
+  });
+
+  test('PATCH /:id on unknown returns 404', async () => {
+    const { app, adminBearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://test/api/sources/9999', {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${adminBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ label: 'x' }),
+    }));
+    expect(res.status).toBe(404);
+  });
 });
