@@ -9,6 +9,7 @@ const base: DeploymentConfig = {
   id: 1, mode: 'local', domain: null, adminEmail: null, cfNamedToken: null,
   publicUrl: null, status: 'ready', statusMessage: null,
   certExpiresAt: null, lastAppliedAt: null,
+  lastKnownPublicUrl: null, publicUrlChangedAt: null, previousPublicUrl: null,
 };
 
 describe('writeDeploymentSidecarFiles', () => {

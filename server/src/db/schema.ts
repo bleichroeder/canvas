@@ -144,10 +144,25 @@ export const deploymentConfig = sqliteTable('deployment_config', {
   statusMessage: text('status_message'),
   certExpiresAt: integer('cert_expires_at'),
   lastAppliedAt: integer('last_applied_at'),
+  // Sub-project P: tunnel URL drift detection
+  lastKnownPublicUrl: text('last_known_public_url'),
+  publicUrlChangedAt: integer('public_url_changed_at'),
+  previousPublicUrl: text('previous_public_url'),
 });
 
 export type DeploymentConfig = typeof deploymentConfig.$inferSelect;
 export type NewDeploymentConfig = typeof deploymentConfig.$inferInsert;
+
+// ── Sub-project P tables ──────────────────────────────────────────────────────
+
+export const updatePreferences = sqliteTable('update_preferences', {
+  id: integer('id').primaryKey({ autoIncrement: false }),  // singleton, always 1
+  autoUpdate: integer('auto_update', { mode: 'boolean' }).notNull().default(false),
+  lastAutoCheckAt: integer('last_auto_check_at'),  // nullable, seconds since epoch
+});
+
+export type UpdatePreferencesRow = typeof updatePreferences.$inferSelect;
+export type NewUpdatePreferencesRow = typeof updatePreferences.$inferInsert;
 
 // ── Sub-project G tables ──────────────────────────────────────────────────────
 
