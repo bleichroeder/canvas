@@ -7,6 +7,9 @@ import { runMigrations } from './db/migrate';
 import { bootstrapAdminIfNeeded } from './lib/bootstrap';
 import { refreshDeploymentSync } from './lib/deployment-sync';
 import { startReaper } from './storage/reaper';
+import { makeWatchtowerClient } from './lib/watchtower-client';
+import { detectPublicUrlDrift } from './lib/tunnel-url-drift';
+import { startAutoUpdateWorker } from './lib/auto-update-worker';
 import { buildApp } from './app';
 
 logger.info({ version: config.version, env: config.NODE_ENV }, 'canvas server starting');
@@ -19,15 +22,29 @@ bootstrapAdminIfNeeded(db, { dbPath: config.CANVAS_DB_PATH, claimTokenTtlSec: 24
 // Reconcile deployment_config with runtime after a restart: flip status
 // from pending/applying back to ready, populate publicUrl from sidecar for
 // cf-quick, etc.
-refreshDeploymentSync(db, config.CANVAS_DATA_DIR);
+const deployConf = refreshDeploymentSync(db, config.CANVAS_DATA_DIR);
+
+// Detect if the public tunnel URL changed across restarts (sub-project P).
+// Runs once at boot after the deployment sidecar has been read.
+detectPublicUrlDrift(db, deployConf.publicUrl);
+
+const watchtowerClient = makeWatchtowerClient({
+  url: config.WATCHTOWER_URL,
+  token: config.WATCHTOWER_TOKEN,
+});
 
 const stopReaper = startReaper(db);
+const stopAutoUpdate = startAutoUpdateWorker({
+  getDb: () => db,
+  watchtowerClient,
+  currentVersion: config.CANVAS_VERSION,
+});
 
 // Module-level ref so the setup route can call server.requestIP(req).
 // Assigned right after Bun.serve() returns; the closure is safe because
 // no request can arrive before Bun.serve() completes.
 let serverRef: ReturnType<typeof Bun.serve> | null = null;
-const app = buildApp(db, () => serverRef);
+const app = buildApp(db, () => serverRef, watchtowerClient);
 
 const server = Bun.serve({
   port: config.PORT,
@@ -41,6 +58,7 @@ logger.info({ url: `http://${config.HOST}:${config.PORT}` }, 'listening');
 const shutdown = (signal: string) => {
   logger.info({ signal }, 'shutting down');
   stopReaper();
+  stopAutoUpdate.stop();
   server.stop(false);
   process.exit(0);
 };

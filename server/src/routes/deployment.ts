@@ -41,6 +41,8 @@ export function makeDeploymentRoutes(getDb: () => Db) {
       lastAppliedAt: conf.lastAppliedAt,
       hasCfNamedToken: conf.cfNamedToken !== null && conf.cfNamedToken.length > 0,
       externallyManaged: config.CANVAS_EXTERNAL_PROXY,
+      publicUrlChangedAt: conf.publicUrlChangedAt,
+      previousPublicUrl: conf.previousPublicUrl,
     });
   });
 
@@ -92,6 +94,8 @@ export function makeDeploymentRoutes(getDb: () => Db) {
       status: conf.status,
       publicUrl: conf.publicUrl,
       externallyManaged: config.CANVAS_EXTERNAL_PROXY,
+      publicUrlChangedAt: conf.publicUrlChangedAt,
+      previousPublicUrl: conf.previousPublicUrl,
     });
   });
 

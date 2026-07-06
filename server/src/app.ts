@@ -23,6 +23,7 @@ import { makeSetupRoutes } from './routes/setup';
 import { makeTelemetryRoutes } from './routes/telemetry';
 import { makeAdminTelemetryRoutes } from './routes/admin-telemetry';
 import { makeAdminUpdatesRoutes } from './routes/admin-updates';
+import { makeWatchtowerClient, type WatchtowerClient } from './lib/watchtower-client';
 import { registerAdapter } from './sources/registry';
 import { plexAdapter } from './sources/plex';
 import { flixifyAdapter } from './sources/flixify';
@@ -36,7 +37,12 @@ registerAdapter(flixifyAdapter);
 export function buildApp(
   db: Db,
   getServer: () => ReturnType<typeof Bun.serve> | null = () => null,
+  watchtowerClient?: WatchtowerClient,
 ): Hono {
+  const wtClient = watchtowerClient ?? makeWatchtowerClient({
+    url: config.WATCHTOWER_URL,
+    token: config.WATCHTOWER_TOKEN,
+  });
   const app = new Hono();
   app.use('*', corsMiddleware());
   app.use('*', requestLog());
@@ -90,7 +96,7 @@ export function buildApp(
   app.route('/api/subtitles',      makeSubtitlesRoutes(() => db));
   app.route('/api/admin',          makeAdminRoutes(() => db));
   app.route('/api/admin',          makeAdminTelemetryRoutes(() => db));
-  app.route('/api/admin',          makeAdminUpdatesRoutes(() => db));
+  app.route('/api/admin',          makeAdminUpdatesRoutes(() => db, wtClient));
   app.route('/api/sources',        makeSourcesMgmtRoutes(() => db));
 
   // Anything under /api/* that didn't match a mounted route returns a JSON
