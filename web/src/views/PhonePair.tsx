@@ -8,6 +8,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import { useRoute } from '../router';
 import { api } from '../api';
 import { stripPin, formatPin } from '../lib/pin-format';
+import { generateUUID } from '../lib/uuid';
 
 const PLEX_PRODUCT = 'Canvas';
 const CLIENT_ID_KEY = 'canvas.plex.clientId';
@@ -15,7 +16,11 @@ const CLIENT_ID_KEY = 'canvas.plex.clientId';
 function plexClientId(): string {
   let id = localStorage.getItem(CLIENT_ID_KEY);
   if (!id) {
-    id = crypto.randomUUID();
+    // generateUUID has a getRandomValues fallback so this doesn't crash on
+    // phones loading canvas over http:// (crypto.randomUUID is secure-context
+    // only). Users who bypass their tunnel and hit the LAN IP directly hit
+    // this path.
+    id = generateUUID();
     localStorage.setItem(CLIENT_ID_KEY, id);
   }
   return id;

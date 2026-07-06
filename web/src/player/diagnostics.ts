@@ -7,6 +7,8 @@
 // - Kill switches: ?diag=off URL param OR localStorage.canvas.diag.disabled === '1'.
 // - POST failures to /api/telemetry/error are swallowed silently.
 
+import { generateUUID } from '../lib/uuid';
+
 // ---------------------------------------------------------------------------
 // sanitizeMessage — strips URL-shaped substrings from error messages/stacks
 // before emitting telemetry, so token-bearing or path-revealing URLs don't leak.
@@ -54,10 +56,7 @@ export const ring = new Ring<DiagEvent>(RING_CAP);
 // Module-level session identifier — stable for the lifetime of this JS module
 // (i.e. a single browser session / page load). Used by PlayerErrorDialog to
 // surface a correlation handle in the error detail panel.
-const sessionId: string =
-  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+const sessionId: string = generateUUID();
 
 export function getSessionId(): string {
   return sessionId;

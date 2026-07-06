@@ -86,8 +86,21 @@ export function Pair() {
   // The pairing (QR) state renders full-screen without AppShell chrome so the
   // QR is the star and there is no branded top bar competing for attention.
   if (state.kind === 'pairing') {
+    // QR URL inherits window.location.protocol — if the car is on http://
+    // (LAN IP, no tunnel), the phone will land on http:// too, where the
+    // Web Crypto APIs pairing needs are unavailable. Warn the car user so
+    // they can switch to their tunnel URL before scanning.
+    const insecureContext = typeof window !== 'undefined'
+      && window.isSecureContext === false;
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 3, textAlign: 'center' }}>
+        {insecureContext && (
+          <Alert severity="warning" sx={{ mb: 3, maxWidth: 560, textAlign: 'left' }}>
+            <strong>Non-secure context.</strong> Canvas is being accessed over <code>http://</code>{' '}
+            (typically a LAN IP). Phone pairing needs <code>https://</code> to work — reload
+            this page from your public tunnel URL before scanning the QR.
+          </Alert>
+        )}
         <Typography variant="h2" sx={{ mb: 3 }}>Scan with your phone to pair</Typography>
         {qrSvg ? (
           <Box
