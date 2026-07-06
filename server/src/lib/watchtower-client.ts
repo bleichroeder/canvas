@@ -29,9 +29,10 @@ export function makeWatchtowerClient(opts: MakeWatchtowerClientOpts): Watchtower
         headers,
         signal: controller.signal,
       });
-      // Any HTTP response (including 401) means Watchtower is listening.
+      // Any HTTP response (including 401 or 5xx) means Watchtower is listening.
       // Only network-level failures indicate unreachability.
-      return res.status >= 200 && res.status < 500;
+      void res;
+      return true;
     } catch {
       return false;
     } finally {

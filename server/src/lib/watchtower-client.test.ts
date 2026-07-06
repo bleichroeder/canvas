@@ -22,6 +22,13 @@ describe('makeWatchtowerClient', () => {
     restore();
   });
 
+  test('isReachable returns true when Watchtower responds with 5xx (still reachable)', async () => {
+    const restore = mockFetch(async () => new Response('boom', { status: 503 }));
+    const c = makeWatchtowerClient({ url: 'http://wt:8080', token: 't', reachableTtlMs: 0 });
+    expect(await c.isReachable()).toBe(true);
+    restore();
+  });
+
   test('isReachable returns false when fetch throws', async () => {
     const restore = mockFetch(async () => { throw new Error('ECONNREFUSED'); });
     const c = makeWatchtowerClient({ url: 'http://wt:8080', token: 't', reachableTtlMs: 0 });
