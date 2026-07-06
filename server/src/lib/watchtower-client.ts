@@ -22,15 +22,17 @@ export function makeWatchtowerClient(opts: MakeWatchtowerClientOpts): Watchtower
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), probeTimeoutMs);
     try {
+      // Probe a nonexistent path. Watchtower's HTTP API does not gate /v1/update
+      // by method — any authenticated request to that path triggers an update.
+      // A 404 on an unknown path proves the server is listening without side
+      // effects. Any HTTP response (2xx/4xx/5xx) means Watchtower is reachable.
       const headers: Record<string, string> = {};
       if (opts.token) headers.authorization = `Bearer ${opts.token}`;
-      const res = await fetch(`${opts.url}/v1/update`, {
+      const res = await fetch(`${opts.url}/_canvas_probe`, {
         method: 'GET',
         headers,
         signal: controller.signal,
       });
-      // Any HTTP response (including 401 or 5xx) means Watchtower is listening.
-      // Only network-level failures indicate unreachability.
       void res;
       return true;
     } catch {

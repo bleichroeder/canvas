@@ -54,11 +54,13 @@ describe('refreshDeploymentSync — cf-quick baseline seed', () => {
     }
   });
 
-  test('non-null lastKnownPublicUrl: refreshDeploymentSync does NOT overwrite lastKnownPublicUrl when writing a new publicUrl', () => {
+  test('non-null lastKnownPublicUrl differing from new publicUrl: records drift event', () => {
     const db = makeDb();
     const dir = mkdtempSync(join(tmpdir(), 'canvas-sync-'));
     try {
-      // Simulate a second boot: lastKnownPublicUrl already seeded from prior run
+      // Simulate a second boot: lastKnownPublicUrl already seeded from prior run.
+      // publicUrl is null on this boot because cloudflared hasn't written the
+      // sidecar yet — which is when the boot-time drift check runs and no-ops.
       updateDeploymentConfig(db, {
         mode: 'cf-quick',
         status: 'ready',
@@ -66,21 +68,45 @@ describe('refreshDeploymentSync — cf-quick baseline seed', () => {
         lastKnownPublicUrl: 'https://old.example',
       });
 
-      // Write a new (different) URL sidecar — simulating a URL change
+      // cloudflared writes a new (different) URL sidecar late.
       const sidecarPath = join(dir, '.deployment-public-url');
       writeFileSync(sidecarPath, 'https://new.trycloudflare.com\n', 'utf8');
 
       refreshDeploymentSync(db, dir);
 
       const row = getRow(db);
-      // publicUrl updated
       expect(row.publicUrl).toBe('https://new.trycloudflare.com');
-      // lastKnownPublicUrl NOT touched by refreshDeploymentSync — boot-time
-      // detectPublicUrlDrift handles this case
-      expect(row.lastKnownPublicUrl).toBe('https://old.example');
-      // No drift fields written by refreshDeploymentSync
-      expect(row.publicUrlChangedAt).toBeNull();
+      // Drift recorded: lastKnownPublicUrl advances to new URL, previous is
+      // captured, changedAt is stamped.
+      expect(row.lastKnownPublicUrl).toBe('https://new.trycloudflare.com');
+      expect(row.previousPublicUrl).toBe('https://old.example');
+      expect(row.publicUrlChangedAt).not.toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('non-null lastKnownPublicUrl matching new publicUrl: no drift recorded', () => {
+    const db = makeDb();
+    const dir = mkdtempSync(join(tmpdir(), 'canvas-sync-'));
+    try {
+      updateDeploymentConfig(db, {
+        mode: 'cf-quick',
+        status: 'ready',
+        publicUrl: null,
+        lastKnownPublicUrl: 'https://same.trycloudflare.com',
+      });
+
+      const sidecarPath = join(dir, '.deployment-public-url');
+      writeFileSync(sidecarPath, 'https://same.trycloudflare.com\n', 'utf8');
+
+      refreshDeploymentSync(db, dir);
+
+      const row = getRow(db);
+      expect(row.publicUrl).toBe('https://same.trycloudflare.com');
+      expect(row.lastKnownPublicUrl).toBe('https://same.trycloudflare.com');
       expect(row.previousPublicUrl).toBeNull();
+      expect(row.publicUrlChangedAt).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

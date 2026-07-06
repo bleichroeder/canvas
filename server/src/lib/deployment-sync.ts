@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
 import type { Db } from '../db';
 import { getDeploymentConfig, updateDeploymentConfig } from '../storage/deployment-config';
-import { deploymentConfig, type DeploymentConfig } from '../db/schema';
+import { type DeploymentConfig } from '../db/schema';
+import { detectPublicUrlDrift } from './tunnel-url-drift';
 import { logger } from '../log';
 
 /**
@@ -68,21 +68,16 @@ export function refreshDeploymentSync(db: Db, dataDir: string): DeploymentConfig
     patch.publicUrl = nextUrl;
   }
 
-  // cf-quick baseline seed: if publicUrl is transitioning null → non-null AND
-  // lastKnownPublicUrl is still null, seed lastKnownPublicUrl at the same time.
-  // This is a one-shot operation — once lastKnownPublicUrl is set, the boot-time
-  // detectPublicUrlDrift call handles all subsequent drift detection.
-  // Do NOT set publicUrlChangedAt — this is baseline seeding, not a drift event.
-  if (
-    patch.publicUrl !== undefined &&
-    patch.publicUrl !== null &&
-    dc.publicUrl === null &&
-    dc.lastKnownPublicUrl === null
-  ) {
-    db.update(deploymentConfig)
-      .set({ lastKnownPublicUrl: patch.publicUrl })
-      .where(eq(deploymentConfig.id, 1))
-      .run();
+  // cf-quick late-arriving URL: when publicUrl transitions null → non-null
+  // (cloudflared just wrote its sidecar), run the drift detector. It handles
+  // all three cases:
+  //   - lastKnownPublicUrl === null  → seed baseline (no publicUrlChangedAt)
+  //   - lastKnownPublicUrl === new   → no-op
+  //   - lastKnownPublicUrl !== new   → record drift event
+  // The boot-time detectPublicUrlDrift call no-ops on publicUrl=null, so it
+  // misses cf-quick's late URL; this catches it.
+  if (patch.publicUrl !== undefined && patch.publicUrl !== null && dc.publicUrl === null) {
+    detectPublicUrlDrift(db, patch.publicUrl);
   }
 
   // Status: pending/applying -> ready. Special case for cf-quick — hold in

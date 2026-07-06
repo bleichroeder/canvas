@@ -41,6 +41,21 @@ describe('makeWatchtowerClient', () => {
     expect(await c.isReachable()).toBe(false);
   });
 
+  test('isReachable probes a non-/v1/update path (avoids triggering an update)', async () => {
+    let probedUrl: string | URL | undefined;
+    const restore = mockFetch(async (input) => {
+      probedUrl = input;
+      return new Response('', { status: 404 });
+    });
+    const c = makeWatchtowerClient({ url: 'http://wt:8080', token: 't', reachableTtlMs: 0 });
+    await c.isReachable();
+    const url = String(probedUrl);
+    // Regression guard: hitting /v1/update (even with GET) triggers Watchtower.
+    expect(url).not.toContain('/v1/update');
+    expect(url.startsWith('http://wt:8080')).toBe(true);
+    restore();
+  });
+
   test('isReachable caches the probe result within TTL', async () => {
     let calls = 0;
     const restore = mockFetch(async () => { calls++; return new Response('', { status: 200 }); });
