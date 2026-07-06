@@ -1,94 +1,103 @@
 # Updates
 
-Canvas auto-updates via [Watchtower](https://containrrr.dev/watchtower/), bundled in the `docker-compose.yml` at the repo root.
+Canvas installs new versions via a companion [Watchtower](https://containrrr.dev/watchtower/) container that pulls the latest image from `ghcr.io/bleichroeder/canvas` and recreates the canvas container in place. Data persists across updates via the `canvas-data` Docker volume.
 
-## How it works
+## v0.10.0+ update flow (click-to-update)
 
-- Watchtower polls `ghcr.io/bleichroeder/canvas` every 5 minutes.
-- When it sees a newer image than the currently-running one, it pulls the image, stops the canvas container, and starts a new one from the new image.
-- Only containers explicitly labeled `com.centurylinklabs.watchtower.enable=true` are watched. Watchtower will not touch other containers on your host.
-- The canvas data volume (`canvas-data`) persists across updates. Users, sources, and error reports are preserved.
+Watchtower runs in **HTTP API mode** — it does not poll on a schedule. Canvas is in charge of when to trigger updates. Two paths:
 
-## Viewing update status in canvas
+- **Click-to-update (default).** Canvas checks GitHub Releases every 15 minutes. When a new version is available, Settings → About shows an **Update now** button. Click it to trigger the update.
+- **Auto-update (opt-in).** Flip the **Auto-update** switch in Settings → About. Canvas will call Watchtower automatically the moment a new version is detected on the 15-minute tick.
 
-Sign in as admin → **Settings → About**. The "Updates" card shows:
+Either way, canvas restarts within ~10 seconds after the trigger. If you're using Cloudflare Quick Tunnel, expect a new public URL after each restart — canvas surfaces the new URL in Settings → Deployment.
 
-- Current running version.
-- Latest published version (if newer than current).
-- Release notes for the latest version.
-- A hint that Watchtower will apply the update within 5 minutes.
+## First-time setup
 
-## Disabling auto-updates
+Generate a shared secret for canvas ↔ Watchtower:
 
-Remove the `watchtower` service from your `docker-compose.yml`, then:
+```bash
+openssl rand -hex 32
+```
+
+Save it in a `.env` file alongside your `docker-compose.yml`:
 
 ```
+WATCHTOWER_HTTP_API_TOKEN=<paste-your-token-here>
+```
+
+See `.env.example` at the repo root for the template.
+
+Bring canvas up:
+
+```bash
 docker-compose up -d
 ```
 
-Canvas continues running. You'll need to update manually — see below.
+Verify both services are healthy:
 
-## Triggering an update manually
-
-Whether or not Watchtower is running:
-
-```
-docker-compose pull canvas
-docker-compose up -d canvas
+```bash
+docker-compose ps
 ```
 
-Watchtower will pick up the change on its next poll if it's still enabled.
+Verify the click-to-update flow: open canvas, go to **Settings → About**. The Updates card should show the auto-update toggle and (when applicable) the Update now button.
 
-## Rolling back to an older version
+## Migrating from v0.9.x
 
-Pin canvas to a specific tag in your compose file:
+Existing v0.9.x installs have Watchtower running in auto-polling mode. Migration is opt-in and non-breaking — v0.9.x → v0.10.0 auto-updates one last time before you switch modes.
+
+1. **Wait for canvas to auto-update to v0.10.0.** Watchtower will pull it within ~5 minutes on its normal poll cycle.
+2. **After v0.10.0 is running**, open Settings → About. You'll see a warning: *"Watchtower's HTTP API is unreachable — Update your compose per docs/updates.md."*
+3. **Generate a token:**
+   ```bash
+   openssl rand -hex 32
+   ```
+4. **Create `.env` next to your `docker-compose.yml`:**
+   ```
+   WATCHTOWER_HTTP_API_TOKEN=<paste-your-token>
+   ```
+5. **Update your `docker-compose.yml`** to match the current version at `https://github.com/bleichroeder/canvas/blob/main/docker-compose.yml` (or edit in place: remove `WATCHTOWER_POLL_INTERVAL`, add `WATCHTOWER_HTTP_API_UPDATE: "true"` and `WATCHTOWER_HTTP_API_TOKEN: "${WATCHTOWER_HTTP_API_TOKEN:?...}"` to Watchtower, and `WATCHTOWER_URL` + `WATCHTOWER_TOKEN` to canvas).
+6. **Recreate:**
+   ```bash
+   docker-compose up -d
+   ```
+7. Refresh Settings → About. The warning should be gone; toggle + button are live.
+
+You can keep running on v0.9.x-style auto-polling indefinitely if you prefer — canvas will still function, only the click-to-update UI features are disabled until you migrate.
+
+## Manual updates
+
+Once click-to-update is set up, updates happen entirely from the UI:
+
+1. Open canvas → Settings → About.
+2. If an update is available, an **Update now** button appears.
+3. Click it, confirm the dialog. Canvas restarts within ~10 seconds.
+
+## Auto-update
+
+Prefer canvas to update itself the moment a new version is out? Flip the **Auto-update** switch in Settings → About. Canvas polls GitHub every 15 minutes and calls Watchtower automatically when a new tag is detected.
+
+**Caveat:** if you're on Cloudflare Quick Tunnel, auto-updates will silently change your public URL. Users with bookmarked URLs won't know until they visit canvas from a device on the same LAN (which shows the current URL in Settings → Deployment). If URL stability matters, use **Cloudflare Named Tunnel** instead.
+
+## Rollback
+
+Pin a specific version in your `docker-compose.yml`:
 
 ```yaml
 services:
   canvas:
-    image: ghcr.io/bleichroeder/canvas:0.6.0
-    # rest unchanged
+    image: ghcr.io/bleichroeder/canvas:0.9.2
 ```
 
-Then:
+Then `docker-compose up -d`. Watchtower still ignores anything without the `com.centurylinklabs.watchtower.enable=true` label, and the pinned image will only update when you change the tag manually.
 
-```
-docker-compose up -d canvas
-```
+## Troubleshooting
 
-Note: if the old version has DB schema older than your `canvas-data`, migrations only go forward. Rolling back may break if newer schema is required for the DB to load. Test rollbacks against a fresh volume if you're worried.
+**"Watchtower unreachable" persists after migration.**
+- Check both services are running: `docker-compose ps`.
+- Check Watchtower's logs for token misconfiguration: `docker logs canvas-watchtower`.
+- Verify `WATCHTOWER_HTTP_API_TOKEN` is set: `docker-compose config | grep WATCHTOWER`.
 
-## Direct-Docker deployment (skipping compose)
-
-If you're running canvas via plain `docker run` instead of compose, updates are your responsibility:
-
-```
-docker pull ghcr.io/bleichroeder/canvas:latest
-docker rm -f canvas
-docker run -d --restart unless-stopped --name canvas \
-  -p 8787:8787 -p 80:80 -p 443:443 \
-  -v canvas-data:/data \
-  ghcr.io/bleichroeder/canvas:latest
-```
-
-This works but you don't get auto-updates. Watchtower can still work with `docker run` deployments — see [Watchtower docs](https://containrrr.dev/watchtower/).
-
-## Migrating from an older canvas deployment
-
-If you used an earlier `docker-compose.yml` (pre-v0.8.0) with a bind-mount data directory like `./canvas-data:/data`, the new compose file uses a named Docker volume instead. To carry your existing data across:
-
-```
-# Stop the old deployment
-docker-compose down
-
-# Copy bind-mounted data into the named volume canvas will now use
-docker run --rm \
-  -v "$(pwd)/canvas-data:/src:ro" \
-  -v canvas-data:/dst \
-  alpine sh -c "cp -a /src/. /dst/"
-
-# Bring the new compose file up
-docker-compose up -d
-```
-
-If you were running canvas via plain `docker run -v canvas-data:/data …`, your named `canvas-data` volume is already picked up automatically — the new compose file declares the volume with `name: canvas-data` to preserve the literal name. No migration needed.
+**Update button clicked but canvas didn't restart.**
+- Check canvas logs immediately after clicking: `docker logs canvas`. A successful trigger logs "auto-update: triggering watchtower" or the manual endpoint logs a 202.
+- Check Watchtower logs: `docker logs canvas-watchtower`. It should log the update attempt.
+- If Watchtower's log says "no session token" or similar auth error, the token in canvas' env doesn't match Watchtower's env. Verify both reference the same `${WATCHTOWER_HTTP_API_TOKEN}`.

@@ -14,6 +14,9 @@ services:
     #   TELEMETRY_ENABLED: "true"
     #   TELEMETRY_RETENTION_DAYS: "30"
     #   TELEMETRY_MAX_ROWS: "1000"
+    environment:
+      WATCHTOWER_URL: "http://canvas-watchtower:8080"
+      WATCHTOWER_TOKEN: "${WATCHTOWER_HTTP_API_TOKEN}"
     labels:
       # Opt this container into Watchtower's auto-update watch.
       com.centurylinklabs.watchtower.enable: "true"
@@ -25,11 +28,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      # Only update containers explicitly labeled — don't touch other stuff.
       WATCHTOWER_LABEL_ENABLE: "true"
-      # Check every 5 minutes.
-      WATCHTOWER_POLL_INTERVAL: "300"
-      # Remove old images after successful update to save disk.
+      # v0.10.0+: click-to-update mode. No polling; canvas triggers updates via /v1/update.
+      WATCHTOWER_HTTP_API_UPDATE: "true"
+      WATCHTOWER_HTTP_API_TOKEN: "${WATCHTOWER_HTTP_API_TOKEN:?WATCHTOWER_HTTP_API_TOKEN required — see docs/updates.md}"
       WATCHTOWER_CLEANUP: "true"
 
 volumes:
