@@ -11,7 +11,7 @@ import { api } from '../api';
 
 export interface ApiSource {
   id: number;
-  type: 'plex' | 'flixify';
+  type: 'plex' | 'flixify' | 'youtube';
   baseUrl: string;
   label: string;
   pairedByUserId: number | null;

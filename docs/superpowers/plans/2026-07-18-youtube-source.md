@@ -111,12 +111,12 @@
 
 **Files:** `server/src/routes/sources-mgmt.ts`, `web/src/api.ts`, `web/src/lib/source-style.ts`, `web/src/views/Pair.tsx` (and/or `SourcesTab.tsx`).
 
-- [ ] Admin `POST /api/sources` `{ type:'youtube', label }` → tokenless source + grant to creator.
-- [ ] `api.addPublicSource`; "Add YouTube" entry in the source picker (no QR).
-- [ ] `source-style`: red + `YT` glyph.
-- [ ] `npm --prefix web run build` green.
+- [x] `POST /api/sources` `{ type:'youtube', label? }` → tokenless source + grant to creator (any authed user; admin shares via Users UI). Rejects pairing types with 400.
+- [x] `api.addPublicSource`; "Add YouTube" entry in the source picker (no QR, branches to `addPublic`).
+- [x] `source-style`: red (`#ff0000`) + `YT` glyph (widened the client source-type unions: `storage.ts`, `SourcesContext`, `api.ts`).
+- [x] `web` build green (`tsc --noEmit && vite build`).
 
-**Verify:** admin adds YouTube; it appears on Home with badge; search + a playlist binge (Up-Next autoplay) + captions all work; a member without the grant doesn't see it.
+**Verify:** ✅ 3 route tests; server suite 360 pass; web build clean. **Live app integration** (real yt-dlp/ffmpeg): `POST /api/sources` (201) → `POST /api/play` (200, duration=213s, 6 sub tracks) → signed `GET /api/yt/stream` (200 `video/mp4`, `ftyp` box, ffprobe **h264+aac**). In-browser click-through still worth a manual pass once running.
 
 ## Task 7: Docker + docs
 

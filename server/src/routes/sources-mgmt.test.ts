@@ -58,6 +58,43 @@ describe('sources-mgmt routes', () => {
     expect(body.map((b) => b.label)).toEqual(['S1']);
   });
 
+  test('POST / adds a tokenless YouTube source and grants the creator', async () => {
+    const { app, memberBearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://test/api/sources', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${memberBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'youtube' }),
+    }));
+    expect(res.status).toBe(201);
+    const created = await res.json() as { id: number; type: string; label: string; baseUrl: string };
+    expect(created).toMatchObject({ type: 'youtube', label: 'YouTube', baseUrl: '' });
+    // Creator was granted access, so it now shows in their listing.
+    const list = await app.fetch(new Request('http://test/api/sources', { headers: { authorization: `Bearer ${memberBearer}` } }));
+    const body = await list.json() as { type: string }[];
+    expect(body.some((b) => b.type === 'youtube')).toBe(true);
+  });
+
+  test('POST / with a custom label uses it', async () => {
+    const { app, adminBearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://test/api/sources', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'youtube', label: 'Family YouTube' }),
+    }));
+    const created = await res.json() as { label: string };
+    expect(created.label).toBe('Family YouTube');
+  });
+
+  test('POST / rejects pairing-based types (plex) with 400', async () => {
+    const { app, adminBearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://test/api/sources', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'plex', baseUrl: 'http://x', token: 't' }),
+    }));
+    expect(res.status).toBe(400);
+  });
+
   test('DELETE /:id by admin removes any source', async () => {
     const { app, adminBearer, s2 } = await makeFixture();
     const res = await app.fetch(new Request(`http://test/api/sources/${s2.id}`, { method: 'DELETE', headers: { authorization: `Bearer ${adminBearer}` } }));

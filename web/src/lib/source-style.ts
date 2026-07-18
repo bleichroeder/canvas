@@ -5,6 +5,7 @@ export const SOURCE_TYPE_COLOR: Record<StoredSource['type'], string> = {
   jellyfin: '#aa5cc3',
   flixify: '#cc3333',
   generic: '#6b7280',
+  youtube: '#ff0000',
 };
 
 /**

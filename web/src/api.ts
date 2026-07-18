@@ -157,12 +157,18 @@ export const api = {
   adminRevokeSource: (userId: number, sourceId: number) => request<void>(`/api/admin/users/${userId}/sources/${sourceId}`, { method: 'DELETE' }),
 
   // Source management
-  listSources: () => request<{ id: number; type: 'plex' | 'flixify'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number; usersWithAccess?: number[] }[]>('/api/sources'),
+  listSources: () => request<{ id: number; type: 'plex' | 'flixify' | 'youtube'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number; usersWithAccess?: number[] }[]>('/api/sources'),
   deleteSource: (id: number) => request<void>(`/api/sources/${id}`, { method: 'DELETE' }),
   updateSource: (id: number, patch: { baseUrl?: string; label?: string }) =>
-    request<{ id: number; type: 'plex' | 'flixify'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }>(
+    request<{ id: number; type: 'plex' | 'flixify' | 'youtube'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }>(
       `/api/sources/${id}`,
       { method: 'PATCH', body: JSON.stringify(patch) },
+    ),
+  // Add a tokenless public source (v1: YouTube). No pair flow.
+  addPublicSource: (type: 'youtube', label?: string) =>
+    request<{ id: number; type: 'youtube'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }>(
+      '/api/sources',
+      { method: 'POST', body: JSON.stringify({ type, ...(label ? { label } : {}) }) },
     ),
 
   // Setup (first-run wizard)

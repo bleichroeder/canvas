@@ -21,10 +21,11 @@ type State =
   | { kind: 'paired'; label: string }
   | { kind: 'error'; message: string };
 
-const SOURCE_TYPES: Array<{ type: SourceType; label: string; available: boolean }> = [
+const SOURCE_TYPES: Array<{ type: SourceType; label: string; available: boolean; note?: string }> = [
   { type: 'plex', label: 'Plex Media Server', available: true },
   { type: 'jellyfin', label: 'Jellyfin', available: false },
   { type: 'flixify', label: 'Flixify (thecalm.site)', available: true },
+  { type: 'youtube', label: 'YouTube', available: true, note: 'public • no sign-in' },
   { type: 'generic', label: 'Direct URL', available: false },
 ];
 
@@ -48,6 +49,18 @@ export function Pair() {
     try {
       const { code, expiresAt } = await api.pairStart(type);
       setState({ kind: 'pairing', type, code, expiresAt });
+    } catch (e) {
+      setState({ kind: 'error', message: (e as Error).message });
+    }
+  }
+
+  // Public sources (YouTube) have no credential and no QR flow — create directly.
+  async function addPublic(type: 'youtube') {
+    try {
+      const src = await api.addPublicSource(type);
+      await refreshSources();
+      setState({ kind: 'paired', label: src.label });
+      setTimeout(() => navigate('/settings?tab=sources'), 1200);
     } catch (e) {
       setState({ kind: 'error', message: (e as Error).message });
     }
@@ -159,12 +172,15 @@ export function Pair() {
                 <Card key={s.type} sx={{ opacity: s.available ? 1 : 0.5 }}>
                   <CardActionArea
                     disabled={!s.available}
-                    onClick={() => startPair(s.type)}
+                    onClick={() => (s.type === 'youtube' ? addPublic('youtube') : startPair(s.type))}
                     sx={{ p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                   >
                     <Typography variant="body1" sx={{ fontWeight: 500 }}>{s.label}</Typography>
                     {!s.available && (
                       <Typography variant="caption" color="text.secondary">(coming soon)</Typography>
+                    )}
+                    {s.available && s.note && (
+                      <Typography variant="caption" color="text.secondary">{s.note}</Typography>
                     )}
                   </CardActionArea>
                 </Card>

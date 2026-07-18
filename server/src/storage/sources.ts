@@ -3,7 +3,7 @@ import type { Db } from '../db';
 import { sources, userSourceAccess, type Source, type NewSource } from '../db/schema';
 import { nowSec } from '../lib/time';
 
-export function createSource(db: Db, input: { type: 'plex' | 'flixify'; baseUrl: string; token: string; label: string; pairedByUserId: number }): Source {
+export function createSource(db: Db, input: { type: 'plex' | 'flixify' | 'youtube'; baseUrl: string; token: string; label: string; pairedByUserId: number }): Source {
   const row: NewSource = {
     type: input.type,
     baseUrl: input.baseUrl,

@@ -8,7 +8,7 @@
  * @deprecated Use ApiSource from lib/SourcesContext instead.
  */
 export interface StoredSource {
-  type: 'plex' | 'jellyfin' | 'flixify' | 'generic';
+  type: 'plex' | 'jellyfin' | 'flixify' | 'generic' | 'youtube';
   baseUrl: string;
   token: string;
   label: string;
