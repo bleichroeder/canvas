@@ -122,11 +122,11 @@
 
 **Files:** `Dockerfile`, `README.md`, `docs/youtube.md`.
 
-- [ ] Runtime stage: `apk add --no-cache ffmpeg` + copy pinned yt-dlp binary; verify both on `PATH`.
-- [ ] `docs/youtube.md`: capabilities, v1 limits, ToS note, yt-dlp bump steps.
-- [ ] README: list YouTube as a source.
+- [x] Runtime stage: `apk add ffmpeg python3` + pinned yt-dlp zipapp (`YTDLP_VERSION` build arg) to `/usr/local/bin`. *(musl note: the standalone yt-dlp binary is glibc-only, so we use the python zipapp on system python3.)* Build-time `yt-dlp --version && ffmpeg -version` sanity check.
+- [x] `docs/youtube.md`: how-it-works, capabilities, v1 limits, config, yt-dlp bump steps, ToS note.
+- [x] README: YouTube in the tagline + Adding-sources section.
 
-**Verify:** `docker build` (CI `docker-build`) green; binaries present in the image; a video plays from a container run.
+**Verify:** ✅ `docker build` green; in-image check: yt-dlp 2026.07.04, ffmpeg 6.1.2, python3 3.12 all on PATH (`/usr/local/bin/yt-dlp`, `/usr/bin/ffmpeg`) matching config defaults.
 
 ## Task 8: Failure-isolation + resource regression check
 

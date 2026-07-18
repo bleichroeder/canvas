@@ -28,6 +28,16 @@ FROM oven/bun:1.3-alpine AS runtime
 # gettext = envsubst (Caddyfile templating); tini = PID 1 signal handling.
 RUN apk add --no-cache gettext tini
 
+# YouTube source deps: ffmpeg (remux/transcode) + yt-dlp (extraction). On Alpine
+# (musl) the standalone yt-dlp binary is glibc-only, so we install the pinned
+# python zipapp and the system python3 it runs on. Bump YTDLP_VERSION to update
+# the extractor when a YouTube change breaks it (see docs/youtube.md).
+ARG YTDLP_VERSION=2026.07.04
+RUN apk add --no-cache ffmpeg python3 \
+ && wget -qO /usr/local/bin/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp" \
+ && chmod +x /usr/local/bin/yt-dlp \
+ && yt-dlp --version && ffmpeg -version | head -n1
+
 COPY --from=caddy-src /usr/bin/caddy /usr/local/bin/caddy
 COPY --from=cloudflared-src /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 
