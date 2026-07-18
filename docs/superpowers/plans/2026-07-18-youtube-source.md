@@ -88,12 +88,12 @@
 
 **Files:** `server/src/sources/youtube.ts` (+test).
 
-- [ ] Item ID encode/decode (`v:`/`p:`/`c:` prefixes).
-- [ ] `search` (`ytsearchN:` via yt-dlp), `home` (trending row), `library` (sections + channel/playlist browse), `item` (video / playlist-as-show / channel).
-- [ ] `resolveStream` → signed internal URL + `durationSec` + `subtitleTracks` from metadata.
-- [ ] `saveProgress` no-op; `startPair` unused stub.
-- [ ] Map YouTube metadata → `Item`/`ItemDetail` (title, channel→`showTitle`, duration, thumbnail→`poster`, `hasCC`).
-- [ ] Tests with injected yt-dlp exec cover each method + id round-tripping.
+- [x] Item ID encode/decode (`v:`/`p:`/`c:` prefixes; bare id = video).
+- [x] `search` (`ytsearch30:` via yt-dlp), `home` (trending row), `library` (Trending section + playlist/channel browse w/ paging), `item` (video / playlist-or-channel-as-show).
+- [x] `resolveStream` → signed internal URL + `durationSec` + capped `subtitleTracks` from metadata.
+- [x] `saveProgress` no-op; `startPair` throws (added tokenless, not via pair flow).
+- [x] Map YouTube metadata → `Item`/`ItemDetail` (title, duration, thumbnail→`poster`, year, `hasCC`). *(channel-name subtitle on cards deferred — no clean `Item` field; shown via detail synopsis.)*
+- [x] `makeYoutubeAdapter({yt, signer})` factory; tests inject a fake YtDlp. ✅ 13 tests; full suite 348 pass; typecheck clean.
 
 ## Task 5: Stream + subtitle routes
 
