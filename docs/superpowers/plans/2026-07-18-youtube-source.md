@@ -80,9 +80,9 @@
 
 **Files:** `server/src/lib/yt-stream-sign.ts` (+test).
 
-- [ ] `signStreamUrl(videoId, fromSec)` → query string with `exp` + HMAC-SHA256 `sig` (WebCrypto, like `lib/bearer.ts`).
-- [ ] `verifyStreamSig(videoId, params)` → boolean; reject expired/tampered.
-- [ ] Tests: round-trip, expiry, tamper rejection.
+- [x] `makeStreamSigner(secret, {now})` → `signQuery(videoId, fromSec)` = `from=&exp=&sig=` (HMAC-SHA256 via WebCrypto, like `lib/bearer.ts`); injectable clock for testable expiry.
+- [x] `verify(videoId, params)` → boolean; timing-safe compare; reject expired/tampered/missing.
+- [x] Tests: round-trip, from clamp/floor, tamper (id/from/sig), expiry, wrong-secret, missing/non-numeric params. ✅ 9 pass, typecheck clean.
 
 ## Task 4: YouTube adapter (metadata)
 
