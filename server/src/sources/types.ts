@@ -1,4 +1,4 @@
-export type SourceType = 'plex' | 'jellyfin' | 'flixify' | 'generic';
+export type SourceType = 'plex' | 'jellyfin' | 'flixify' | 'generic' | 'youtube';
 
 export interface SourceContext {
   baseUrl: string;

@@ -18,7 +18,7 @@ export const pairSessions = sqliteTable(
   'pair_sessions',
   {
     code: text('code').primaryKey(),
-    type: text('type', { enum: ['plex', 'flixify'] }).notNull(),
+    type: text('type', { enum: ['plex', 'flixify', 'youtube'] }).notNull(),
     status: text('status', { enum: ['pending', 'approved', 'expired'] }).notNull(),
     payload: text('payload', { mode: 'json' }).$type<PairPayload>().notNull(),
     createdAt: integer('created_at').notNull(),
@@ -99,7 +99,7 @@ export const sources = sqliteTable(
   'sources',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    type: text('type', { enum: ['plex', 'flixify'] }).notNull(),
+    type: text('type', { enum: ['plex', 'flixify', 'youtube'] }).notNull(),
     baseUrl: text('base_url').notNull(),
     token: text('token').notNull(),
     label: text('label').notNull(),
