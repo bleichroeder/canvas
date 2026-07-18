@@ -99,13 +99,13 @@
 
 **Files:** `server/src/routes/yt-stream.ts` (+test), `server/src/app.ts`.
 
-- [ ] `GET /api/yt/stream/:videoId` — verify sig → concurrency semaphore → yt-dlp extract → ffmpeg remux pipe → `video/mp4`. Kill children on `c.req.raw.signal` abort. 429 when over the concurrency cap; 403 on bad sig.
-- [ ] `GET /api/yt/subs/:videoId?lang=` — fetch caption track, return `text/vtt`.
-- [ ] Mount both **public** (before auth middleware) in `app.ts`, alongside `/api/telemetry`.
-- [ ] Register `youtubeAdapter`.
-- [ ] Tests: sig rejection, concurrency-cap 429, child-kill on abort (fake exec), VTT content-type.
+- [x] `GET /api/yt/stream/:videoId` — verify sig → concurrency semaphore → yt-dlp extract → ffmpeg remux pipe → `video/mp4`. Kills children on `c.req.raw.signal` abort. 429 over the cap; 403 on bad sig. `buildFfmpegArgs` shared helper.
+- [x] `GET /api/yt/subs/:videoId?lang=` — fetch caption track, return `text/vtt`.
+- [x] Mount in `app.ts`: `/api/yt/stream` **public**; `/api/yt/subs` **authed** (client attaches bearer, like `/api/subtitles`).
+- [x] Register the YouTube adapter (constructed in `buildApp` with config-derived yt-dlp + signer).
+- [x] Tests: sig rejection (no spawn), 429 cap, child-kill+slot-release on abort, VTT proxy, `buildFfmpegArgs` copy/transcode. ✅ 9 route tests; full suite 357 pass; typecheck clean.
 
-**Verify:** with real binaries locally, a public video plays end-to-end through the canvas player; seek reboots cleanly; disconnect leaves no orphan ffmpeg.
+**Verify:** ✅ **Live pipeline verified** against real YouTube (240p *Me at the zoo* + 1080p *Never Gonna Give You Up*): real `yt-dlp -J → pickFormats → ffmpeg` produced valid **H.264 + AAC** fragmented MP4 (ffprobe-confirmed), remux-not-transcode, capped at 1080p. Full in-*app* playback (browser) pends the frontend wiring in Task 6.
 
 ## Task 6: Add-source route + frontend
 
