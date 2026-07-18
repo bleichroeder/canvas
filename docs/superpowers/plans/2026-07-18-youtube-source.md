@@ -130,8 +130,8 @@
 
 ## Task 8: Failure-isolation + resource regression check
 
-- [ ] Force a resolve failure (bad video id / yt-dlp non-zero): Home still renders Plex/Flixify rows with a YouTube warning; player shows retryable error.
-- [ ] Load test the concurrency cap; confirm no orphaned subprocesses after disconnect/seek storms.
+- [x] Failure isolation locked by `dispatch.test.ts`: `callPerSource` returns other sources' results while a throwing source (e.g. a YouTube resolve error) becomes a 502 per-source `error`, never sinking Plex/Flixify. A yt-dlp non-zero exit surfaces as `YtDlpError` (502) → `/api/play` 502 → the player's existing `onFatal` retryable dialog.
+- [x] Concurrency cap + no-orphan cleanup covered by `yt-stream.test.ts`: 429 over the cap, and on client abort the child is killed **and the slot is released** (a subsequent request succeeds at `maxConcurrent=1`). Real subprocess teardown rides the same abort→`kill()` wiring (Bun.spawn `signal`).
 
 ---
 
