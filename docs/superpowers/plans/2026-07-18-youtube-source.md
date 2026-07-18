@@ -70,11 +70,11 @@
 
 **Files:** `server/src/lib/ytdlp.ts` (+test), `server/src/config.ts`.
 
-- [ ] `config.ts`: `YTDLP_PATH` (default `yt-dlp`), `FFMPEG_PATH` (default `ffmpeg`), `YT_MAX_CONCURRENT_STREAMS` (default 2), `YT_STREAM_SECRET` (optional).
-- [ ] `ytdlp.ts`: injectable `exec` (default `Bun.spawn`); `ytdlpJson(args)` → parsed JSON; `pickFormats(info)` → `{ videoUrl, audioUrl, needsTranscode }` selecting avc1≤1080 + m4a; timeouts + non-zero-exit → typed error.
-- [ ] Tests inject a fake exec returning canned yt-dlp JSON; assert format selection incl. the AV1-only → `needsTranscode` branch.
+- [x] `config.ts`: `YTDLP_PATH` (default `yt-dlp`), `FFMPEG_PATH` (default `ffmpeg`), `YT_MAX_CONCURRENT_STREAMS` (default 2), `YT_STREAM_SECRET` (optional).
+- [x] `ytdlp.ts`: injectable `exec` (default `Bun.spawn`); `json(args)` → parsed JSON; `pickFormats(formats)` → `{ videoUrl, audioUrl, needsTranscode }` selecting avc1≤1080 + m4a, muxed fallback, transcode fallback; timeouts + non-zero-exit → `YtDlpError`. (Added `YtDlpError extends UpstreamError` in `errors.ts`.)
+- [x] Tests inject a fake exec returning canned yt-dlp JSON; assert format selection incl. the muxed-fallback and AV1-only → `needsTranscode` branches.
 
-**Verify:** `bun test` green; no real process spawned in tests.
+**Verify:** ✅ `bun test` 326 pass / 0 fail (11 new); `bun run typecheck` clean; no real process spawned in tests.
 
 ## Task 3: Signed stream URLs
 

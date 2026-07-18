@@ -45,3 +45,10 @@ export class PlexHttpError extends UpstreamError {
     this.name = 'PlexHttpError';
   }
 }
+
+export class YtDlpError extends UpstreamError {
+  constructor(message: string, public readonly stderr = '') {
+    super(502, 'yt-dlp', `yt-dlp: ${message}`);
+    this.name = 'YtDlpError';
+  }
+}

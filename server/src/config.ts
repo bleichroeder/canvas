@@ -18,6 +18,13 @@ const ConfigSchema = z.object({
   CANVAS_VERSION: z.string().optional().default('dev'),
   WATCHTOWER_URL: z.string().default('http://canvas-watchtower:8080'),
   WATCHTOWER_TOKEN: z.string().default(''),
+  // Sub-project Q: YouTube source (yt-dlp + ffmpeg pipeline)
+  YTDLP_PATH: z.string().default('yt-dlp'),
+  FFMPEG_PATH: z.string().default('ffmpeg'),
+  YT_MAX_CONCURRENT_STREAMS: z.coerce.number().int().min(1).default(2),
+  // HMAC secret for signed stream URLs. Empty = generate an ephemeral secret at
+  // boot (fine for single-instance; stream URLs are short-lived and per-session).
+  YT_STREAM_SECRET: z.string().optional().default(''),
 });
 
 export type Config = z.infer<typeof ConfigSchema> & { version: string };
