@@ -96,7 +96,7 @@ describe('GET /_dash/:videoId (internal assembly)', () => {
       expect(res.headers.get('content-type')).toBe('video/mp4');
       const body = new Uint8Array(await res.arrayBuffer());
       expect(Array.from(body)).toEqual([1, 2, 3, 7, 7, 7]); // initBytes ++ fetched
-      expect(capturedRange).toBe('bytes=110-');
+      expect(capturedRange).toBe('bytes=110-4000109'); // bounded chunk, not open-ended
     } finally {
       globalThis.fetch = original;
     }

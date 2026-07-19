@@ -62,6 +62,10 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
   const release = () => { if (active > 0) active--; };
 
   const FRAG = ['-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1'];
+  // googlevideo throttles open-ended reads to ~1x real-time but serves bounded
+  // byte ranges at full speed (this is why yt-dlp downloads in chunks). We proxy
+  // in chunks this size to defeat the throttle.
+  const DASH_CHUNK = 4_000_000;
 
   // Internal: serves one DASH stream (video|audio) starting at the seek segment:
   // init bytes + a byte-range fetch from the computed offset. Public but signed;
@@ -80,27 +84,34 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
     const { byteOffset } = seekPointForTime(s.index, from);
 
     const signal = c.req.raw.signal;
-    const upstream = await fetch(s.url, { headers: { Range: `bytes=${byteOffset}-`, 'user-agent': UA }, ...(signal ? { signal } : {}) });
-    if (!upstream.ok && upstream.status !== 206 && upstream.status !== 200) {
-      return c.json({ error: `range fetch ${upstream.status}` }, 502);
-    }
     const init = s.initBytes;
+    // ffmpeg opens the URL open-ended, which googlevideo throttles to ~real-time
+    // (video buffer never fills → audio starves → freeze). So we proxy it as
+    // sequential bounded-range fetches instead. Pull-based so we only fetch the
+    // next chunk when ffmpeg has drained the previous one (no unbounded memory).
+    let pos = byteOffset;
+    let ended = false;
     const body = new ReadableStream<Uint8Array>({
-      async start(controller) {
-        controller.enqueue(init);
-        const reader = upstream.body!.getReader();
+      start(controller) { controller.enqueue(init); },
+      async pull(controller) {
+        if (ended) { controller.close(); return; }
         try {
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value) controller.enqueue(value);
-          }
-          controller.close();
+          const resp = await fetch(s.url, {
+            headers: { Range: `bytes=${pos}-${pos + DASH_CHUNK - 1}`, 'user-agent': UA },
+            ...(signal ? { signal } : {}),
+          });
+          if (resp.status !== 206 && resp.status !== 200) { ended = true; controller.close(); return; }
+          const buf = new Uint8Array(await resp.arrayBuffer());
+          if (buf.length === 0) { ended = true; controller.close(); return; }
+          controller.enqueue(buf);
+          pos += buf.length;
+          if (buf.length < DASH_CHUNK) ended = true; // short read → EOF
         } catch {
+          ended = true;
           try { controller.close(); } catch { /* already closed */ }
         }
       },
-      cancel() { upstream.body?.cancel().catch(() => {}); },
+      cancel() { ended = true; },
     });
     return new Response(body, { headers: { 'content-type': 'video/mp4', 'cache-control': 'no-store' } });
   });
