@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { pickFormats, type YtFormat, type PickedFormats, type YtDlp } from '../lib/ytdlp';
+import { type PickedFormats, type YtDlp } from '../lib/ytdlp';
 import type { StreamSigner } from '../lib/yt-stream-sign';
 import { logger } from '../log';
 
@@ -92,8 +92,16 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
     const releaseOnce = () => { if (!released) { released = true; release(); } };
 
     try {
-      const info = (await opts.yt.json(['-J', '--skip-download', watchUrl(videoId)])) as { formats?: YtFormat[] };
-      const picked = pickFormats(info.formats ?? []);
+      // Extract direct URLs with -g so yt-dlp fully processes them (signature +
+      // n-param). The format.url fields from -J work in curl but 403 in ffmpeg;
+      // -g output does not. Prefer H.264 (copy); no avc → 502 (rare).
+      const selector = 'bv*[vcodec^=avc1][height<=1080]+ba[ext=m4a]/b[ext=mp4][vcodec^=avc1]';
+      const out = await opts.yt.text(['-f', selector, '-g', watchUrl(videoId)]);
+      const urls = out.split('\n').map((s) => s.trim()).filter(Boolean);
+      if (urls.length === 0) return c.json({ error: 'no playable H.264 stream for this video' }, 502);
+      const picked: PickedFormats = urls.length >= 2
+        ? { videoUrl: urls[0]!, audioUrl: urls[1]!, needsTranscode: false }
+        : { videoUrl: urls[0]!, needsTranscode: false };
       const from = Number(c.req.query('from') ?? '0') || 0;
 
       const signal = c.req.raw.signal;

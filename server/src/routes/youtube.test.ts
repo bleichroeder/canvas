@@ -14,7 +14,7 @@ import { generateBearer, hashBearer } from '../lib/bearer';
 import type { YtDlp } from '../lib/ytdlp';
 
 // Fake yt-dlp: resolveFollowMeta reads title + thumbnails from the -J payload.
-const fakeYt: YtDlp = { json: async () => ({ title: 'Resolved Title', thumbnails: [{ url: 't://thumb' }] }) };
+const fakeYt: YtDlp = { json: async () => ({ title: 'Resolved Title', thumbnails: [{ url: 't://thumb' }] }), text: async () => '' };
 
 async function makeFixture(yt: YtDlp = fakeYt) {
   const sqlite = new Database(':memory:');

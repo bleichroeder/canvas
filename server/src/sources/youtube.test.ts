@@ -8,7 +8,7 @@ const CTX: SourceContext = { baseUrl: '', token: '' };
 const signer = makeStreamSigner('test-secret', { now: () => 1000 });
 
 function fakeYt(handler: (args: string[]) => unknown): YtDlp {
-  return { async json(args) { return handler(args); } };
+  return { async json(args) { return handler(args); }, async text() { return ''; } };
 }
 
 // A search/trending flat-playlist payload mixing a video, a channel, and a playlist.

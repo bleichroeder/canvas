@@ -80,6 +80,8 @@ export interface PickedFormats {
 export interface YtDlp {
   /** Run yt-dlp and parse stdout as a single JSON document (`-J`). */
   json(args: string[], opts?: { timeoutMs?: number | undefined; signal?: AbortSignal | undefined }): Promise<unknown>;
+  /** Run yt-dlp and return raw stdout (e.g. `-g` direct-URL output). */
+  text(args: string[], opts?: { timeoutMs?: number | undefined; signal?: AbortSignal | undefined }): Promise<string>;
 }
 
 export function makeYtDlp(opts: MakeYtDlpOpts): YtDlp {
@@ -88,28 +90,36 @@ export function makeYtDlp(opts: MakeYtDlpOpts): YtDlp {
   // Prefix applied to every invocation so signature solving works.
   const runtimeArgs = opts.jsRuntime ? ['--js-runtimes', opts.jsRuntime] : [];
 
+  async function run(
+    args: string[],
+    callOpts?: { timeoutMs?: number | undefined; signal?: AbortSignal | undefined },
+  ): Promise<string> {
+    const cmd = [opts.ytdlpPath, ...runtimeArgs, ...args];
+    let res: ExecResult;
+    try {
+      res = await exec(cmd, { timeoutMs: callOpts?.timeoutMs ?? defaultTimeoutMs, signal: callOpts?.signal });
+    } catch (err) {
+      throw new YtDlpError(err instanceof Error ? err.message : 'spawn failed');
+    }
+    if (res.exitCode !== 0) {
+      const stderr = res.stderr.slice(0, 800);
+      logger.warn({ ytArgs: cmd.slice(1), exitCode: res.exitCode, stderr }, 'yt-dlp failed');
+      throw new YtDlpError(`exited ${res.exitCode}`, stderr);
+    }
+    return res.stdout;
+  }
+
   return {
     async json(args, callOpts) {
-      const cmd = [opts.ytdlpPath, ...runtimeArgs, ...args];
-      let res: ExecResult;
+      const stdout = await run(args, callOpts);
       try {
-        res = await exec(cmd, {
-          timeoutMs: callOpts?.timeoutMs ?? defaultTimeoutMs,
-          signal: callOpts?.signal,
-        });
-      } catch (err) {
-        throw new YtDlpError(err instanceof Error ? err.message : 'spawn failed');
-      }
-      if (res.exitCode !== 0) {
-        const stderr = res.stderr.slice(0, 800);
-        logger.warn({ ytArgs: cmd.slice(1), exitCode: res.exitCode, stderr }, 'yt-dlp failed');
-        throw new YtDlpError(`exited ${res.exitCode}`, stderr);
-      }
-      try {
-        return JSON.parse(res.stdout);
+        return JSON.parse(stdout);
       } catch {
-        throw new YtDlpError('could not parse JSON output', res.stderr.slice(0, 500));
+        throw new YtDlpError('could not parse JSON output');
       }
+    },
+    async text(args, callOpts) {
+      return run(args, callOpts);
     },
   };
 }

@@ -13,7 +13,11 @@ const FORMATS = {
   ],
 };
 
-const fakeYt = (payload: unknown): YtDlp => ({ json: async () => payload });
+// The stream route uses text() (`-g` direct URLs); the subs route uses json() (`-J`).
+const STREAM_URLS = 'https://gv/video\nhttps://gv/audio';
+function fakeYt(over: { text?: string; json?: unknown } = {}): YtDlp {
+  return { json: async () => over.json ?? {}, text: async () => over.text ?? STREAM_URLS };
+}
 
 function closedStream(): ReadableStream<Uint8Array> {
   return new ReadableStream({ start(c) { c.close(); } });
@@ -41,7 +45,7 @@ function makeFakeSpawn(exited: Promise<number> = Promise.resolve(0)): FakeSpawn 
 describe('GET /stream/:videoId', () => {
   test('rejects a bad signature with 403 and never spawns', async () => {
     const fs = makeFakeSpawn();
-    const r = makeYtStreamRoutes({ yt: fakeYt(FORMATS), signer, ffmpegPath: 'ffmpeg', maxConcurrent: 2, spawn: fs.spawn });
+    const r = makeYtStreamRoutes({ yt: fakeYt(), signer, ffmpegPath: 'ffmpeg', maxConcurrent: 2, spawn: fs.spawn });
     const res = await r.request('/stream/vid?from=0&exp=9999999999&sig=deadbeef');
     expect(res.status).toBe(403);
     expect(fs.cmd()).toBeUndefined();
@@ -49,7 +53,7 @@ describe('GET /stream/:videoId', () => {
 
   test('streams video/mp4 and spawns ffmpeg with the picked inputs', async () => {
     const fs = makeFakeSpawn();
-    const r = makeYtStreamRoutes({ yt: fakeYt(FORMATS), signer, ffmpegPath: '/bin/ffmpeg', maxConcurrent: 2, spawn: fs.spawn });
+    const r = makeYtStreamRoutes({ yt: fakeYt(), signer, ffmpegPath: '/bin/ffmpeg', maxConcurrent: 2, spawn: fs.spawn });
     const q = await signer.signQuery('vid', 0);
     const res = await r.request(`/stream/vid?${q}`);
     expect(res.status).toBe(200);
@@ -64,7 +68,7 @@ describe('GET /stream/:videoId', () => {
   test('returns 429 when the concurrency cap is reached', async () => {
     const neverExits = new Promise<number>(() => {});
     const fs = makeFakeSpawn(neverExits);
-    const r = makeYtStreamRoutes({ yt: fakeYt(FORMATS), signer, ffmpegPath: 'ffmpeg', maxConcurrent: 1, spawn: fs.spawn });
+    const r = makeYtStreamRoutes({ yt: fakeYt(), signer, ffmpegPath: 'ffmpeg', maxConcurrent: 1, spawn: fs.spawn });
     const q = await signer.signQuery('vid', 0);
     const first = await r.request(`/stream/vid?${q}`);
     expect(first.status).toBe(200);      // holds the only slot (never exits)
@@ -75,7 +79,7 @@ describe('GET /stream/:videoId', () => {
   test('kills the child and frees the slot on client abort', async () => {
     const neverExits = new Promise<number>(() => {});
     const fs = makeFakeSpawn(neverExits);
-    const r = makeYtStreamRoutes({ yt: fakeYt(FORMATS), signer, ffmpegPath: 'ffmpeg', maxConcurrent: 1, spawn: fs.spawn });
+    const r = makeYtStreamRoutes({ yt: fakeYt(), signer, ffmpegPath: 'ffmpeg', maxConcurrent: 1, spawn: fs.spawn });
     const q = await signer.signQuery('vid', 0);
 
     const ac = new AbortController();
@@ -92,7 +96,7 @@ describe('GET /stream/:videoId', () => {
 });
 
 describe('GET /subs/:videoId', () => {
-  const withSubs = fakeYt({ subtitles: { en: [{ ext: 'vtt', url: 'https://cc/en.vtt' }] }, automatic_captions: {} });
+  const withSubs = fakeYt({ json: { subtitles: { en: [{ ext: 'vtt', url: 'https://cc/en.vtt' }] }, automatic_captions: {} } });
 
   test('proxies a VTT caption track as text/vtt', async () => {
     const original = globalThis.fetch;
