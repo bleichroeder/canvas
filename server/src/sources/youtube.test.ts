@@ -70,6 +70,13 @@ describe('library', () => {
     expect(res.breadcrumbs).toEqual([{ name: 'YouTube' }, { name: 'results', libraryId: 'c:UCabc' }]);
   });
 
+  test('channel browse targets the /videos tab (uploads), not the channel root', async () => {
+    let captured: string[] = [];
+    const yt = makeYoutubeAdapter({ yt: fakeYt((args) => { captured = args; return { entries: [] }; }), signer });
+    await yt.library(CTX, encodeId('c', 'UCabc'));
+    expect(captured.some((a) => a === 'https://www.youtube.com/channel/UCabc/videos')).toBe(true);
+  });
+
   test('paging maps offset/limit to yt-dlp playlist-start/end', async () => {
     let captured: string[] = [];
     const yt = makeYoutubeAdapter({ yt: fakeYt((args) => { captured = args; return { entries: [] }; }), signer });

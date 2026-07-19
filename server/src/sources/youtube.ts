@@ -34,8 +34,11 @@ export function decodeId(encoded: string): { kind: YtKind; id: string } {
 
 const watchUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
 const playlistUrl = (id: string) => `https://www.youtube.com/playlist?list=${id}`;
+// Channel root — used for resolving a channel's display title/thumbnail.
 const channelUrl = (id: string) =>
   id.startsWith('UC') ? `https://www.youtube.com/channel/${id}` : `https://www.youtube.com/${id}`;
+// Channel uploads live under the /videos tab; the bare channel URL lists nothing.
+const channelVideosUrl = (id: string) => `${channelUrl(id)}/videos`;
 
 // ── yt-dlp JSON shapes (only the fields we read) ───────────────────────────────
 
@@ -211,7 +214,7 @@ export function makeYoutubeAdapter(deps: YoutubeAdapterDeps): SourceAdapter {
       if (!libraryId) return { breadcrumbs: [{ name: 'YouTube' }], items: [] };
 
       const { kind, id } = decodeId(libraryId);
-      const url = kind === 'p' ? playlistUrl(id) : kind === 'c' ? channelUrl(id) : watchUrl(id);
+      const url = kind === 'p' ? playlistUrl(id) : kind === 'c' ? channelVideosUrl(id) : watchUrl(id);
 
       const start = (page?.offset ?? 0) + 1;
       const end = (page?.offset ?? 0) + (page?.limit ?? maxBrowse);
@@ -230,7 +233,7 @@ export function makeYoutubeAdapter(deps: YoutubeAdapterDeps): SourceAdapter {
       const { kind, id: realId } = decodeId(id);
 
       if (kind === 'p' || kind === 'c') {
-        const url = kind === 'p' ? playlistUrl(realId) : channelUrl(realId);
+        const url = kind === 'p' ? playlistUrl(realId) : channelVideosUrl(realId);
         const info = (await yt.json(['-J', '--flat-playlist', '--playlist-end', String(maxBrowse), url])) as YtInfo;
         return collectionAsShow(id, info);
       }
