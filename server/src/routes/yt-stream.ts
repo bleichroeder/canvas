@@ -122,12 +122,17 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
       let args: string[];
       if (sources) {
         // Full-res DASH: ffmpeg muxes the two internal (sidx-seeked) streams.
-        const q = await opts.signer.signQuery(videoId, from);
+        // Align BOTH streams to the video keyframe's time so their timelines
+        // share a start (independent seek → A/V desync otherwise). -max_interleave_delta 0
+        // forces tight interleaving so audio can't lag behind video (which starved
+        // the audio-driven clock → freeze).
+        const aligned = seekPointForTime(sources.video.index, from).segStartSec;
+        const q = await opts.signer.signQuery(videoId, aligned);
         const vUrl = `${opts.internalBase}/api/yt/_dash/${encodeURIComponent(videoId)}?stream=v&${q}`;
         const aUrl = `${opts.internalBase}/api/yt/_dash/${encodeURIComponent(videoId)}?stream=a&${q}`;
         args = ['-hide_banner', '-loglevel', 'error', '-i', vUrl, '-i', aUrl,
           '-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', '-bsf:a', 'aac_adtstoasc',
-          '-avoid_negative_ts', 'make_zero', ...FRAG];
+          '-max_interleave_delta', '0', '-avoid_negative_ts', 'make_zero', ...FRAG];
       } else {
         // Fallback: single progressive file, ffmpeg -ss (seekable).
         const out = await opts.yt.text(['-f', PROGRESSIVE_SEL, '-g', watchUrl(videoId)]);
