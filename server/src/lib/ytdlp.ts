@@ -1,4 +1,5 @@
 import { YtDlpError } from '../errors';
+import { logger } from '../log';
 
 // Thin, injectable wrapper around the yt-dlp binary. All process spawning goes
 // through the `exec` dependency so adapter/route tests never touch a real
@@ -81,7 +82,7 @@ export interface YtDlp {
 
 export function makeYtDlp(opts: MakeYtDlpOpts): YtDlp {
   const exec = opts.exec ?? defaultExec;
-  const defaultTimeoutMs = opts.timeoutMs ?? 20_000;
+  const defaultTimeoutMs = opts.timeoutMs ?? 45_000;
 
   return {
     async json(args, callOpts) {
@@ -96,7 +97,9 @@ export function makeYtDlp(opts: MakeYtDlpOpts): YtDlp {
         throw new YtDlpError(err instanceof Error ? err.message : 'spawn failed');
       }
       if (res.exitCode !== 0) {
-        throw new YtDlpError(`exited ${res.exitCode}`, res.stderr.slice(0, 500));
+        const stderr = res.stderr.slice(0, 800);
+        logger.warn({ ytArgs: cmd.slice(1), exitCode: res.exitCode, stderr }, 'yt-dlp failed');
+        throw new YtDlpError(`exited ${res.exitCode}`, stderr);
       }
       try {
         return JSON.parse(res.stdout);
