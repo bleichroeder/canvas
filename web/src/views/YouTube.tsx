@@ -43,7 +43,13 @@ export function YouTube({ source }: Props) {
     const lists = await Promise.all(
       follows.map((f) =>
         api.library(source, `${f.kind === 'channel' ? 'c' : 'p'}:${f.ytId}`)
-          .then((r) => r.items.slice(0, 8))
+          // Channel-browse entries don't repeat the channel per-video, so stamp
+          // the follow's identity on so subscription cards still show the channel.
+          .then((r) => r.items.slice(0, 8).map((it) => ({
+            ...it,
+            ...(it.channelTitle ? {} : { channelTitle: f.title }),
+            ...(it.channelId || f.kind !== 'channel' ? {} : { channelId: f.ytId }),
+          })))
           .catch(() => [] as Item[]),
       ),
     );
