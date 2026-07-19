@@ -41,6 +41,12 @@ export interface Item {
   artistName?: string;
   /** Music: 1-indexed track number within the album. */
   trackNumber?: number;
+  /** YouTube: originating channel id (UC…) — lets a card open the channel page. */
+  channelId?: string;
+  /** YouTube: channel / uploader display name, shown on the card byline. */
+  channelTitle?: string;
+  /** YouTube: view count, rendered as the "N views" card stat. */
+  viewCount?: number;
 }
 
 export interface Episode {

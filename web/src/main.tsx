@@ -13,6 +13,7 @@ import { SourcesProvider, useSources } from './lib/SourcesContext';
 import { Home } from './views/Home';
 import { SourceHome } from './views/SourceHome';
 import { YouTube } from './views/YouTube';
+import { YouTubeChannel } from './views/YouTubeChannel';
 import { Library } from './views/Library';
 import { ItemDetailView } from './views/ItemDetail';
 import { SearchView } from './views/Search';
@@ -136,6 +137,7 @@ function App() {
     ['/', () => <Home />],
     ['/search', () => <SearchView />],
     ['/source/:src', (p) => <SourceRoute source={p.src!} />],
+    ['/yt/:src/channel/:cid', (p) => <YouTubeChannel source={p.src!} channelId={p.cid!} />],
     ['/lib/:src', (p) => <Library source={p.src!} />],
     ['/lib/:src/:libId', (p) => <Library source={p.src!} libraryId={p.libId} />],
     ['/item/:src/:id', (p) => <ItemDetailView source={p.src!} id={p.id!} />],

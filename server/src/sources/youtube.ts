@@ -48,7 +48,9 @@ interface YtEntry {
   url?: string;
   duration?: number | null;
   channel?: string;
+  channel_id?: string;
   uploader?: string;
+  view_count?: number | null;
   thumbnail?: string;
   thumbnails?: Array<{ url?: string }>;
   upload_date?: string; // YYYYMMDD
@@ -84,6 +86,7 @@ function isVideoEntry(e: YtEntry): boolean {
 function mapVideo(e: YtEntry): Item {
   const poster = pickThumb(e);
   const year = e.upload_date ? Number(e.upload_date.slice(0, 4)) : undefined;
+  const channelTitle = e.channel ?? e.uploader;
   return {
     id: encodeId('v', String(e.id)),
     type: 'movie',
@@ -91,6 +94,9 @@ function mapVideo(e: YtEntry): Item {
     ...(poster ? { poster } : {}),
     ...(e.duration != null ? { durationSec: e.duration } : {}),
     ...(year && Number.isFinite(year) ? { year } : {}),
+    ...(e.channel_id ? { channelId: e.channel_id } : {}),
+    ...(channelTitle ? { channelTitle } : {}),
+    ...(e.view_count != null ? { viewCount: e.view_count } : {}),
   };
 }
 

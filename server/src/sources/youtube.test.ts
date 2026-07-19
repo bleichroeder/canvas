@@ -15,7 +15,7 @@ function fakeYt(handler: (args: string[]) => unknown): YtDlp {
 const MIXED_ENTRIES = {
   title: 'results',
   entries: [
-    { id: 'dQw4w9WgXcQ', title: 'A Video', duration: 212, thumbnail: 't://vid', ie_key: 'Youtube', upload_date: '20091025' },
+    { id: 'dQw4w9WgXcQ', title: 'A Video', duration: 212, thumbnail: 't://vid', ie_key: 'Youtube', upload_date: '20091025', channel: 'Rick Astley', channel_id: 'UCrick', view_count: 1600000000 },
     { id: 'UCabc', title: 'A Channel', ie_key: 'YoutubeTab' },
     { id: 'PLxyz', title: 'A Playlist', ie_key: 'YoutubeTab' },
   ],
@@ -38,7 +38,10 @@ describe('search', () => {
     const yt = makeYoutubeAdapter({ yt: fakeYt(() => MIXED_ENTRIES), signer });
     const items = await yt.search(CTX, 'rick astley');
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ id: 'v:dQw4w9WgXcQ', type: 'movie', title: 'A Video', durationSec: 212, poster: 't://vid', year: 2009 });
+    expect(items[0]).toMatchObject({
+      id: 'v:dQw4w9WgXcQ', type: 'movie', title: 'A Video', durationSec: 212, poster: 't://vid', year: 2009,
+      channelId: 'UCrick', channelTitle: 'Rick Astley', viewCount: 1600000000,
+    });
   });
 
   test('returns [] for a blank query without calling yt-dlp', async () => {
