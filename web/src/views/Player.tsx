@@ -18,7 +18,7 @@ import {
   setCaptionsOffsetMs,
 } from '../storage';
 import { getQueue, setQueue, type PlaybackQueue } from '../lib/playback-queue';
-import { type PlayerMode, closePlayer, openPlayer, setPlayerMode } from '../lib/player-session';
+import { type PlayerMode, closePlayer, openPlayer, setPlayerMode, useEmbedRect } from '../lib/player-session';
 import {
   startSession,
   updateSession,
@@ -66,6 +66,7 @@ const MAX_PENDING_AUDIO_CHUNKS = 480;
 export function PlayerInstance({ source, id, fromSec, mode }: Props) {
   const route = useRoute();
   const isMini = mode === 'mini';
+  const embedRect = useEmbedRect();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [paused, setPaused] = useState(true);
@@ -697,7 +698,11 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
       }
     : mode === 'embed'
     ? {
-        position: 'absolute', inset: 0, background: '#000',
+        // Float over the slot the host view (YouTube watch) measured for us.
+        position: 'fixed',
+        top: embedRect?.top ?? 0, left: embedRect?.left ?? 0,
+        width: embedRect?.width ?? '100%', height: embedRect?.height ?? 220,
+        background: '#000', overflow: 'hidden', zIndex: 2,
         display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
       }
     : {
@@ -760,7 +765,7 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
       <Fade in={splashVisible} timeout={300} unmountOnExit>
         <Box
           sx={{
-            position: 'fixed', inset: 0,
+            position: 'absolute', inset: 0,
             backgroundColor: '#0e0f12',
             backgroundImage: itemMeta?.backdrop ? `url(${itemMeta.backdrop})` : 'none',
             backgroundSize: 'cover',
@@ -897,7 +902,7 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
           </Stack>
         </Backdrop>
       )}
-      {!isMini && (
+      {mode === 'full' && (
         <div
           onClick={onCornerTap}
           style={{ position: 'fixed', top: 0, left: 0, width: 100, height: 100, zIndex: 9998, cursor: 'default' }}

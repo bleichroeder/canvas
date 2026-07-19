@@ -67,3 +67,32 @@ function subscribe(cb: () => void): () => void {
 export function usePlayerSession(): PlayerSession | null {
   return useSyncExternalStore(subscribe, getPlayerSession, getPlayerSession);
 }
+
+// ── Embed slot ─────────────────────────────────────────────────────────────
+// In 'embed' mode the (above-the-router) player floats over a slot the host
+// view provides. The view measures its slot and publishes the viewport rect
+// here; the player positions itself to match.
+
+export interface EmbedRect { top: number; left: number; width: number; height: number }
+
+let embedRect: EmbedRect | null = null;
+const rectListeners = new Set<() => void>();
+
+export function getEmbedRect(): EmbedRect | null { return embedRect; }
+
+export function setEmbedRect(r: EmbedRect | null): void {
+  if (r && embedRect && r.top === embedRect.top && r.left === embedRect.left
+      && r.width === embedRect.width && r.height === embedRect.height) return;
+  if (r === null && embedRect === null) return;
+  embedRect = r;
+  for (const l of rectListeners) l();
+}
+
+function subscribeRect(cb: () => void): () => void {
+  rectListeners.add(cb);
+  return () => { rectListeners.delete(cb); };
+}
+
+export function useEmbedRect(): EmbedRect | null {
+  return useSyncExternalStore(subscribeRect, getEmbedRect, getEmbedRect);
+}

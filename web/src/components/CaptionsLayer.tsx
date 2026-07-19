@@ -19,7 +19,7 @@ export function CaptionsLayer({ cues, posSec, offsetMs, controlsVisible }: Props
   return (
     <Box
       sx={{
-        position: 'fixed',
+        position: 'absolute',
         left: '50%',
         bottom: controlsVisible ? 150 : 48,
         transform: 'translateX(-50%)',

@@ -156,7 +156,7 @@ export function PlayerControls(p: PlayerControlsProps) {
   return (
     <Box onClick={(e) => e.stopPropagation()}>
       <Fade in={p.visible} timeout={200}>
-        <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 10, display: 'flex', gap: 1 }}>
+        <Box sx={{ position: 'absolute', top: 20, right: 20, zIndex: 10, display: 'flex', gap: 1 }}>
           <Tooltip title="Minimize">
             <IconButton
               onClick={p.onMinimize}
@@ -192,7 +192,7 @@ export function PlayerControls(p: PlayerControlsProps) {
             alt=""
             onError={() => setPreviewBroken(true)}
             sx={{
-              position: 'fixed', bottom: 130, left: '50%',
+              position: 'absolute', bottom: 130, left: '50%',
               transform: `translateX(calc(-50% + ${
                 ((scrubPos / sliderMax) - 0.5) * Math.min(window.innerWidth - 40, 1400)
               }px))`,
@@ -209,7 +209,7 @@ export function PlayerControls(p: PlayerControlsProps) {
       <Fade in={p.visible} timeout={200}>
         <Box
           sx={{
-            position: 'fixed', left: 0, right: 0, bottom: 0,
+            position: 'absolute', left: 0, right: 0, bottom: 0,
             px: 3, pt: 4, pb: 2.5,
             background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.65) 50%, transparent 100%)',
             backdropFilter: 'blur(2px)',

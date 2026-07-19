@@ -56,7 +56,7 @@ function channelHue(name: string): number {
 }
 
 export function YouTubeCard({ item, source, width = 300, showChannel = true }: YouTubeCardProps) {
-  const href = item.type === 'folder' ? `/lib/${source}/${item.id}` : `/item/${source}/${item.id}`;
+  const href = item.type === 'folder' ? `/lib/${source}/${item.id}` : `/yt/${source}/watch/${item.id}`;
   const hasChannel = showChannel && !!item.channelTitle;
 
   const openChannel = (e: React.MouseEvent) => {

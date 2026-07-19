@@ -14,6 +14,7 @@ import { Home } from './views/Home';
 import { SourceHome } from './views/SourceHome';
 import { YouTube } from './views/YouTube';
 import { YouTubeChannel } from './views/YouTubeChannel';
+import { YouTubeWatch } from './views/YouTubeWatch';
 import { Library } from './views/Library';
 import { ItemDetailView } from './views/ItemDetail';
 import { SearchView } from './views/Search';
@@ -158,6 +159,7 @@ function App() {
     ['/search', () => <SearchView />],
     ['/source/:src', (p) => <SourceRoute source={p.src!} />],
     ['/yt/:src/channel/:cid', (p) => <YouTubeChannel source={p.src!} channelId={p.cid!} />],
+    ['/yt/:src/watch/:id', (p) => <YouTubeWatch source={p.src!} id={p.id!} />],
     ['/lib/:src', (p) => <Library source={p.src!} />],
     ['/lib/:src/:libId', (p) => <Library source={p.src!} libraryId={p.libId} />],
     ['/item/:src/:id', (p) => <ItemDetailView source={p.src!} id={p.id!} />],
