@@ -111,6 +111,10 @@ export function Player({ source, id }: Props) {
   const pendingAudioRef = useRef<EncodedAudioChunk[]>([]);
   const snapshotIntervalRef = useRef<number | null>(null);
   const startedRef = useRef(false);
+  // While true, audio chunks are buffered (not fed to the decoder) so the
+  // audio-mastered clock stays at 0 until the first video frame is decoded —
+  // otherwise audio plays ahead during the video decoder's post-seek spin-up.
+  const audioHeldRef = useRef(false);
   const reportRef = useRef(0);
   const resolutionRef = useRef<PlayResolution | null>(null);
   // Start as true so the first onReady auto-plays. The user already gestured
@@ -264,29 +268,36 @@ export function Player({ source, id }: Props) {
   async function autoStartPlayback(): Promise<void> {
     const video = videoRef.current;
     const audio = audioRef.current;
-    // Prime the video decoder and wait for its first frame BEFORE starting the
-    // audio clock. The audio-mastered clock advances as soon as audio plays, so
-    // if we started audio while the (slower) video decoder was still producing
-    // its first frame, audio would run several seconds ahead of the picture
-    // after a seek — the drift users saw. Feeding video first + gating audio on
-    // the first decoded frame makes both tracks begin from the same instant.
-    if (video && pendingVideoRef.current.length > 0) {
-      video.start(); // draw loop; clock is still 0 so nothing paints until audio starts
-      for (const c of pendingVideoRef.current) video.feed(c);
-      pendingVideoRef.current = [];
-      const deadline = performance.now() + 2000; // fallback so we never hang
+    // Start the audio context now (needs the user gesture), but HOLD audio: with
+    // an empty worklet queue the audio-mastered clock stays at 0. Route video
+    // chunks straight to the decoder and wait for its first decoded frame, then
+    // release audio. This keeps audio from racing ahead while the (slower) 1080p
+    // video decoder spins up after a seek — the post-seek "audio ahead / audio
+    // before video" drift. At from=0 the first keyframe is already there so the
+    // wait is negligible.
+    if (audio) await audio.start(); // ctx.resume; no samples fed yet → clock 0
+    video?.start();
+    startedRef.current = true;
+    audioHeldRef.current = !!video && !!audio; // only hold when we have both tracks
+    for (const c of pendingVideoRef.current) video?.feed(c);
+    pendingVideoRef.current = [];
+    if (!audioHeldRef.current) {
+      for (const c of pendingAudioRef.current) audio?.feed(c);
+      pendingAudioRef.current = [];
+    }
+    // Wait for the first decoded video frame (VideoSink.frames populated by the
+    // decoder, independent of the clock), with a fallback so we never hang.
+    if (audioHeldRef.current && video) {
+      const deadline = performance.now() + 3000;
       while (video.queuedFrames === 0 && performance.now() < deadline) {
         await new Promise((r) => setTimeout(r, 16));
       }
+      // Release audio: feed what buffered during the wait; future chunks flow
+      // directly again once the hold is cleared.
+      audioHeldRef.current = false;
+      for (const c of pendingAudioRef.current) audio?.feed(c);
+      pendingAudioRef.current = [];
     }
-    if (audio) await audio.start();
-    video?.start(); // idempotent if already running
-    // Feed the first frames + anything that arrived during the wait.
-    for (const c of pendingVideoRef.current) video?.feed(c);
-    for (const c of pendingAudioRef.current) audio?.feed(c);
-    pendingVideoRef.current = [];
-    pendingAudioRef.current = [];
-    startedRef.current = true;
     setPaused(false);
     setHasEverStarted(true);
     // Drained the pending buffers — let the fetcher run free again.
@@ -394,7 +405,7 @@ export function Player({ source, id }: Props) {
             }
           },
           onAudioSample: (chunk) => {
-            if (startedRef.current && audioRef.current) audioRef.current.feed(chunk);
+            if (startedRef.current && !audioHeldRef.current && audioRef.current) audioRef.current.feed(chunk);
             else {
               pendingAudioRef.current.push(chunk);
               if (pendingAudioRef.current.length >= MAX_PENDING_AUDIO_CHUNKS) {
