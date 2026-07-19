@@ -19,6 +19,14 @@ describe('makeYtDlp.json', () => {
     expect(captured).toEqual(['/opt/yt-dlp', '-J', '--flat-playlist', 'x']);
   });
 
+  test('prepends --js-runtimes when jsRuntime is configured', async () => {
+    let captured: string[] | undefined;
+    const exec: Exec = async (cmd) => { captured = cmd; return { stdout: '{}', stderr: '', exitCode: 0 }; };
+    const yt = makeYtDlp({ ytdlpPath: 'yt-dlp', exec, jsRuntime: 'deno:/opt/deno' });
+    await yt.json(['-J', 'abc']);
+    expect(captured).toEqual(['yt-dlp', '--js-runtimes', 'deno:/opt/deno', '-J', 'abc']);
+  });
+
   test('throws YtDlpError on non-zero exit, carrying stderr', async () => {
     const exec: Exec = async () => ({ stdout: '', stderr: 'ERROR: unavailable', exitCode: 1 });
     const yt = makeYtDlp({ ytdlpPath: 'yt-dlp', exec });

@@ -82,14 +82,18 @@ yt-dlp timeout.
 - [x] `YouTubeCard` (16:9 thumbnail + duration badge + 2-line title) + `api.youtubeFollows` client.
 - [x] `npm run build` green (tsc + vite, no type errors).
 
-## Task 6: JS runtime for extraction reliability — DEFERRED
+## Task 6: JS runtime for extraction — DONE (un-deferred; it was required)
 
-**Deferred (2026-07-18).** yt-dlp warns "no JS runtime" but still extracts the
-H.264 formats we use, so this is reliability insurance, not a blocker. Also,
-**Deno is glibc-only and won't run on the Alpine (musl) image** — if/when we do
-this, use **Node** (`apk add nodejs`, has a musl build) with yt-dlp
-`--js-runtimes node`, *after* confirming yt-dlp accepts Node. Revisit only if we
-observe videos failing to extract/play.
+Local testing proved it's **not** optional: without a JS runtime, modern videos
+fail `ERROR: [youtube] <id>: This video is not available` (yt-dlp can't solve the
+signature/n-param). So:
+
+- [x] `config.YT_JS_RUNTIME` (RUNTIME[:PATH]); `makeYtDlp` prepends `--js-runtimes`
+  to every call when set; `app.ts` wires it. ✅ unit test + verified: a video that
+  returned "not available" now resolves and streams h264+aac.
+- [x] **Dockerfile**: `apk add nodejs` + `ENV YT_JS_RUNTIME=node` (Deno is glibc-only;
+  Node has a musl build and yt-dlp accepts it — both confirmed working locally).
+- [x] Local dev uses Deno (`YT_JS_RUNTIME=deno:<path>`).
 
 ## Task 7: (Stretch) throttle resilience
 

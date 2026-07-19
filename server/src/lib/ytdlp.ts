@@ -48,6 +48,8 @@ export interface MakeYtDlpOpts {
   exec?: Exec;
   /** Per-invocation timeout for metadata calls. */
   timeoutMs?: number;
+  /** JS runtime for signature solving, passed as `--js-runtimes` (RUNTIME[:PATH]). */
+  jsRuntime?: string;
 }
 
 // Shape of the bits of yt-dlp's `-J` output we consume. yt-dlp emits far more;
@@ -83,10 +85,12 @@ export interface YtDlp {
 export function makeYtDlp(opts: MakeYtDlpOpts): YtDlp {
   const exec = opts.exec ?? defaultExec;
   const defaultTimeoutMs = opts.timeoutMs ?? 45_000;
+  // Prefix applied to every invocation so signature solving works.
+  const runtimeArgs = opts.jsRuntime ? ['--js-runtimes', opts.jsRuntime] : [];
 
   return {
     async json(args, callOpts) {
-      const cmd = [opts.ytdlpPath, ...args];
+      const cmd = [opts.ytdlpPath, ...runtimeArgs, ...args];
       let res: ExecResult;
       try {
         res = await exec(cmd, {

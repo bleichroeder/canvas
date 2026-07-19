@@ -53,7 +53,7 @@ export function buildApp(
   // Sub-project Q: YouTube source. The adapter and the public stream route
   // share one yt-dlp wrapper + URL signer. An empty YT_STREAM_SECRET yields an
   // ephemeral per-boot secret (fine single-instance; stream URLs are short-lived).
-  const ytdlp = makeYtDlp({ ytdlpPath: config.YTDLP_PATH });
+  const ytdlp = makeYtDlp({ ytdlpPath: config.YTDLP_PATH, jsRuntime: config.YT_JS_RUNTIME });
   const streamSigner = makeStreamSigner(config.YT_STREAM_SECRET || generateBearer());
   registerAdapter(makeYoutubeAdapter({ yt: ytdlp, signer: streamSigner }));
 

@@ -21,6 +21,10 @@ const ConfigSchema = z.object({
   // Sub-project Q: YouTube source (yt-dlp + ffmpeg pipeline)
   YTDLP_PATH: z.string().default('yt-dlp'),
   FFMPEG_PATH: z.string().default('ffmpeg'),
+  // JS runtime for yt-dlp's signature/n-param solving (RUNTIME[:PATH], e.g.
+  // "deno" or "deno:/usr/local/bin/deno"). Empty = rely on yt-dlp's own PATH
+  // autodetect. Without a runtime, modern YouTube videos fail "not available".
+  YT_JS_RUNTIME: z.string().optional().default(''),
   YT_MAX_CONCURRENT_STREAMS: z.coerce.number().int().min(1).default(2),
   // HMAC secret for signed stream URLs. Empty = generate an ephemeral secret at
   // boot (fine for single-instance; stream URLs are short-lived and per-session).
