@@ -36,8 +36,13 @@ export function buildFfmpegArgs(picked: PickedFormats, fromSec = 0, output = 'pi
     args.push(...inputOpts(from), '-i', picked.audioUrl, '-map', '0:v:0', '-map', '1:a:0');
   }
   // Remux (copy) is the common case; transcode only when the best video isn't H.264.
-  if (picked.needsTranscode) args.push('-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'aac');
-  else args.push('-c', 'copy');
+  if (picked.needsTranscode) {
+    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'aac');
+  } else {
+    // Some YouTube AAC audio is ADTS-framed and can't be stream-copied into MP4
+    // without converting to ASC ("Malformed AAC bitstream" otherwise).
+    args.push('-c', 'copy', '-bsf:a', 'aac_adtstoasc');
+  }
   args.push('-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', output);
   return args;
 }
