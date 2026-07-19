@@ -82,6 +82,22 @@ export class VideoSink {
     };
   })();
 
+  private emitRender = (() => {
+    let last = 0;
+    return (drawnPtsSec: number, clockSec: number, queueDepth: number) => {
+      const now = performance.now();
+      if (now - last >= 1000) {
+        last = now;
+        emit('av_render', {
+          drawnPtsSec,
+          clockSec,
+          lagSec: clockSec - drawnPtsSec,
+          queueDepth,
+        });
+      }
+    };
+  })();
+
   constructor(opts: VideoSinkOptions) {
     this.canvas = opts.canvas;
     this.canvas.width = opts.config.codedWidth ?? 1280;
@@ -201,8 +217,13 @@ export class VideoSink {
       drawn = f;
     }
     if (drawn) {
+      const drawnPtsSec = drawn.timestamp / 1_000_000;
       this.ctx.drawImage(drawn, 0, 0, this.canvas.width, this.canvas.height);
       drawn.close();
+      // Rendered A/V offset: how far the frame we actually painted trails the
+      // audio clock. This is the true on-screen lag (video_frame reports the
+      // DECODED pts, which can differ). Throttled to ~1/sec.
+      this.emitRender(drawnPtsSec, clockSec, this.frames.length);
       if (!this.firstFrameDispatched) {
         this.firstFrameDispatched = true;
         if (this.onFirstFrame) {
