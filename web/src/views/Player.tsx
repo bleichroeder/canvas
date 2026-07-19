@@ -262,10 +262,28 @@ export function Player({ source, id }: Props) {
   }, []);
 
   async function autoStartPlayback(): Promise<void> {
-    if (audioRef.current) await audioRef.current.start();
-    videoRef.current?.start();
-    for (const c of pendingVideoRef.current) videoRef.current?.feed(c);
-    for (const c of pendingAudioRef.current) audioRef.current?.feed(c);
+    const video = videoRef.current;
+    const audio = audioRef.current;
+    // Prime the video decoder and wait for its first frame BEFORE starting the
+    // audio clock. The audio-mastered clock advances as soon as audio plays, so
+    // if we started audio while the (slower) video decoder was still producing
+    // its first frame, audio would run several seconds ahead of the picture
+    // after a seek — the drift users saw. Feeding video first + gating audio on
+    // the first decoded frame makes both tracks begin from the same instant.
+    if (video && pendingVideoRef.current.length > 0) {
+      video.start(); // draw loop; clock is still 0 so nothing paints until audio starts
+      for (const c of pendingVideoRef.current) video.feed(c);
+      pendingVideoRef.current = [];
+      const deadline = performance.now() + 2000; // fallback so we never hang
+      while (video.queuedFrames === 0 && performance.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 16));
+      }
+    }
+    if (audio) await audio.start();
+    video?.start(); // idempotent if already running
+    // Feed the first frames + anything that arrived during the wait.
+    for (const c of pendingVideoRef.current) video?.feed(c);
+    for (const c of pendingAudioRef.current) audio?.feed(c);
     pendingVideoRef.current = [];
     pendingAudioRef.current = [];
     startedRef.current = true;
