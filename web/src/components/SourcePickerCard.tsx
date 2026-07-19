@@ -94,7 +94,11 @@ export function SourcePickerCard({ srcKey, label, type, libraryCount, backdropUr
               mt: 0.25,
             }}
           >
-            {libraryCount === undefined
+            {/* YouTube has no library concept — show a tagline instead of a
+                misleading "0 libraries" count. */}
+            {type === 'youtube'
+              ? 'Search & subscriptions'
+              : libraryCount === undefined
               ? ' '
               : `${libraryCount} ${libraryCount === 1 ? 'library' : 'libraries'}`}
           </Typography>
