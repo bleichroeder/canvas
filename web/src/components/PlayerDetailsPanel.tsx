@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import CircularProgress from '@mui/material/CircularProgress';
 import CloseIcon from '@mui/icons-material/Close';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -200,12 +202,49 @@ function MediaDetails({ meta, queue, currentId, onPlayEpisodeIndex }: {
         </Typography>
       )}
       {queue && queue.episodes.length > 1 && (
-        <Box sx={{ mt: 3 }}>
-          <Typography sx={{ fontWeight: 700, fontSize: 13.5, mb: 1.5, color: 'text.secondary' }}>
-            {`Episodes${queue.episodes[0]?.season ? ` · Season ${queue.episodes[0].season}` : ''}`}
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-            {queue.episodes.map((ep, i) => {
+        <SeasonEpisodes queue={queue} currentId={currentId} onPlayEpisodeIndex={onPlayEpisodeIndex} />
+      )}
+    </>
+  );
+}
+
+// Episode list scoped to one season, with a season picker for multi-season
+// shows — so a long-running series doesn't dump every episode into one list.
+function SeasonEpisodes({ queue, currentId, onPlayEpisodeIndex }: {
+  queue: PlaybackQueue; currentId: string; onPlayEpisodeIndex(index: number): void;
+}) {
+  const seasons = useMemo(
+    () => [...new Set(queue.episodes.map((e) => e.season))].sort((a, b) => a - b),
+    [queue.episodes],
+  );
+  const currentSeason = queue.episodes.find((e) => e.id === currentId)?.season ?? seasons[0] ?? 1;
+  const [selSeason, setSelSeason] = useState(currentSeason);
+  // Follow the playing episode's season as it changes (e.g. auto-advance).
+  useEffect(() => { setSelSeason(currentSeason); }, [currentSeason]);
+
+  const inSeason = queue.episodes
+    .map((ep, i) => ({ ep, i }))
+    .filter(({ ep }) => ep.season === selSeason);
+
+  return (
+    <Box sx={{ mt: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: 13.5, color: 'text.secondary' }}>Episodes</Typography>
+        {seasons.length > 1 && (
+          <Select
+            size="small"
+            value={selSeason}
+            onChange={(e) => setSelSeason(Number(e.target.value))}
+            sx={{ ml: 'auto', fontSize: 13, '& .MuiSelect-select': { py: 0.5, pl: 1.25 } }}
+          >
+            {seasons.map((s) => (
+              <MenuItem key={s} value={s} sx={{ fontSize: 13 }}>{s === 0 ? 'Specials' : `Season ${s}`}</MenuItem>
+            ))}
+          </Select>
+        )}
+      </Box>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+        {inSeason.map(({ ep, i }) => {
               const current = ep.id === currentId;
               return (
                 <Box
@@ -237,9 +276,7 @@ function MediaDetails({ meta, queue, currentId, onPlayEpisodeIndex }: {
                 </Box>
               );
             })}
-          </Box>
-        </Box>
-      )}
-    </>
+      </Box>
+    </Box>
   );
 }
