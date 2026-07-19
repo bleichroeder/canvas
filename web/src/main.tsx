@@ -20,7 +20,8 @@ import { SearchView } from './views/Search';
 import { Settings } from './views/Settings';
 import { Pair } from './views/Pair';
 import { PhonePair } from './views/PhonePair';
-import { Player } from './views/Player';
+import { PlayerHost } from './components/PlayerHost';
+import { openPlayer, setPlayerMode, getPlayerSession } from './lib/player-session';
 import { Claim } from './views/Claim';
 import { SignIn } from './views/SignIn';
 import { SetPassword } from './views/SetPassword';
@@ -50,6 +51,25 @@ if (previousCrash) {
 
 function NotFound() {
   return <div style={{ padding: 20 }}><h1>Not found</h1></div>;
+}
+
+// The /play route no longer mounts the player itself (it lives in PlayerHost,
+// above the router, so it survives navigation). This just drives the session:
+// open the item full-screen on entry, and dock it to a mini player when the
+// user navigates away while it's still playing.
+function PlayerRoute({ source, id }: { source: string; id: string }) {
+  const route = useRoute();
+  const raw = route.query.from;
+  const fromSec = raw !== undefined && Number.isFinite(Number(raw)) ? Math.max(0, Math.floor(Number(raw))) : 0;
+  useEffect(() => {
+    openPlayer(source, id, { fromSec, mode: 'full' });
+    return () => {
+      const s = getPlayerSession();
+      if (s && s.source === source && s.id === id) setPlayerMode('mini');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, id]);
+  return null;
 }
 
 // Routes accessible without a canvas account. /pair is the phone-side
@@ -141,7 +161,7 @@ function App() {
     ['/lib/:src', (p) => <Library source={p.src!} />],
     ['/lib/:src/:libId', (p) => <Library source={p.src!} libraryId={p.libId} />],
     ['/item/:src/:id', (p) => <ItemDetailView source={p.src!} id={p.id!} />],
-    ['/play/:src/:id', (p) => <Player source={p.src!} id={p.id!} />],
+    ['/play/:src/:id', (p) => <PlayerRoute source={p.src!} id={p.id!} />],
     ['/settings', () => <Settings />],
     ['/settings/pair', () => <Pair />],
     ['/settings/users', () => <Users />],
@@ -172,6 +192,9 @@ function App() {
       <Fade in key={route.path} timeout={250}>
         <div>{element}</div>
       </Fade>
+      {/* Persistent player — above the routed tree so it survives navigation
+          (enables the docked mini-player and the YouTube watch embed). */}
+      <PlayerHost />
       <NowPlayingStrip />
       <DrivingDisclaimer isPublicRoute={isPublicRoute} />
     </>

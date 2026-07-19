@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { emit, reportFatal, getSessionId } from '../player/diagnostics';
 import { createStallWatchdog } from '../player/watchdog';
 import { api } from '../api';
@@ -18,6 +18,7 @@ import {
   setCaptionsOffsetMs,
 } from '../storage';
 import { getQueue, setQueue, type PlaybackQueue } from '../lib/playback-queue';
+import { type PlayerMode, closePlayer, openPlayer } from '../lib/player-session';
 import {
   startSession,
   updateSession,
@@ -35,8 +36,10 @@ import Fade from '@mui/material/Fade';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import CloseIcon from '@mui/icons-material/Close';
+import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 
-interface Props { source: string; id: string }
+interface Props { source: string; id: string; fromSec: number; mode: PlayerMode }
 
 function classifyError(e: Error): string {
   const m = (e.message ?? '').toLowerCase();
@@ -60,14 +63,9 @@ const PROGRESS_INTERVAL_MS = 15_000;
 const MAX_PENDING_VIDEO_CHUNKS = 240;
 const MAX_PENDING_AUDIO_CHUNKS = 480;
 
-export function Player({ source, id }: Props) {
+export function PlayerInstance({ source, id, fromSec, mode }: Props) {
   const route = useRoute();
-  const fromQuery = (() => {
-    const raw = route.query.from;
-    if (raw === undefined) return 0;
-    const n = Number(raw);
-    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
-  })();
+  const isMini = mode === 'mini';
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [paused, setPaused] = useState(true);
@@ -190,9 +188,12 @@ export function Player({ source, id }: Props) {
         if (q && q.currentIndex + 1 < q.episodes.length) {
           setUpNextOpen(true);
         } else {
-          // No queue OR at last episode — navigate back to browse (or item detail).
-          if (window.history.length > 1) window.history.back();
-          else navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
+          // No queue OR at last episode — close the player and unwind.
+          closePlayer();
+          if (mode !== 'mini') {
+            if (window.history.length > 1) window.history.back();
+            else navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
+          }
         }
       }
     }, 250);
@@ -466,10 +467,10 @@ export function Player({ source, id }: Props) {
       source,
       id,
       startedAt: Date.now(),
-      posSec: fromQuery,
+      posSec: fromSec,
       heapMB: currentHeapMB(),
     });
-    const handle = bootSession(fromQuery);
+    const handle = bootSession(fromSec);
     return () => {
       handle.cancel();
       if (snapshotIntervalRef.current !== null) {
@@ -618,8 +619,11 @@ export function Player({ source, id }: Props) {
     if (!nextEp) return;
     const updated: PlaybackQueue = { ...queue, currentIndex: nextIndex };
     setQueue(updated);
-    const fromSec = Math.floor(nextEp.viewOffsetSec ?? 0);
-    navigate(`/play/${source}/${nextEp.id}?from=${fromSec}`, { replace: true });
+    const nextFrom = Math.floor(nextEp.viewOffsetSec ?? 0);
+    // Switch the persistent session to the next item (re-boots via the host's
+    // key); keep the URL in step when we're the full-screen route.
+    openPlayer(source, nextEp.id, { fromSec: nextFrom, mode });
+    if (mode === 'full') navigate(`/play/${source}/${nextEp.id}?from=${nextFrom}`, { replace: true });
   }
 
   function onPrev(): void {
@@ -647,44 +651,63 @@ export function Player({ source, id }: Props) {
     }
   }
 
+  // Tear the persistent player down. When it's the full/embed surface we also
+  // unwind the route we're on (rather than pushing a new entry, which would
+  // trap /play in the back-stack); a mini player just closes in place.
+  function exitPlayer() {
+    closePlayer();
+    if (mode !== 'mini') {
+      if (window.history.length > 1) window.history.back();
+      else navigate('/');
+    }
+  }
+
   async function onClose() {
     const a = audioRef.current;
     if (a && startedRef.current) {
       await api.progress(source, id, sessionBaseRef.current + a.currentTime(), false).catch(() => {});
     }
-    // Unwind to wherever the user came from rather than pushing a new entry
-    // (which would leave /play/ in the back-stack and trap the user there).
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
-    }
+    exitPlayer();
   }
 
   // Audio-only keeps the splash on screen the entire session as the
   // now-playing surface (album art + title); audio+video hides it once
   // playback starts.
-  const splashVisible = !errMsg && !reseeking && (isAudioOnly || !hasEverStarted);
+  const splashVisible = !isMini && !errMsg && !reseeking && (isAudioOnly || !hasEverStarted);
   const engineReady = status === '';
   // Center button icon: spinner while engine is warming up, Pause if we're
   // playing (audio-only's persistent splash needs to flip), Play otherwise.
   const splashShowingPause = isAudioOnly && startedRef.current && !paused;
 
+  const containerStyle: CSSProperties = isMini
+    ? {
+        position: 'fixed', bottom: 16, right: 16, width: 384, height: 216,
+        background: '#000', borderRadius: 10, overflow: 'hidden',
+        boxShadow: '0 10px 34px rgba(0,0,0,0.6)', zIndex: 1200,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+      }
+    : mode === 'embed'
+    ? {
+        position: 'absolute', inset: 0, background: '#000',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+      }
+    : {
+        position: 'fixed', inset: 0, background: '#000',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+      };
+
   return (
     <div
       onClick={() => {
         if (errMsg) return;
-        // Before first play, any tap on the canvas starts playback (with or
-        // without controls visible). Once running, the standard rule applies:
-        // taps only toggle pause when controls were already visible.
+        // Mini: a tap expands back to the full route. Otherwise: before first
+        // play any tap starts playback; once running, taps toggle pause only
+        // when controls were already visible.
+        if (isMini) { navigate(`/play/${source}/${id}`); return; }
         if (!hasEverStarted) { void onPlayPause(); return; }
         if (controlsVisible) void onPlayPause();
       }}
-      style={{
-        position: 'fixed', inset: 0, background: '#000',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: 'pointer',
-      }}
+      style={containerStyle}
     >
       <canvas
         ref={canvasRef}
@@ -694,6 +717,37 @@ export function Player({ source, id }: Props) {
         // containers too. The backing-store size stays the decoded resolution.
         style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
       />
+      {isMini && (
+        <>
+          <Box
+            onClick={(e) => e.stopPropagation()}
+            sx={{
+              position: 'absolute', top: 0, left: 0, right: 0,
+              display: 'flex', justifyContent: 'flex-end', gap: 0.25, p: 0.25,
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0.65), transparent)',
+            }}
+          >
+            <IconButton size="small" aria-label="expand" sx={{ color: '#fff' }}
+              onClick={() => navigate(`/play/${encodeURIComponent(source)}/${encodeURIComponent(id)}`)}>
+              <OpenInFullIcon sx={{ fontSize: 17 }} />
+            </IconButton>
+            <IconButton size="small" aria-label="close" sx={{ color: '#fff' }}
+              onClick={() => { void onClose(); }}>
+              <CloseIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Box>
+          <IconButton
+            aria-label={paused ? 'play' : 'pause'}
+            onClick={(e) => { e.stopPropagation(); void onPlayPause(); }}
+            sx={{
+              position: 'absolute', color: '#fff', backgroundColor: 'rgba(0,0,0,0.45)',
+              '&:hover': { backgroundColor: 'rgba(0,0,0,0.65)' },
+            }}
+          >
+            {paused ? <PlayArrowIcon /> : <PauseIcon />}
+          </IconButton>
+        </>
+      )}
       <Fade in={splashVisible} timeout={300} unmountOnExit>
         <Box
           sx={{
@@ -764,7 +818,7 @@ export function Player({ source, id }: Props) {
           </Stack>
         </Box>
       </Fade>
-      <PlayerControls
+      {!isMini && <PlayerControls
         paused={paused}
         posSec={pos}
         durationSec={duration}
@@ -792,13 +846,13 @@ export function Player({ source, id }: Props) {
         } : null}
         onSubtitleChange={onSubtitleChange}
         onCaptionsOffsetChange={onCaptionsOffsetChange}
-      />
-      <CaptionsLayer
+      />}
+      {!isMini && <CaptionsLayer
         cues={captionCues}
         posSec={pos}
         offsetMs={captionsOffsetMs}
         controlsVisible={controlsVisible}
-      />
+      />}
       <PlayerErrorDialog
         open={!!errMsg}
         message={errMsg ?? ''}
@@ -807,14 +861,10 @@ export function Player({ source, id }: Props) {
         onShowDiagnostics={() => setDiagOpen(true)}
         onBackToBrowse={() => {
           setErrMsg(null);
-          if (window.history.length > 1) {
-            window.history.back();
-          } else {
-            navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
-          }
+          exitPlayer();
         }}
       />
-      {queue && queue.currentIndex + 1 < queue.episodes.length && (
+      {!isMini && queue && queue.currentIndex + 1 < queue.episodes.length && (
         <UpNextOverlay
           open={upNextOpen}
           showTitle={queue.showTitle}
@@ -825,22 +875,25 @@ export function Player({ source, id }: Props) {
           }}
           onCancel={() => {
             setUpNextOpen(false);
-            if (window.history.length > 1) window.history.back();
-            else navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(queue.showId)}`);
+            exitPlayer();
           }}
         />
       )}
-      <Backdrop open={reseeking} sx={{ zIndex: 5, bgcolor: 'rgba(0,0,0,0.6)' }}>
-        <Stack alignItems="center" spacing={2}>
-          <CircularProgress />
-          <Typography color="common.white">Seeking…</Typography>
-        </Stack>
-      </Backdrop>
-      <div
-        onClick={onCornerTap}
-        style={{ position: 'fixed', top: 0, left: 0, width: 100, height: 100, zIndex: 9998, cursor: 'default' }}
-        aria-hidden="true"
-      />
+      {!isMini && (
+        <Backdrop open={reseeking} sx={{ zIndex: 5, bgcolor: 'rgba(0,0,0,0.6)' }}>
+          <Stack alignItems="center" spacing={2}>
+            <CircularProgress />
+            <Typography color="common.white">Seeking…</Typography>
+          </Stack>
+        </Backdrop>
+      )}
+      {!isMini && (
+        <div
+          onClick={onCornerTap}
+          style={{ position: 'fixed', top: 0, left: 0, width: 100, height: 100, zIndex: 9998, cursor: 'default' }}
+          aria-hidden="true"
+        />
+      )}
       <DiagnosticsOverlay open={diagOpen} onClose={() => setDiagOpen(false)} sourceType={source ?? 'unknown'} />
     </div>
   );
