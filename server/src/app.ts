@@ -27,6 +27,7 @@ import { makeYtStreamRoutes } from './routes/yt-stream';
 import { makeYoutubeRoutes } from './routes/youtube';
 import { makeWatchtowerClient, type WatchtowerClient } from './lib/watchtower-client';
 import { makeYtDlp } from './lib/ytdlp';
+import { makeYtDash } from './lib/yt-dash';
 import { makeStreamSigner } from './lib/yt-stream-sign';
 import { generateBearer } from './lib/bearer';
 import { registerAdapter } from './sources/registry';
@@ -54,6 +55,7 @@ export function buildApp(
   // share one yt-dlp wrapper + URL signer. An empty YT_STREAM_SECRET yields an
   // ephemeral per-boot secret (fine single-instance; stream URLs are short-lived).
   const ytdlp = makeYtDlp({ ytdlpPath: config.YTDLP_PATH, jsRuntime: config.YT_JS_RUNTIME });
+  const ytDash = makeYtDash(ytdlp);
   const streamSigner = makeStreamSigner(config.YT_STREAM_SECRET || generateBearer());
   registerAdapter(makeYoutubeAdapter({ yt: ytdlp, signer: streamSigner }));
 
@@ -87,11 +89,13 @@ export function buildApp(
   app.use('/api/yt/subs', requireUser(() => db));
   app.route('/api/yt', makeYtStreamRoutes({
     yt: ytdlp,
+    ytDash,
     signer: streamSigner,
     ytdlpPath: config.YTDLP_PATH,
     ffmpegPath: config.FFMPEG_PATH,
     jsRuntime: config.YT_JS_RUNTIME,
     maxConcurrent: config.YT_MAX_CONCURRENT_STREAMS,
+    internalBase: `http://127.0.0.1:${config.PORT}`,
   }));
 
   // Followed channels/playlists (authed) — the YouTube page's curated feed.
