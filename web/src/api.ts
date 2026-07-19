@@ -49,12 +49,21 @@ export const api = {
   },
   item: (srcKey: string, id: string) =>
     request<ItemDetail>(`/api/item/${encodeURIComponent(srcKey)}/${encodeURIComponent(id)}`),
-  play: (srcKey: string, id: string, fromSec?: number) => {
+  play: async (srcKey: string, id: string, fromSec?: number) => {
     const qs = typeof fromSec === 'number' && fromSec > 0 ? `?fromSec=${Math.floor(fromSec)}` : '';
-    return request<PlayResolution>(
+    const res = await request<PlayResolution>(
       `/api/play/${encodeURIComponent(srcKey)}/${encodeURIComponent(id)}${qs}`,
       { method: 'POST' },
     );
+    // Plex/Flixify return absolute upstream URLs; canvas-internal streams (YouTube)
+    // are root-relative. The player's RangeFetcher does `new URL(url)` and fetches
+    // it directly, so relative URLs both throw and (in dev) hit the wrong origin.
+    // Absolutize against the API base (dev) or the page origin (same-origin prod).
+    if (res.url.startsWith('/')) {
+      const base = API_BASE || (typeof location !== 'undefined' ? location.origin : '');
+      res.url = `${base}${res.url}`;
+    }
+    return res;
   },
   progress: (srcKey: string, id: string, posSec: number, completed = false) =>
     request<void>(`/api/progress/${encodeURIComponent(srcKey)}/${encodeURIComponent(id)}`, {

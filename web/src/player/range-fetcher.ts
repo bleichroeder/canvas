@@ -115,7 +115,7 @@ export class RangeFetcher {
       emit('fetch_start', {
         rangeStart: this.offset,
         rangeEnd: this.totalSize ?? null,
-        hostname: new URL(this.url).hostname,
+        hostname: new URL(this.url, typeof location !== 'undefined' ? location.href : undefined).hostname,
       });
       const res = await fetch(this.url, {
         headers: this.offset > 0 ? { Range: `bytes=${this.offset}-` } : {},
