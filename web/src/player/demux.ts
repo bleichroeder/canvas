@@ -78,8 +78,12 @@ export class Demuxer {
         this.audioTrackId = track.id;
         this.audioTimescale = track.timescale;
         const description = extractEsdsDescription(this.file, track.id);
+        // WebCodecs rejects a bare "mp4a.40" as ambiguous ("Unknown or ambiguous
+        // codec name"); some remuxed AAC (e.g. our yt-dlp→ffmpeg YouTube streams)
+        // reports the codec without its profile suffix. Default to AAC-LC (.2) —
+        // the actual config still comes from the esds `description`.
         audioConfig = {
-          codec: track.codec,
+          codec: track.codec === 'mp4a.40' ? 'mp4a.40.2' : track.codec,
           sampleRate: track.audio.sample_rate,
           numberOfChannels: track.audio.channel_count,
           ...(description ? { description } : {}),
