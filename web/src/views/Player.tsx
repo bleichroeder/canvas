@@ -18,7 +18,7 @@ import {
   setCaptionsOffsetMs,
 } from '../storage';
 import { getQueue, setQueue, type PlaybackQueue } from '../lib/playback-queue';
-import { type PlayerMode, closePlayer, openPlayer } from '../lib/player-session';
+import { type PlayerMode, closePlayer, openPlayer, setPlayerMode } from '../lib/player-session';
 import {
   startSession,
   updateSession,
@@ -670,6 +670,15 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
     exitPlayer();
   }
 
+  // Dock to the corner mini-player and return to whatever's behind /play, so
+  // playback continues while browsing. (Leaving /play also docks it, but the
+  // explicit button doesn't depend on how the user got here.)
+  function minimizePlayer() {
+    setPlayerMode('mini');
+    if (window.history.length > 1) window.history.back();
+    else navigate('/');
+  }
+
   // Audio-only keeps the splash on screen the entire session as the
   // now-playing surface (album art + title); audio+video hides it once
   // playback starts.
@@ -834,6 +843,7 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
         onSeek={onSeek}
         onSeekRelative={onSeekRelative}
         onClose={onClose}
+        onMinimize={minimizePlayer}
         onVolumeChange={onVolumeChange}
         onMuteToggle={onMuteToggle}
         onFullscreenToggle={onFullscreenToggle}

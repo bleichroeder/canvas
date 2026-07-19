@@ -11,6 +11,7 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Divider from '@mui/material/Divider';
 import CloseIcon from '@mui/icons-material/Close';
+import PictureInPictureAltIcon from '@mui/icons-material/PictureInPictureAlt';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import Replay10Icon from '@mui/icons-material/Replay10';
@@ -58,6 +59,7 @@ interface PlayerControlsProps {
   onSeek(sec: number): void;
   onSeekRelative(deltaSec: number): void;
   onClose(): void;
+  onMinimize(): void;
   onVolumeChange(v: number): void;
   onMuteToggle(): void;
   onFullscreenToggle(): void;
@@ -154,20 +156,32 @@ export function PlayerControls(p: PlayerControlsProps) {
   return (
     <Box onClick={(e) => e.stopPropagation()}>
       <Fade in={p.visible} timeout={200}>
-        <IconButton
-          onClick={p.onClose}
-          aria-label="close"
-          sx={{
-            position: 'fixed', top: 20, right: 20, zIndex: 10,
-            color: 'text.primary',
-            width: 48, height: 48,
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            backdropFilter: 'blur(8px)',
-            '&:hover': { backgroundColor: 'rgba(0,0,0,0.6)' },
-          }}
-        >
-          <CloseIcon />
-        </IconButton>
+        <Box sx={{ position: 'fixed', top: 20, right: 20, zIndex: 10, display: 'flex', gap: 1 }}>
+          <Tooltip title="Minimize">
+            <IconButton
+              onClick={p.onMinimize}
+              aria-label="minimize"
+              sx={{
+                color: 'text.primary', width: 48, height: 48,
+                backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+                '&:hover': { backgroundColor: 'rgba(0,0,0,0.6)' },
+              }}
+            >
+              <PictureInPictureAltIcon />
+            </IconButton>
+          </Tooltip>
+          <IconButton
+            onClick={p.onClose}
+            aria-label="close"
+            sx={{
+              color: 'text.primary', width: 48, height: 48,
+              backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+              '&:hover': { backgroundColor: 'rgba(0,0,0,0.6)' },
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
       </Fade>
 
       {previewSrc && !previewBroken && (
@@ -315,6 +329,11 @@ export function PlayerControls(p: PlayerControlsProps) {
                 sx={{ ml: 1 }}
               >
                 <MoreVertIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Minimize">
+              <IconButton onClick={p.onMinimize} aria-label="minimize" sx={{ ml: 1.5 }}>
+                <PictureInPictureAltIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title={p.fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
