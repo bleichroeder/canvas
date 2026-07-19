@@ -59,20 +59,20 @@ yt-dlp timeout.
 
 ## Task 2: `youtube_follows` table + storage
 
-- [ ] Add `youtubeFollows` to `schema.ts` (per addendum); `bun run db:generate`.
-- [ ] `storage/youtube-follows.ts`: `listFollows(userId)`, `addFollow(userId, {kind, ytId, title, thumbnail})` (INSERT OR IGNORE on the unique index), `removeFollow(userId, id)`.
-- [ ] Tests: add/list/remove, dedup via unique index, per-user isolation.
+- [x] Added `youtubeFollows` to `schema.ts`; `bun run db:generate` → `drizzle/0006_red_inertia.sql`.
+- [x] `storage/youtube-follows.ts`: `listFollows`, `addFollow` (INSERT OR IGNORE, idempotent), `removeFollow` (owner-scoped).
+- [x] Tests: add/list/remove, dedup, kind-distinct, per-user isolation. ✅ 5 tests.
 
 ## Task 3: Follows routes + follow-resolve
 
-- [ ] `sources/youtube.ts`: `resolveFollowMeta(kind, ytId)` → `{ title, thumbnail? }` via a single `yt-dlp -J --flat-playlist --playlist-end 1` on the channel/playlist URL.
-- [ ] `routes/youtube.ts`: `GET /follows`, `POST /follows` `{kind, ytId}` (resolve meta → addFollow), `DELETE /follows/:id`. Accept a pasted URL too (parse to `{kind, ytId}`).
-- [ ] Mount `app.use('/api/youtube', requireUser); app.route('/api/youtube', …)`.
-- [ ] Tests: add (with mocked resolve), list, remove, bad input 400.
+- [x] `sources/youtube.ts`: `resolveFollowMeta(yt, kind, ytId)` (single `-J --flat-playlist --playlist-end 1`) + `parseFollowUrl` (channel-id / @handle / /c//user/ / playlist `list=`).
+- [x] `routes/youtube.ts`: `GET/POST/DELETE /follows`; POST accepts `{kind, ytId}` or `{url}`.
+- [x] Mounted `app.use('/api/youtube/*', requireUser); app.route('/api/youtube', …)`.
+- [x] Tests: add via {kind,ytId} + {url}, list, delete→404, bad input 400, auth required. ✅ 6 tests.
 
 ## Task 4: Idempotent public-source add
 
-- [ ] `sources-mgmt.ts` `POST /`: if the user already has a `youtube` source, return it (200) instead of creating a second. Update the test.
+- [x] `sources-mgmt.ts` `POST /`: if the caller already has a `youtube` source, grant + return it (200) instead of creating a second. ✅ idempotency test added.
 
 ## Task 5: Dedicated YouTube frontend
 

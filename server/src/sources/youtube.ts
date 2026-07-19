@@ -140,6 +140,35 @@ function collectionAsShow(encodedId: string, info: YtInfo): ItemDetail {
   };
 }
 
+// ── Follow helpers (used by the /api/youtube/follows route) ──────────────────────
+
+/** Parse a pasted channel/playlist URL into a follow target, or null. */
+export function parseFollowUrl(raw: string): { kind: 'channel' | 'playlist'; ytId: string } | null {
+  const url = raw.trim();
+  const list = /[?&]list=([A-Za-z0-9_-]+)/.exec(url);
+  if (list?.[1]) return { kind: 'playlist', ytId: list[1] };
+  const chId = /\/channel\/(UC[A-Za-z0-9_-]+)/.exec(url);
+  if (chId?.[1]) return { kind: 'channel', ytId: chId[1] };
+  const handle = /\/(@[A-Za-z0-9_.-]+)/.exec(url);
+  if (handle?.[1]) return { kind: 'channel', ytId: handle[1] };
+  const named = /\/(?:c|user)\/([A-Za-z0-9_.-]+)/.exec(url);
+  if (named?.[1]) return { kind: 'channel', ytId: named[1] };
+  return null;
+}
+
+/** Fetch a channel/playlist's display title + thumbnail for a follow record. */
+export async function resolveFollowMeta(
+  yt: YtDlp,
+  kind: 'channel' | 'playlist',
+  ytId: string,
+): Promise<{ title: string; thumbnail?: string }> {
+  const url = kind === 'playlist' ? playlistUrl(ytId) : channelUrl(ytId);
+  const info = (await yt.json(['-J', '--flat-playlist', '--playlist-end', '1', url])) as YtInfo;
+  const title = info.title ?? info.channel ?? info.uploader ?? ytId;
+  const thumbnail = pickThumb(info);
+  return { title, ...(thumbnail ? { thumbnail } : {}) };
+}
+
 // ── Factory ────────────────────────────────────────────────────────────────────
 
 export interface YoutubeAdapterDeps {

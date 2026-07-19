@@ -187,3 +187,26 @@ export const errorReports = sqliteTable(
 
 export type ErrorReport = typeof errorReports.$inferSelect;
 export type NewErrorReport = typeof errorReports.$inferInsert;
+
+// ── Sub-project Q tables (YouTube source) ─────────────────────────────────────
+
+// A user's followed YouTube channels/playlists — the self-curated feed shown on
+// the YouTube destination page (in lieu of a sign-in-backed subscriptions feed).
+export const youtubeFollows = sqliteTable(
+  'youtube_follows',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['channel', 'playlist'] }).notNull(),
+    ytId: text('yt_id').notNull(),        // channel id (UC…) or playlist id (PL…)
+    title: text('title').notNull(),       // cached for display
+    thumbnail: text('thumbnail'),         // cached poster, nullable
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    userItemUniq: uniqueIndex('youtube_follows_user_item').on(t.userId, t.kind, t.ytId),
+  }),
+);
+
+export type YoutubeFollow = typeof youtubeFollows.$inferSelect;
+export type NewYoutubeFollow = typeof youtubeFollows.$inferInsert;

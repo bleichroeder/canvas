@@ -74,6 +74,26 @@ describe('sources-mgmt routes', () => {
     expect(body.some((b) => b.type === 'youtube')).toBe(true);
   });
 
+  test('POST / is idempotent — a second YouTube add returns the existing source', async () => {
+    const { app, memberBearer } = await makeFixture();
+    const first = await app.fetch(new Request('http://test/api/sources', {
+      method: 'POST', headers: { authorization: `Bearer ${memberBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'youtube' }),
+    }));
+    expect(first.status).toBe(201);
+    const a = await first.json() as { id: number };
+    const second = await app.fetch(new Request('http://test/api/sources', {
+      method: 'POST', headers: { authorization: `Bearer ${memberBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'youtube' }),
+    }));
+    expect(second.status).toBe(200);
+    const b = await second.json() as { id: number };
+    expect(b.id).toBe(a.id);
+    // Only one YouTube source in the member's listing.
+    const list = await (await app.fetch(new Request('http://test/api/sources', { headers: { authorization: `Bearer ${memberBearer}` } }))).json() as { type: string }[];
+    expect(list.filter((s) => s.type === 'youtube')).toHaveLength(1);
+  });
+
   test('POST / with a custom label uses it', async () => {
     const { app, adminBearer } = await makeFixture();
     const res = await app.fetch(new Request('http://test/api/sources', {

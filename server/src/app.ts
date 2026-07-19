@@ -24,6 +24,7 @@ import { makeTelemetryRoutes } from './routes/telemetry';
 import { makeAdminTelemetryRoutes } from './routes/admin-telemetry';
 import { makeAdminUpdatesRoutes } from './routes/admin-updates';
 import { makeYtStreamRoutes } from './routes/yt-stream';
+import { makeYoutubeRoutes } from './routes/youtube';
 import { makeWatchtowerClient, type WatchtowerClient } from './lib/watchtower-client';
 import { makeYtDlp } from './lib/ytdlp';
 import { makeStreamSigner } from './lib/yt-stream-sign';
@@ -90,6 +91,10 @@ export function buildApp(
     ffmpegPath: config.FFMPEG_PATH,
     maxConcurrent: config.YT_MAX_CONCURRENT_STREAMS,
   }));
+
+  // Followed channels/playlists (authed) — the YouTube page's curated feed.
+  app.use('/api/youtube/*', requireUser(() => db));
+  app.route('/api/youtube', makeYoutubeRoutes(() => db, ytdlp));
 
   // Everything else under /api/* requires a valid bearer token.
   app.use('/api/pair/*',        requireUser(() => db));

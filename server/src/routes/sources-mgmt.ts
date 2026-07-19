@@ -51,17 +51,23 @@ export function makeSourcesMgmtRoutes(getDb: () => Db) {
     }
     const label = typeof body.label === 'string' && body.label.trim() ? body.label.trim() : 'YouTube';
     const db = getDb();
+    const shape = (s: { id: number; type: string; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }) => ({
+      id: s.id, type: s.type, baseUrl: s.baseUrl, label: s.label, pairedByUserId: s.pairedByUserId, createdAt: s.createdAt,
+    });
+
+    // Idempotent: if the caller already has a YouTube source, return it rather
+    // than creating a duplicate (public sources are tokenless and interchangeable).
+    const owned = auth.role === 'admin' ? listAllSources(db) : listAccessibleSources(db, auth.userId);
+    const existing = owned.find((s) => s.type === 'youtube');
+    if (existing) {
+      grantSourceAccess(db, auth.userId, existing.id);
+      return c.json(shape(existing), 200);
+    }
+
     const created = createSource(db, { type: 'youtube', baseUrl: '', token: '', label, pairedByUserId: auth.userId });
     grantSourceAccess(db, auth.userId, created.id);
     logger.info({ sourceId: created.id, by: auth.userId, type: 'youtube' }, 'public source created');
-    return c.json({
-      id: created.id,
-      type: created.type,
-      baseUrl: created.baseUrl,
-      label: created.label,
-      pairedByUserId: created.pairedByUserId,
-      createdAt: created.createdAt,
-    }, 201);
+    return c.json(shape(created), 201);
   });
 
   r.delete('/:id', async (c) => {
