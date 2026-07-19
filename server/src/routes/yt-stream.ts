@@ -1,85 +1,83 @@
 import { Hono } from 'hono';
-import { type PickedFormats, type YtDlp } from '../lib/ytdlp';
+import type { YtDlp } from '../lib/ytdlp';
 import type { StreamSigner } from '../lib/yt-stream-sign';
 import { logger } from '../log';
 
-// Public streaming route for YouTube. resolveStream (authed) mints a signed URL;
-// this route verifies it, then runs yt-dlp (fresh format URLs — they're IP-bound
-// and expire) → ffmpeg (remux to fragmented MP4) → HTTP pipe consumed by the
-// player's RangeFetcher. A concurrency cap and abort-driven kill keep the
-// ffmpeg fleet bounded.
+// Public streaming route for YouTube.
+//
+// Both initial play and seek stream via:
+//   yt-dlp --download-sections "*<from>-"  →  ffmpeg (remux)  →  fragmented MP4
+// yt-dlp uses the DASH segment index (sidx) to byte-range-fetch starting at the
+// requested time — so a seek to 40:00 transfers only from that point, never the
+// preceding prefix or the whole file (measured: ~4MB, not ~344MB). ffmpeg alone
+// can't do this (it reads a fragmented MP4 from byte 0 regardless of -ss). ffmpeg
+// then remuxes yt-dlp's mpegts stream into the fragmented MP4 the player needs.
+// Prefers 1080p H.264 (stream copy); progressive itag 18 as a last resort.
 
 const watchUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
+const FORMAT = 'bv*[vcodec^=avc1][height<=1080]+ba[ext=m4a]/b[ext=mp4][vcodec^=avc1]/18';
 
-// ffmpeg's default UA is often rejected by googlevideo; reuse a browser UA.
-const UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
-
-function inputOpts(from: number): string[] {
-  return [
-    ...(from > 0 ? ['-ss', String(from)] : []),
-    '-user_agent', UA,
-    '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-  ];
-}
-
-/**
- * Build ffmpeg args (without the binary path) to mux the picked formats into a
- * fragmented MP4. Shared with the live-verify script. `output` is `pipe:1` for
- * streaming or a file path for offline checks.
- */
-export function buildFfmpegArgs(picked: PickedFormats, fromSec = 0, output = 'pipe:1'): string[] {
-  const from = Math.max(0, Math.floor(fromSec));
-  const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
-  args.push(...inputOpts(from), '-i', picked.videoUrl);
-  if (picked.audioUrl) {
-    args.push(...inputOpts(from), '-i', picked.audioUrl, '-map', '0:v:0', '-map', '1:a:0');
-  }
-  // Remux (copy) is the common case; transcode only when the best video isn't H.264.
-  if (picked.needsTranscode) {
-    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'aac');
-  } else {
-    // Some YouTube AAC audio is ADTS-framed and can't be stream-copied into MP4
-    // without converting to ASC ("Malformed AAC bitstream" otherwise).
-    args.push('-c', 'copy', '-bsf:a', 'aac_adtstoasc');
-  }
-  args.push('-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', output);
-  return args;
-}
-
-// Minimal view of a spawned child so tests can inject a fake ffmpeg.
-export interface Spawned {
+export interface StreamHandle {
   stdout: ReadableStream<Uint8Array>;
-  stderr: ReadableStream<Uint8Array>;
   exited: Promise<number>;
-  kill(): void;
+  /** Combined yt-dlp+ffmpeg stderr (tail), for logging on failure. */
+  errText: () => Promise<string>;
+  kill: () => void;
 }
-export type Spawn = (cmd: string[], opts: { signal?: AbortSignal }) => Spawned;
-
-const defaultSpawn: Spawn = (cmd, opts) => {
-  const proc = Bun.spawn(cmd, { stdout: 'pipe', stderr: 'pipe', ...(opts.signal ? { signal: opts.signal } : {}) });
-  return {
-    stdout: proc.stdout as ReadableStream<Uint8Array>,
-    stderr: proc.stderr as ReadableStream<Uint8Array>,
-    exited: proc.exited,
-    kill: () => { try { proc.kill(); } catch { /* already gone */ } },
-  };
-};
+export interface StartStreamArgs { videoId: string; fromSec: number; signal?: AbortSignal | undefined }
+export type StartStream = (a: StartStreamArgs) => StreamHandle;
 
 export interface MakeYtStreamRoutesOpts {
-  yt: YtDlp;
+  yt: YtDlp;                          // subs route: -J caption metadata
   signer: StreamSigner;
+  ytdlpPath: string;
   ffmpegPath: string;
+  jsRuntime?: string | undefined;     // --js-runtimes for signature solving
   maxConcurrent: number;
-  spawn?: Spawn;
+  startStream?: StartStream;          // injectable for tests
+}
+
+// yt-dlp (section download) piped into ffmpeg (remux to fragmented MP4).
+function makeDefaultStartStream(ytdlpPath: string, ffmpegPath: string, jsRuntime: string): StartStream {
+  return ({ videoId, fromSec, signal }) => {
+    const rt = jsRuntime ? ['--js-runtimes', jsRuntime] : [];
+    const from = Math.max(0, Math.floor(fromSec));
+    const sig = signal ? { signal } : {};
+    const yt = Bun.spawn(
+      [ytdlpPath, ...rt, '-f', FORMAT, '--download-sections', `*${from}-`, '--quiet', '-o', '-', watchUrl(videoId)],
+      { stdout: 'pipe', stderr: 'pipe', ...sig },
+    );
+    const ff = Bun.spawn(
+      [ffmpegPath, '-hide_banner', '-loglevel', 'error', '-i', 'pipe:0',
+        '-c', 'copy', '-bsf:a', 'aac_adtstoasc',
+        '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1'],
+      { stdin: yt.stdout, stdout: 'pipe', stderr: 'pipe', ...sig },
+    );
+    let errCache: string | undefined;
+    return {
+      stdout: ff.stdout as ReadableStream<Uint8Array>,
+      exited: ff.exited,
+      errText: async () => {
+        if (errCache === undefined) {
+          const [a, b] = await Promise.all([
+            new Response(yt.stderr).text().catch(() => ''),
+            new Response(ff.stderr).text().catch(() => ''),
+          ]);
+          errCache = `yt-dlp: ${a.slice(-300)} | ffmpeg: ${b.slice(-300)}`;
+        }
+        return errCache;
+      },
+      kill: () => { try { yt.kill(); } catch { /* gone */ } try { ff.kill(); } catch { /* gone */ } },
+    };
+  };
 }
 
 export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
-  const spawn = opts.spawn ?? defaultSpawn;
+  const startStream = opts.startStream
+    ?? makeDefaultStartStream(opts.ytdlpPath, opts.ffmpegPath, opts.jsRuntime ?? '');
   const r = new Hono();
 
-  // Simple in-process semaphore. Protects CPU/memory from a flood of ffmpeg
-  // children; excess requests get a retryable 429.
+  // In-process semaphore — each stream spawns yt-dlp + ffmpeg, so cap concurrency.
   let active = 0;
   const tryAcquire = () => (active >= opts.maxConcurrent ? false : (active++, true));
   const release = () => { if (active > 0) active--; };
@@ -92,39 +90,23 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
     if (!ok) return c.json({ error: 'invalid or expired stream url' }, 403);
 
     if (!tryAcquire()) return c.json({ error: 'too many concurrent streams' }, 429);
-
     let released = false;
     const releaseOnce = () => { if (!released) { released = true; release(); } };
 
     try {
-      // Prefer a single progressive (muxed) H.264+AAC file. It's the only YouTube
-      // stream ffmpeg can *seek* reliably over HTTP — DASH split streams have no
-      // in-URL index, so `-ss` makes ffmpeg scan the whole file and hang. This
-      // caps quality (~360p, itag 18) but makes seeking instant. Extract with -g
-      // so yt-dlp fully processes the URL (signature + n-param). See docs/youtube.md.
-      const selector = 'b[protocol=https][vcodec^=avc1][acodec^=mp4a]/18/b[ext=mp4][vcodec^=avc1]';
-      const out = await opts.yt.text(['-f', selector, '-g', watchUrl(videoId)]);
-      const urls = out.split('\n').map((s) => s.trim()).filter(Boolean);
-      if (urls.length === 0) return c.json({ error: 'no playable H.264 stream for this video' }, 502);
-      const picked: PickedFormats = urls.length >= 2
-        ? { videoUrl: urls[0]!, audioUrl: urls[1]!, needsTranscode: false }
-        : { videoUrl: urls[0]!, needsTranscode: false };
       const from = Number(c.req.query('from') ?? '0') || 0;
-
       const signal = c.req.raw.signal;
-      const child = spawn([opts.ffmpegPath, ...buildFfmpegArgs(picked, from)], { ...(signal ? { signal } : {}) });
+      const h = startStream({ videoId, fromSec: from, signal });
 
-      // Drain stderr so ffmpeg never blocks on a full pipe; log on nonzero exit.
-      const stderrText = new Response(child.stderr).text().catch(() => '');
-      child.exited.then(async (code) => {
+      h.exited.then(async (code) => {
         releaseOnce();
-        if (code) logger.warn({ videoId, code, stderr: (await stderrText).slice(-500) }, 'yt-stream ffmpeg exited nonzero');
+        // 0 = clean, non-zero often means client disconnect (SIGTERM). Log real failures.
+        if (code) logger.warn({ videoId, code, err: (await h.errText()).slice(-400) }, 'yt-stream pipeline exited nonzero');
       }).catch(releaseOnce);
 
-      // Kill the child if the client goes away (disconnect / seek reboot).
-      if (signal) signal.addEventListener('abort', () => { child.kill(); releaseOnce(); }, { once: true });
+      signal.addEventListener('abort', () => { h.kill(); releaseOnce(); }, { once: true });
 
-      return new Response(child.stdout, {
+      return new Response(h.stdout, {
         headers: { 'content-type': 'video/mp4', 'cache-control': 'no-store' },
       });
     } catch (err) {
@@ -145,7 +127,6 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
       automatic_captions?: Record<string, Array<{ ext?: string; url?: string }>>;
     };
     const tracks = (auto ? info.automatic_captions : info.subtitles)?.[lang] ?? [];
-    // Prefer a native VTT track; else take the first and request fmt=vtt.
     const vtt = tracks.find((t) => t.ext === 'vtt') ?? tracks[0];
     if (!vtt?.url) return c.json({ error: 'no captions for lang' }, 404);
     const url = vtt.ext === 'vtt' ? vtt.url : `${vtt.url}${vtt.url.includes('?') ? '&' : '?'}fmt=vtt`;

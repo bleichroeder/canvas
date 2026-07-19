@@ -88,7 +88,9 @@ export function buildApp(
   app.route('/api/yt', makeYtStreamRoutes({
     yt: ytdlp,
     signer: streamSigner,
+    ytdlpPath: config.YTDLP_PATH,
     ffmpegPath: config.FFMPEG_PATH,
+    jsRuntime: config.YT_JS_RUNTIME,
     maxConcurrent: config.YT_MAX_CONCURRENT_STREAMS,
   }));
 
