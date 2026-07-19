@@ -18,7 +18,9 @@ import {
   setCaptionsOffsetMs,
 } from '../storage';
 import { getQueue, setQueue, type PlaybackQueue } from '../lib/playback-queue';
-import { type PlayerMode, closePlayer, openPlayer, setPlayerMode, useEmbedRect } from '../lib/player-session';
+import { type PlayerMode, closePlayer, openPlayer, setPlayerMode } from '../lib/player-session';
+import { useSources } from '../lib/SourcesContext';
+import { PlayerDetailsPanel } from '../components/PlayerDetailsPanel';
 import {
   startSession,
   updateSession,
@@ -66,7 +68,9 @@ const MAX_PENDING_AUDIO_CHUNKS = 480;
 export function PlayerInstance({ source, id, fromSec, mode }: Props) {
   const route = useRoute();
   const isMini = mode === 'mini';
-  const embedRect = useEmbedRect();
+  const { sources } = useSources();
+  const sourceType = sources[source]?.type ?? 'unknown';
+  const [showDetails, setShowDetails] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [paused, setPaused] = useState(true);
@@ -689,46 +693,44 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
   // playing (audio-only's persistent splash needs to flip), Play otherwise.
   const splashShowingPause = isAudioOnly && startedRef.current && !paused;
 
-  const containerStyle: CSSProperties = isMini
+  // Outer shell: full = fullscreen flex-row (video region + optional details
+  // panel); mini = docked corner box.
+  const outerStyle: CSSProperties = isMini
     ? {
         position: 'fixed', bottom: 16, right: 16, width: 384, height: 216,
         background: '#000', borderRadius: 10, overflow: 'hidden',
-        boxShadow: '0 10px 34px rgba(0,0,0,0.6)', zIndex: 1200,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+        boxShadow: '0 10px 34px rgba(0,0,0,0.6)', zIndex: 1200, display: 'flex',
       }
-    : mode === 'embed'
-    ? {
-        // Float over the slot the host view (YouTube watch) measured for us.
-        position: 'fixed',
-        top: embedRect?.top ?? 0, left: embedRect?.left ?? 0,
-        width: embedRect?.width ?? '100%', height: embedRect?.height ?? 220,
-        background: '#000', overflow: 'hidden', zIndex: 2,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-      }
-    : {
-        position: 'fixed', inset: 0, background: '#000',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-      };
+    : { position: 'fixed', inset: 0, background: '#000', display: 'flex', flexDirection: 'row' };
+
+  const onVideoAreaClick = () => {
+    if (errMsg) return;
+    // Mini: a tap expands back to the full route. Otherwise: before first play
+    // any tap starts playback; once running, taps toggle pause only when
+    // controls were already visible.
+    if (isMini) { navigate(`/play/${encodeURIComponent(source)}/${encodeURIComponent(id)}`); return; }
+    if (!hasEverStarted) { void onPlayPause(); return; }
+    if (controlsVisible) void onPlayPause();
+  };
 
   return (
-    <div
-      onClick={() => {
-        if (errMsg) return;
-        // Mini: a tap expands back to the full route. Otherwise: before first
-        // play any tap starts playback; once running, taps toggle pause only
-        // when controls were already visible.
-        if (isMini) { navigate(`/play/${source}/${id}`); return; }
-        if (!hasEverStarted) { void onPlayPause(); return; }
-        if (controlsVisible) void onPlayPause();
-      }}
-      style={containerStyle}
-    >
+    <div style={outerStyle}>
+      {/* Video region — the canvas + all player chrome position within this
+          box, so when the details panel is open the controls stay under the
+          video and don't run beneath the panel. */}
+      <div
+        onClick={onVideoAreaClick}
+        style={{
+          position: 'relative', flex: '1 1 0', minWidth: 0, height: '100%', background: '#000',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+        }}
+      >
       <canvas
         ref={canvasRef}
-        // Fill the player area and scale the decoded frame to fit, preserving
+        // Fill the video region and scale the decoded frame to fit, preserving
         // aspect (letterbox). object-fit lets a low-res stream upscale instead
-        // of rendering tiny at its native size, and adapts to the mini/embed
-        // containers too. The backing-store size stays the decoded resolution.
+        // of rendering tiny at its native size, and adapts to the mini/panel
+        // sizes too. The backing-store size stays the decoded resolution.
         style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
       />
       {isMini && (
@@ -849,6 +851,8 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
         onSeekRelative={onSeekRelative}
         onClose={onClose}
         onMinimize={minimizePlayer}
+        detailsOpen={showDetails}
+        onToggleDetails={() => setShowDetails((v) => !v)}
         onVolumeChange={onVolumeChange}
         onMuteToggle={onMuteToggle}
         onFullscreenToggle={onFullscreenToggle}
@@ -868,6 +872,18 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
         offsetMs={captionsOffsetMs}
         controlsVisible={controlsVisible}
       />}
+      </div>{/* /video region */}
+      {!isMini && showDetails && (
+        <PlayerDetailsPanel
+          source={source}
+          sourceType={sourceType}
+          itemMeta={itemMeta}
+          queue={queue}
+          currentId={id}
+          onPlayEpisodeIndex={goToEpisode}
+          onClose={() => setShowDetails(false)}
+        />
+      )}
       <PlayerErrorDialog
         open={!!errMsg}
         message={errMsg ?? ''}

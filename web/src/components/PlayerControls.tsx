@@ -12,6 +12,7 @@ import ListItemText from '@mui/material/ListItemText';
 import Divider from '@mui/material/Divider';
 import CloseIcon from '@mui/icons-material/Close';
 import PictureInPictureAltIcon from '@mui/icons-material/PictureInPictureAlt';
+import ViewSidebarOutlinedIcon from '@mui/icons-material/ViewSidebarOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import Replay10Icon from '@mui/icons-material/Replay10';
@@ -60,6 +61,8 @@ interface PlayerControlsProps {
   onSeekRelative(deltaSec: number): void;
   onClose(): void;
   onMinimize(): void;
+  detailsOpen: boolean;
+  onToggleDetails(): void;
   onVolumeChange(v: number): void;
   onMuteToggle(): void;
   onFullscreenToggle(): void;
@@ -329,6 +332,15 @@ export function PlayerControls(p: PlayerControlsProps) {
                 sx={{ ml: 1 }}
               >
                 <MoreVertIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={p.detailsOpen ? 'Hide details' : 'Show details'}>
+              <IconButton
+                onClick={p.onToggleDetails}
+                aria-label="toggle details"
+                sx={{ ml: 1.5, color: p.detailsOpen ? 'primary.main' : undefined }}
+              >
+                <ViewSidebarOutlinedIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title="Minimize">
