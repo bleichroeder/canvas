@@ -148,16 +148,19 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
         const q = await opts.signer.signQuery(videoId, aligned);
         const vUrl = `${opts.internalBase}/api/yt/_dash/${encodeURIComponent(videoId)}?stream=v&${q}`;
         const aUrl = `${opts.internalBase}/api/yt/_dash/${encodeURIComponent(videoId)}?stream=a&${q}`;
-        // -max_interleave_delta 0: for these two continuous streams it forces
-        // strict interleave (don't emit a packet until both streams have one).
-        // Without it, ffmpeg writes video up to its 10s default ahead of audio,
-        // so any truncated read — i.e. the player's buffer window — ends with a
-        // video-only tail; audio then drains ~5s before video, the audio-mastered
-        // clock freezes, and playback stalls a few seconds after a seek.
+        // Trim the audio lead on the OUTPUT side (-ss after the inputs), not the
+        // input side. Both produce a container ffprobe reads as synced, but an
+        // input-side -ss rewrites the audio track's own timeline (which the
+        // browser's mp4box/WebCodecs path can decode ~audioLead ahead of the
+        // picture); output-side -ss drops the leading audio from the already-muxed
+        // timeline, leaving a clean audio track. -max_interleave_delta 0 forces
+        // strict interleave so a truncated read (the player's buffer window)
+        // doesn't end video-only (audio drains → clock freezes → post-seek stall).
         args = ['-hide_banner', '-loglevel', 'error',
           '-i', vUrl,
-          '-ss', String(audioLead), '-i', aUrl,
+          '-i', aUrl,
           '-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', '-bsf:a', 'aac_adtstoasc',
+          '-ss', String(audioLead),
           '-max_interleave_delta', '0', '-avoid_negative_ts', 'make_zero', ...FRAG];
       } else {
         // Fallback: single progressive file, ffmpeg -ss (seekable).
