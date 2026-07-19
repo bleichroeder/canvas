@@ -61,7 +61,11 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
   const tryAcquire = () => (active >= opts.maxConcurrent ? false : (active++, true));
   const release = () => { if (active > 0) active--; };
 
-  const FRAG = ['-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1'];
+  // frag_duration caps fragments at 0.5s so the two tracks stay finely
+  // interleaved — otherwise a ~5s keyframe fragment puts all its video bytes
+  // ahead of its audio bytes, and the player's audio buffer drains before the
+  // next fragment arrives (audioDepth 0 → clock stalls → fetch deadlock).
+  const FRAG = ['-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-frag_duration', '500000', '-f', 'mp4', 'pipe:1'];
   // googlevideo throttles open-ended reads to ~1x real-time but serves bounded
   // byte ranges at full speed (this is why yt-dlp downloads in chunks). We proxy
   // in chunks this size to defeat the throttle.
@@ -133,17 +137,20 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
       let args: string[];
       if (sources) {
         // Full-res DASH: ffmpeg muxes the two internal (sidx-seeked) streams.
-        // Align BOTH streams to the video keyframe's time so their timelines
-        // share a start (independent seek → A/V desync otherwise). -max_interleave_delta 0
-        // forces tight interleaving so audio can't lag behind video (which starved
-        // the audio-driven clock → freeze).
+        // Both /_dash streams begin at their own segment boundary; the audio
+        // segment covering the seek point starts *earlier* than the video
+        // keyframe. -ss <keyframe> on BOTH inputs trims each to the exact same
+        // instant so A/V start together (make_zero alone only shifts by the
+        // global-min PTS, leaving the earlier audio as a lead → audio runs ahead).
         const aligned = seekPointForTime(sources.video.index, from).segStartSec;
         const q = await opts.signer.signQuery(videoId, aligned);
         const vUrl = `${opts.internalBase}/api/yt/_dash/${encodeURIComponent(videoId)}?stream=v&${q}`;
         const aUrl = `${opts.internalBase}/api/yt/_dash/${encodeURIComponent(videoId)}?stream=a&${q}`;
-        args = ['-hide_banner', '-loglevel', 'error', '-i', vUrl, '-i', aUrl,
+        const ss = String(aligned);
+        args = ['-hide_banner', '-loglevel', 'error',
+          '-ss', ss, '-i', vUrl, '-ss', ss, '-i', aUrl,
           '-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', '-bsf:a', 'aac_adtstoasc',
-          '-max_interleave_delta', '0', '-avoid_negative_ts', 'make_zero', ...FRAG];
+          '-avoid_negative_ts', 'make_zero', ...FRAG];
       } else {
         // Fallback: single progressive file, ffmpeg -ss (seekable).
         const out = await opts.yt.text(['-f', PROGRESSIVE_SEL, '-g', watchUrl(videoId)]);
