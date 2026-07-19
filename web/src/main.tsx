@@ -9,9 +9,10 @@ import Fade from '@mui/material/Fade';
 import { theme } from './theme';
 import { useRoute, matchRoute, navigate } from './router';
 import { getUser, clearSession } from './lib/session';
-import { SourcesProvider } from './lib/SourcesContext';
+import { SourcesProvider, useSources } from './lib/SourcesContext';
 import { Home } from './views/Home';
 import { SourceHome } from './views/SourceHome';
+import { YouTube } from './views/YouTube';
 import { Library } from './views/Library';
 import { ItemDetailView } from './views/ItemDetail';
 import { SearchView } from './views/Search';
@@ -29,6 +30,15 @@ import { NowPlayingStrip } from './components/NowPlayingStrip';
 import { DrivingDisclaimer } from './components/DrivingDisclaimer';
 import { checkForPreviousCrash } from './lib/crash-telemetry';
 import { api } from './api';
+
+// Routes a source card to its type-specific page: YouTube gets a dedicated
+// search + followed-feed page; personal-media sources use SourceHome.
+function SourceRoute({ source }: { source: string }) {
+  const { sources } = useSources();
+  return sources[source]?.type === 'youtube'
+    ? <YouTube source={source} />
+    : <SourceHome source={source} />;
+}
 
 // Detect renderer-killed-mid-playback once at cold load. Logs to console and
 // appends to canvas.crashLog (surfaced in Settings → About → Diagnostics).
@@ -125,7 +135,7 @@ function App() {
   const routes: Array<[string, (params: Record<string, string>) => React.JSX.Element]> = [
     ['/', () => <Home />],
     ['/search', () => <SearchView />],
-    ['/source/:src', (p) => <SourceHome source={p.src!} />],
+    ['/source/:src', (p) => <SourceRoute source={p.src!} />],
     ['/lib/:src', (p) => <Library source={p.src!} />],
     ['/lib/:src/:libId', (p) => <Library source={p.src!} libraryId={p.libId} />],
     ['/item/:src/:id', (p) => <ItemDetailView source={p.src!} id={p.id!} />],

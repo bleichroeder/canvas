@@ -197,7 +197,7 @@ export function Home() {
               );
             })()}
 
-            {sourceCount === 1 && singleSourceKey && singleSourceLibraries.length > 0 && (
+            {sourceCount === 1 && singleSourceKey && sources[singleSourceKey]?.type !== 'youtube' && singleSourceLibraries.length > 0 && (
               <Box component="section">
                 <SectionHeading title="Libraries" />
                 <Box
@@ -216,7 +216,7 @@ export function Home() {
               </Box>
             )}
 
-            {sourceCount > 1 && (() => {
+            {(sourceCount > 1 || (sourceCount === 1 && singleSourceKey != null && sources[singleSourceKey]?.type === 'youtube')) && (() => {
               const backdrops: Record<string, string | undefined> = {};
               for (const row of state.rows) {
                 if (row.kind !== 'recent') continue;
@@ -236,7 +236,9 @@ export function Home() {
                       pb: 4,
                     }}
                   >
-                    {Object.entries(sources).map(([key, src]) => (
+                    {Object.entries(sources)
+                      .sort(([, a], [, b]) => Number(a.type === 'youtube') - Number(b.type === 'youtube'))
+                      .map(([key, src]) => (
                       <SourcePickerCard
                         key={key}
                         srcKey={key}

@@ -76,16 +76,20 @@ yt-dlp timeout.
 
 ## Task 5: Dedicated YouTube frontend
 
-- [ ] `YouTube.tsx`: search box (reuses `api.search` scoped to the YT source) + one Rail per follow (channel → `api.library('c:<id>')`, playlist → `api.item('p:<id>')`), + Follow/Unfollow controls.
-- [ ] Route the YouTube source card → `YouTube.tsx` (not the generic SourceHome).
-- [ ] `Home.tsx`: sort YouTube source card(s) last / visually grouped as a "service".
-- [ ] YouTube-appropriate card (16:9 thumbnail + channel line) for search/rail results.
-- [ ] `npm run build` green.
+- [x] `YouTube.tsx`: search box (filters `api.search` to the YT source) + a `CardRow` per follow (`api.library('c:'|'p:'+id)`) + paste-URL Follow + per-rail Unfollow.
+- [x] `SourceRoute` wrapper in `main.tsx` routes the YouTube source card → `YouTube.tsx`; other sources → `SourceHome`.
+- [x] `Home.tsx`: YouTube never inlines its libraries (always a picker card, even when it's the only source) and sorts last.
+- [x] `YouTubeCard` (16:9 thumbnail + duration badge + 2-line title) + `api.youtubeFollows` client.
+- [x] `npm run build` green (tsc + vite, no type errors).
 
-## Task 6: Bundle Deno (extraction reliability)
+## Task 6: JS runtime for extraction reliability — DEFERRED
 
-- [ ] `Dockerfile`: install Deno in the runtime stage; ensure `yt-dlp` finds it (on PATH, or pass `--js-runtimes`). Re-verify `docker build` + an in-container extract has no "no JS runtime" warning.
-- [ ] `docs/youtube.md`: note the JS-runtime requirement for local dev.
+**Deferred (2026-07-18).** yt-dlp warns "no JS runtime" but still extracts the
+H.264 formats we use, so this is reliability insurance, not a blocker. Also,
+**Deno is glibc-only and won't run on the Alpine (musl) image** — if/when we do
+this, use **Node** (`apk add nodejs`, has a musl build) with yt-dlp
+`--js-runtimes node`, *after* confirming yt-dlp accepts Node. Revisit only if we
+observe videos failing to extract/play.
 
 ## Task 7: (Stretch) throttle resilience
 

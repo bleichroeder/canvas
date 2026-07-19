@@ -21,6 +21,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 import type { HomeRow, Item, ItemDetail, BrowseResult, PlayResolution, SourceHomeResponse } from './types';
+
+export interface YoutubeFollow {
+  id: number;
+  kind: 'channel' | 'playlist';
+  ytId: string;
+  title: string;
+  thumbnail: string | null;
+  createdAt: number;
+}
 import type { StoredSource } from './storage';
 import type { SessionUser } from './lib/session';
 
@@ -170,6 +179,14 @@ export const api = {
       '/api/sources',
       { method: 'POST', body: JSON.stringify({ type, ...(label ? { label } : {}) }) },
     ),
+
+  // Followed YouTube channels/playlists (the YouTube page's curated feed).
+  youtubeFollows: {
+    list: () => request<YoutubeFollow[]>('/api/youtube/follows'),
+    add: (body: { kind?: 'channel' | 'playlist'; ytId?: string; url?: string }) =>
+      request<YoutubeFollow>('/api/youtube/follows', { method: 'POST', body: JSON.stringify(body) }),
+    remove: (id: number) => request<void>(`/api/youtube/follows/${id}`, { method: 'DELETE' }),
+  },
 
   // Setup (first-run wizard)
   setupProbe: () =>
