@@ -50,7 +50,14 @@ export function makeStreamSigner(secret: string, deps?: { now?: () => number }):
 
   return {
     async signQuery(videoId, fromSec, ttlSec = DEFAULT_TTL_SEC) {
-      const from = String(Math.max(0, Math.floor(fromSec)));
+      // Keep full precision — do NOT floor to whole seconds. /stream signs the
+      // exact aligned keyframe time (e.g. 656.52s) into the internal /_dash URL;
+      // flooring it to 656 makes /_dash's seekPointForTime land on the PREVIOUS
+      // video segment (segments are only 3-7s, so 656 falls inside [650.03,656.52)),
+      // serving video ~one segment behind the audio → audio runs seconds ahead of
+      // the picture after a seek. Number(String(x)) round-trips exactly, and the
+      // signed string is what's verified, so precision can't drift.
+      const from = String(Math.max(0, fromSec));
       const exp = String(now() + ttlSec);
       const sig = await hmacHex(secret, payloadOf(videoId, from, exp));
       return `from=${from}&exp=${exp}&sig=${sig}`;

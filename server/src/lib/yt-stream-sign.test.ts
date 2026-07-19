@@ -14,10 +14,12 @@ describe('makeStreamSigner', () => {
     expect(await s.verify('vid123', parse(q))).toBe(true);
   });
 
-  test('floors and clamps fromSec into the query', async () => {
+  test('preserves sub-second precision and clamps negatives', async () => {
     const s = makeStreamSigner('secret', { now: () => 1000 });
+    // Must NOT floor: /stream signs the exact aligned keyframe time for /_dash,
+    // and flooring lands the video seek on the previous segment (audio drift).
     const q = await s.signQuery('vid', 12.9);
-    expect(parse(q).from).toBe('12');
+    expect(parse(q).from).toBe('12.9');
     const q2 = await s.signQuery('vid', -5);
     expect(parse(q2).from).toBe('0');
   });
