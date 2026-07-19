@@ -47,6 +47,10 @@ export interface Item {
   channelTitle?: string;
   /** YouTube: view count, rendered as the "N views" card stat. */
   viewCount?: number;
+  /** YouTube: upload date as ISO `YYYY-MM-DD`; rendered as a relative "3 days ago". */
+  uploadDate?: string;
+  /** YouTube: true for a live / currently-streaming video — shows a LIVE badge. */
+  isLive?: boolean;
 }
 
 export interface Episode {

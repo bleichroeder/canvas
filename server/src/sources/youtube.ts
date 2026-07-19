@@ -56,6 +56,8 @@ interface YtEntry {
   upload_date?: string; // YYYYMMDD
   ie_key?: string;      // 'Youtube' (video) | 'YoutubeTab' (channel/playlist)
   description?: string;
+  is_live?: boolean;
+  live_status?: string; // 'is_live' | 'was_live' | 'not_live' | 'is_upcoming'
 }
 
 type CaptionMap = Record<string, Array<{ ext?: string; url?: string; name?: string }>>;
@@ -87,6 +89,11 @@ function mapVideo(e: YtEntry): Item {
   const poster = pickThumb(e);
   const year = e.upload_date ? Number(e.upload_date.slice(0, 4)) : undefined;
   const channelTitle = e.channel ?? e.uploader;
+  // upload_date is YYYYMMDD; normalize to ISO for the client's relative formatter.
+  const uploadDate = e.upload_date && /^\d{8}$/.test(e.upload_date)
+    ? `${e.upload_date.slice(0, 4)}-${e.upload_date.slice(4, 6)}-${e.upload_date.slice(6, 8)}`
+    : undefined;
+  const isLive = e.is_live === true || e.live_status === 'is_live';
   return {
     id: encodeId('v', String(e.id)),
     type: 'movie',
@@ -97,6 +104,8 @@ function mapVideo(e: YtEntry): Item {
     ...(e.channel_id ? { channelId: e.channel_id } : {}),
     ...(channelTitle ? { channelTitle } : {}),
     ...(e.view_count != null ? { viewCount: e.view_count } : {}),
+    ...(uploadDate ? { uploadDate } : {}),
+    ...(isLive ? { isLive: true } : {}),
   };
 }
 

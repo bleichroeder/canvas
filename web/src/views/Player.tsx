@@ -688,7 +688,11 @@ export function Player({ source, id }: Props) {
     >
       <canvas
         ref={canvasRef}
-        style={{ maxWidth: '100vw', maxHeight: '100vh', display: 'block' }}
+        // Fill the player area and scale the decoded frame to fit, preserving
+        // aspect (letterbox). object-fit lets a low-res stream upscale instead
+        // of rendering tiny at its native size, and adapts to the mini/embed
+        // containers too. The backing-store size stays the decoded resolution.
+        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
       />
       <Fade in={splashVisible} timeout={300} unmountOnExit>
         <Box

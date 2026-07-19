@@ -30,6 +30,20 @@ function formatViews(n: number): string {
   return String(n);
 }
 
+function formatRelative(iso: string): string {
+  const then = new Date(`${iso}T00:00:00Z`).getTime();
+  if (!Number.isFinite(then)) return '';
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days < 7) return days === 1 ? '1 day ago' : `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+  const months = Math.floor(days / 30.44);
+  if (months < 12) return months <= 1 ? '1 month ago' : `${months} months ago`;
+  const years = Math.floor(days / 365.25);
+  return years === 1 ? '1 year ago' : `${years} years ago`;
+}
+
 function channelInitials(name: string): string {
   return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '·';
 }
@@ -64,7 +78,17 @@ export function YouTubeCard({ item, source, width = 300, showChannel = true }: Y
             <Box component="img" src={item.poster} loading="lazy" decoding="async" alt=""
               sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           )}
-          {item.durationSec !== undefined && item.durationSec > 0 && (
+          {item.isLive ? (
+            <Box sx={{
+              position: 'absolute', bottom: 6, right: 6, px: 0.75, height: 18,
+              borderRadius: 0.5, backgroundColor: '#f00', color: '#fff',
+              fontSize: 11, fontWeight: 700, letterSpacing: 0.3,
+              display: 'flex', alignItems: 'center', gap: 0.5,
+            }}>
+              <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#fff' }} />
+              LIVE
+            </Box>
+          ) : item.durationSec !== undefined && item.durationSec > 0 && (
             <Box sx={{
               position: 'absolute', bottom: 6, right: 6, px: 0.625, height: 18,
               borderRadius: 0.5, backgroundColor: 'rgba(0,0,0,0.82)', color: '#fff',
@@ -115,11 +139,17 @@ export function YouTubeCard({ item, source, width = 300, showChannel = true }: Y
               {item.channelTitle}
             </Typography>
           )}
-          {item.viewCount !== undefined && item.viewCount > 0 && (
-            <Typography sx={{ fontSize: 12.5, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
-              {formatViews(item.viewCount)} views
-            </Typography>
-          )}
+          {(() => {
+            const stats = [
+              item.viewCount !== undefined && item.viewCount > 0 ? `${formatViews(item.viewCount)} views` : null,
+              item.uploadDate ? formatRelative(item.uploadDate) : null,
+            ].filter(Boolean).join(' · ');
+            return stats ? (
+              <Typography sx={{ fontSize: 12.5, color: 'text.disabled', fontVariantNumeric: 'tabular-nums' }}>
+                {stats}
+              </Typography>
+            ) : null;
+          })()}
         </Box>
       </Box>
     </Box>
