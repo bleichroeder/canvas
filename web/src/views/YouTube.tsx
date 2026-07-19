@@ -7,26 +7,29 @@ import CircularProgress from '@mui/material/CircularProgress';
 import SearchIcon from '@mui/icons-material/Search';
 import SearchOffOutlinedIcon from '@mui/icons-material/SearchOffOutlined';
 import SubscriptionsOutlinedIcon from '@mui/icons-material/SubscriptionsOutlined';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { api } from '../api';
+import { navigate } from '../router';
 import { AppShell } from '../components/AppShell';
 import { YouTubeCard } from '../components/YouTubeCard';
-import { SectionHeading } from '../components/SectionHeading';
 import { EmptyState } from '../components/EmptyState';
 import type { Item } from '../types';
 
 interface Props { source: string }
 
+interface SubGroup { title: string; ytId: string; kind: 'channel' | 'playlist'; videos: Item[] }
+
 const YT_CARD_W = 300;
+const ROW_CARD_W = 260;
 const gridSx = { display: 'grid', gridTemplateColumns: `repeat(auto-fill, ${YT_CARD_W}px)`, gap: 3, px: 2.5 } as const;
 
-// Round-robin interleave so the subscriptions grid mixes channels instead of
-// showing all of channel A, then all of B (there's no cross-channel date to
-// sort by, so interleaving reads better than concatenation).
-function interleave(lists: Item[][]): Item[] {
-  const out: Item[] = [];
-  const max = Math.max(0, ...lists.map((l) => l.length));
-  for (let i = 0; i < max; i++) for (const l of lists) if (l[i]) out.push(l[i]!);
-  return out;
+function initials(name: string): string {
+  return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '·';
+}
+function hue(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
 }
 
 export function YouTube({ source }: Props) {
@@ -35,25 +38,27 @@ export function YouTube({ source }: Props) {
   const [searching, setSearching] = useState(false);
   const debounce = useRef<number | undefined>(undefined);
 
-  const [subs, setSubs] = useState<Item[] | null>(null); // null = loading
+  const [groups, setGroups] = useState<SubGroup[] | null>(null); // null = loading
 
   const loadSubs = useCallback(async () => {
     const follows = await api.youtubeFollows.list();
-    if (follows.length === 0) { setSubs([]); return; }
-    const lists = await Promise.all(
-      follows.map((f) =>
-        api.library(source, `${f.kind === 'channel' ? 'c' : 'p'}:${f.ytId}`)
+    if (follows.length === 0) { setGroups([]); return; }
+    const loaded = await Promise.all(
+      follows.map(async (f): Promise<SubGroup> => {
+        const kind = f.kind === 'channel' ? 'c' : 'p';
+        const videos = await api.library(source, `${kind}:${f.ytId}`)
           // Channel-browse entries don't repeat the channel per-video, so stamp
-          // the follow's identity on so subscription cards still show the channel.
-          .then((r) => r.items.slice(0, 8).map((it) => ({
+          // the follow's identity on so cards still show the channel.
+          .then((r) => r.items.slice(0, 12).map((it) => ({
             ...it,
             ...(it.channelTitle ? {} : { channelTitle: f.title }),
             ...(it.channelId || f.kind !== 'channel' ? {} : { channelId: f.ytId }),
           })))
-          .catch(() => [] as Item[]),
-      ),
+          .catch(() => [] as Item[]);
+        return { title: f.title, ytId: f.ytId, kind: f.kind, videos };
+      }),
     );
-    setSubs(interleave(lists));
+    setGroups(loaded.filter((g) => g.videos.length > 0));
   }, [source]);
 
   useEffect(() => { void loadSubs(); }, [loadSubs]);
@@ -81,49 +86,102 @@ export function YouTube({ source }: Props) {
 
   return (
     <AppShell>
-      <Box sx={{ py: 2.5 }}>
-        <Typography variant="h1" sx={{ px: 2.5, mb: 2 }}>YouTube</Typography>
-
-        <Box sx={{ px: 2.5, maxWidth: 640 }}>
+      {/* Hero: centered YouTube logo + search, over a subtle red gradient. */}
+      <Box sx={{
+        position: 'relative', textAlign: 'center', pt: { xs: 4, sm: 6 }, pb: 3.5, px: 2,
+        background: 'linear-gradient(180deg, rgba(255,0,0,0.16) 0%, rgba(255,0,0,0.05) 42%, transparent 100%)',
+      }}>
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.25, mb: 3 }}>
+          <Box sx={{
+            width: 54, height: 38, borderRadius: 2, backgroundColor: '#ff0000',
+            display: 'grid', placeItems: 'center', boxShadow: '0 6px 18px rgba(255,0,0,0.45)',
+          }}>
+            <Box component="svg" viewBox="0 0 24 24" aria-hidden sx={{ width: 26, height: 26 }}>
+              <path d="M8 5.5v13l11-6.5z" fill="#fff" />
+            </Box>
+          </Box>
+          <Typography variant="h1" sx={{ m: 0, fontWeight: 800, letterSpacing: '-0.5px' }}>YouTube</Typography>
+        </Box>
+        <Box sx={{ maxWidth: 640, mx: 'auto' }}>
           <TextField
             fullWidth placeholder="Search YouTube…"
             value={q} onChange={(e) => setQ(e.target.value)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.06)',
+              },
+            }}
             InputProps={{
               startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>,
               endAdornment: searching ? <CircularProgress size={18} /> : undefined,
             }}
           />
         </Box>
-
-        {isSearching ? (
-          <Box sx={{ mt: 2.5, opacity: searching ? 0.5 : 1, transition: 'opacity 120ms' }}>
-            {results.length === 0 && !searching ? (
-              <EmptyState icon={<SearchOffOutlinedIcon />} title={`No results for "${q.trim()}"`} />
-            ) : (
-              <Box sx={gridSx}>
-                {results.map((it) => <YouTubeCard key={it.id} item={it} source={source} width={YT_CARD_W} />)}
-              </Box>
-            )}
-          </Box>
-        ) : (
-          <>
-            <SectionHeading title="Subscriptions" sx={{ mt: 3, mb: 1.5 }} />
-            {subs === null ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
-            ) : subs.length === 0 ? (
-              <EmptyState
-                icon={<SubscriptionsOutlinedIcon />}
-                title="You haven't subscribed to any channels yet"
-                body="Search for something to watch, then open a channel and hit Subscribe — its latest videos show up here."
-              />
-            ) : (
-              <Box sx={gridSx}>
-                {subs.map((it) => <YouTubeCard key={it.id} item={it} source={source} width={YT_CARD_W} />)}
-              </Box>
-            )}
-          </>
-        )}
       </Box>
+
+      {isSearching ? (
+        <Box sx={{ mt: 1, opacity: searching ? 0.5 : 1, transition: 'opacity 120ms' }}>
+          {results.length === 0 && !searching ? (
+            <EmptyState icon={<SearchOffOutlinedIcon />} title={`No results for "${q.trim()}"`} />
+          ) : (
+            <Box sx={gridSx}>
+              {results.map((it) => <YouTubeCard key={it.id} item={it} source={source} width={YT_CARD_W} />)}
+            </Box>
+          )}
+        </Box>
+      ) : groups === null ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
+      ) : groups.length === 0 ? (
+        <EmptyState
+          icon={<SubscriptionsOutlinedIcon />}
+          title="You haven't subscribed to any channels yet"
+          body="Search for something to watch, then open a channel and hit Subscribe — its latest videos show up here."
+        />
+      ) : (
+        <Box sx={{ pb: 4 }}>
+          {groups.map((g) => <ChannelRow key={`${g.kind}:${g.ytId}`} source={source} group={g} />)}
+        </Box>
+      )}
     </AppShell>
+  );
+}
+
+// One subscription = a header (avatar + name + "View all") and a horizontal
+// strip of its recent videos.
+function ChannelRow({ source, group }: { source: string; group: SubGroup }) {
+  const viewAll = () => {
+    if (group.kind === 'channel') {
+      navigate(`/yt/${source}/channel/${encodeURIComponent(group.ytId)}?t=${encodeURIComponent(group.title)}`);
+    } else {
+      navigate(`/lib/${source}/p:${encodeURIComponent(group.ytId)}`);
+    }
+  };
+  return (
+    <Box sx={{ mt: 3.5 }}>
+      <Box
+        onClick={viewAll}
+        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2.5, mb: 1.5, cursor: 'pointer', '&:hover .viewAll': { color: 'text.primary' } }}
+      >
+        <Box sx={{
+          width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+          display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 14, color: '#fff',
+          background: `linear-gradient(135deg, hsl(${hue(group.title)},55%,45%), hsl(${hue(group.title)},55%,28%))`,
+        }}>{initials(group.title)}</Box>
+        <Typography sx={{ fontWeight: 700, fontSize: 17 }} noWrap>{group.title}</Typography>
+        <Box className="viewAll" sx={{ ml: 'auto', display: 'flex', alignItems: 'center', color: 'text.secondary', transition: 'color 120ms' }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>View all</Typography>
+          <ChevronRightIcon sx={{ fontSize: 20 }} />
+        </Box>
+      </Box>
+      <Box sx={{
+        display: 'flex', gap: 2, px: 2.5, pb: 1, overflowX: 'auto',
+        scrollbarWidth: 'thin', '&::-webkit-scrollbar': { height: 8 },
+        '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 4 },
+      }}>
+        {group.videos.map((v) => (
+          <YouTubeCard key={v.id} item={v} source={source} width={ROW_CARD_W} showChannel={false} />
+        ))}
+      </Box>
+    </Box>
   );
 }
