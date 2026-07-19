@@ -53,9 +53,9 @@ yt-dlp timeout.
 
 ## Task 1: Drop YouTube from the aggregated Home
 
-- [ ] `youtube.ts`: `home()` returns `[]`; remove the `/feed/trending` fetch and the `TRENDING_URL` constant (and the `library('trending', …)` section if it only served Home).
-- [ ] Update `youtube.test.ts` — `home()` returns `[]`; library still browses playlists/channels.
-- [ ] Verify Home no longer errors with only a YouTube source (source card shows, no red warning).
+- [x] `youtube.ts`: `home()` returns `[]`; removed the `/feed/trending` fetch, the `TRENDING_URL` constant, and the top-level "Trending" library section. `library()` still browses channels (`c:`) / playlists (`p:`).
+- [x] Updated `youtube.test.ts` — `home()` returns `[]`; library no-id → empty; channel-id browse covered. ✅ 12 tests, typecheck clean.
+- [ ] Confirm in-app: Home no longer errors with only a YouTube source (deferred to Task 8 click-through).
 
 ## Task 2: `youtube_follows` table + storage
 

@@ -50,32 +50,24 @@ describe('search', () => {
 });
 
 describe('home', () => {
-  test('returns a single Trending row', async () => {
+  test('contributes no rows to the aggregated Home (own destination)', async () => {
     const yt = makeYoutubeAdapter({ yt: fakeYt(() => MIXED_ENTRIES), signer });
-    const rows = await yt.home(CTX);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ kind: 'recent', title: 'Trending on YouTube' });
-    expect(rows[0]!.items).toHaveLength(1);
-  });
-
-  test('returns [] when trending is empty', async () => {
-    const yt = makeYoutubeAdapter({ yt: fakeYt(() => ({ entries: [] })), signer });
     expect(await yt.home(CTX)).toEqual([]);
   });
 });
 
 describe('library', () => {
-  test('no id → a Trending folder section', async () => {
+  test('no id → empty (no top-level sections)', async () => {
     const yt = makeYoutubeAdapter({ yt: fakeYt(() => ({})), signer });
     const res = await yt.library(CTX);
-    expect(res.items).toEqual([{ id: 'trending', type: 'folder', title: 'Trending', librarySectionType: 'movie' }]);
+    expect(res.items).toEqual([]);
   });
 
-  test('trending id → mapped video items + breadcrumb', async () => {
+  test('channel id → mapped video items + breadcrumb', async () => {
     const yt = makeYoutubeAdapter({ yt: fakeYt(() => MIXED_ENTRIES), signer });
-    const res = await yt.library(CTX, 'trending');
+    const res = await yt.library(CTX, encodeId('c', 'UCabc'));
     expect(res.items).toHaveLength(1);
-    expect(res.breadcrumbs).toEqual([{ name: 'YouTube' }, { name: 'results', libraryId: 'trending' }]);
+    expect(res.breadcrumbs).toEqual([{ name: 'YouTube' }, { name: 'results', libraryId: 'c:UCabc' }]);
   });
 
   test('paging maps offset/limit to yt-dlp playlist-start/end', async () => {

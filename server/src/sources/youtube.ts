@@ -32,7 +32,6 @@ export function decodeId(encoded: string): { kind: YtKind; id: string } {
   return { kind: 'v', id: encoded };
 }
 
-const TRENDING_URL = 'https://www.youtube.com/feed/trending';
 const watchUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
 const playlistUrl = (id: string) => `https://www.youtube.com/playlist?list=${id}`;
 const channelUrl = (id: string) =>
@@ -162,10 +161,12 @@ export function makeYoutubeAdapter(deps: YoutubeAdapterDeps): SourceAdapter {
       throw new BadRequestError('YouTube sources are added without pairing');
     },
 
+    // YouTube is its own destination (see 2026-07-18 addendum), not part of the
+    // aggregated Home. It contributes no rails — browsing happens on its own page
+    // via search + followed channels/playlists. (YouTube also killed /feed/trending,
+    // so there is no reliable no-auth "trending" to surface here anyway.)
     async home(_ctx: SourceContext): Promise<HomeRow[]> {
-      const info = (await yt.json(['-J', '--flat-playlist', '--playlist-end', '25', TRENDING_URL])) as YtInfo;
-      const items = (info.entries ?? []).filter(isVideoEntry).map(mapVideo);
-      return items.length ? [{ kind: 'recent', title: 'Trending on YouTube', items }] : [];
+      return [];
     },
 
     async search(_ctx: SourceContext, query: string): Promise<Item[]> {
@@ -176,21 +177,12 @@ export function makeYoutubeAdapter(deps: YoutubeAdapterDeps): SourceAdapter {
     },
 
     async library(_ctx: SourceContext, libraryId?: string, _path?: string, page?: BrowsePage): Promise<BrowseResult> {
-      // Top level: a single browsable "Trending" section.
-      if (!libraryId) {
-        return {
-          breadcrumbs: [{ name: 'YouTube' }],
-          items: [{ id: 'trending', type: 'folder', title: 'Trending', librarySectionType: 'movie' }],
-        };
-      }
+      // No top-level sections — the YouTube page is search + followed rails. With
+      // an id, browse a followed channel (c:) or playlist (p:) to populate a rail.
+      if (!libraryId) return { breadcrumbs: [{ name: 'YouTube' }], items: [] };
 
-      let url: string;
-      if (libraryId === 'trending') {
-        url = TRENDING_URL;
-      } else {
-        const { kind, id } = decodeId(libraryId);
-        url = kind === 'p' ? playlistUrl(id) : kind === 'c' ? channelUrl(id) : watchUrl(id);
-      }
+      const { kind, id } = decodeId(libraryId);
+      const url = kind === 'p' ? playlistUrl(id) : kind === 'c' ? channelUrl(id) : watchUrl(id);
 
       const start = (page?.offset ?? 0) + 1;
       const end = (page?.offset ?? 0) + (page?.limit ?? maxBrowse);
