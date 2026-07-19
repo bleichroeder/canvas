@@ -136,19 +136,21 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
 
       let args: string[];
       if (sources) {
-        // Full-res DASH: ffmpeg muxes the two internal (sidx-seeked) streams.
-        // Both /_dash streams begin at their own segment boundary; the audio
-        // segment covering the seek point starts *earlier* than the video
-        // keyframe. -ss <keyframe> on BOTH inputs trims each to the exact same
-        // instant so A/V start together (make_zero alone only shifts by the
-        // global-min PTS, leaving the earlier audio as a lead → audio runs ahead).
+        // Full-res DASH: ffmpeg muxes the two internal (sidx-seeked) streams,
+        // reading each as a fresh 0-based timeline (it does NOT treat the
+        // segment tfdt as absolute). The video /_dash starts exactly at its
+        // keyframe, but the audio /_dash starts at its own (earlier) segment
+        // boundary — so audio plays ~one segment ahead of the picture. Trim just
+        // that lead off the audio input with -ss (a few seconds), leaving video
+        // untouched, so both tracks' time 0 is the same instant.
         const aligned = seekPointForTime(sources.video.index, from).segStartSec;
+        const audioLead = Math.max(0, aligned - seekPointForTime(sources.audio.index, aligned).segStartSec);
         const q = await opts.signer.signQuery(videoId, aligned);
         const vUrl = `${opts.internalBase}/api/yt/_dash/${encodeURIComponent(videoId)}?stream=v&${q}`;
         const aUrl = `${opts.internalBase}/api/yt/_dash/${encodeURIComponent(videoId)}?stream=a&${q}`;
-        const ss = String(aligned);
         args = ['-hide_banner', '-loglevel', 'error',
-          '-ss', ss, '-i', vUrl, '-ss', ss, '-i', aUrl,
+          '-i', vUrl,
+          '-ss', String(audioLead), '-i', aUrl,
           '-map', '0:v:0', '-map', '1:a:0', '-c', 'copy', '-bsf:a', 'aac_adtstoasc',
           '-avoid_negative_ts', 'make_zero', ...FRAG];
       } else {
