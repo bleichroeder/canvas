@@ -97,10 +97,12 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
     const releaseOnce = () => { if (!released) { released = true; release(); } };
 
     try {
-      // Extract direct URLs with -g so yt-dlp fully processes them (signature +
-      // n-param). The format.url fields from -J work in curl but 403 in ffmpeg;
-      // -g output does not. Prefer H.264 (copy); no avc → 502 (rare).
-      const selector = 'bv*[vcodec^=avc1][height<=1080]+ba[ext=m4a]/b[ext=mp4][vcodec^=avc1]';
+      // Prefer a single progressive (muxed) H.264+AAC file. It's the only YouTube
+      // stream ffmpeg can *seek* reliably over HTTP — DASH split streams have no
+      // in-URL index, so `-ss` makes ffmpeg scan the whole file and hang. This
+      // caps quality (~360p, itag 18) but makes seeking instant. Extract with -g
+      // so yt-dlp fully processes the URL (signature + n-param). See docs/youtube.md.
+      const selector = 'b[protocol=https][vcodec^=avc1][acodec^=mp4a]/18/b[ext=mp4][vcodec^=avc1]';
       const out = await opts.yt.text(['-f', selector, '-g', watchUrl(videoId)]);
       const urls = out.split('\n').map((s) => s.trim()).filter(Boolean);
       if (urls.length === 0) return c.json({ error: 'no playable H.264 stream for this video' }, 502);
