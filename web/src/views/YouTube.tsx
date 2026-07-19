@@ -12,6 +12,7 @@ import { api } from '../api';
 import { navigate } from '../router';
 import { AppShell } from '../components/AppShell';
 import { YouTubeCard } from '../components/YouTubeCard';
+import { Rail } from '../components/Rail';
 import { EmptyState } from '../components/EmptyState';
 import type { Item } from '../types';
 
@@ -139,49 +140,36 @@ export function YouTube({ source }: Props) {
         />
       ) : (
         <Box sx={{ pb: 4 }}>
-          {groups.map((g) => <ChannelRow key={`${g.kind}:${g.ytId}`} source={source} group={g} />)}
+          {groups.map((g) => {
+            const viewAll = () =>
+              g.kind === 'channel'
+                ? navigate(`/yt/${source}/channel/${encodeURIComponent(g.ytId)}?t=${encodeURIComponent(g.title)}`)
+                : navigate(`/lib/${source}/p:${encodeURIComponent(g.ytId)}`);
+            return (
+              <Rail
+                key={`${g.kind}:${g.ytId}`}
+                title={g.title}
+                cardWidth={ROW_CARD_W}
+                items={g.videos.map((v) => ({ ...v, source }))}
+                renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} showChannel={false} />}
+                titlePrefix={
+                  <Box sx={{
+                    width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                    display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, color: '#fff',
+                    background: `linear-gradient(135deg, hsl(${hue(g.title)},55%,45%), hsl(${hue(g.title)},55%,28%))`,
+                  }}>{initials(g.title)}</Box>
+                }
+                action={
+                  <Box onClick={viewAll} sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', '&:hover': { color: 'text.primary' } }}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 600 }}>View all</Typography>
+                    <ChevronRightIcon sx={{ fontSize: 20 }} />
+                  </Box>
+                }
+              />
+            );
+          })}
         </Box>
       )}
     </AppShell>
-  );
-}
-
-// One subscription = a header (avatar + name + "View all") and a horizontal
-// strip of its recent videos.
-function ChannelRow({ source, group }: { source: string; group: SubGroup }) {
-  const viewAll = () => {
-    if (group.kind === 'channel') {
-      navigate(`/yt/${source}/channel/${encodeURIComponent(group.ytId)}?t=${encodeURIComponent(group.title)}`);
-    } else {
-      navigate(`/lib/${source}/p:${encodeURIComponent(group.ytId)}`);
-    }
-  };
-  return (
-    <Box sx={{ mt: 3.5 }}>
-      <Box
-        onClick={viewAll}
-        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2.5, mb: 1.5, cursor: 'pointer', '&:hover .viewAll': { color: 'text.primary' } }}
-      >
-        <Box sx={{
-          width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-          display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 14, color: '#fff',
-          background: `linear-gradient(135deg, hsl(${hue(group.title)},55%,45%), hsl(${hue(group.title)},55%,28%))`,
-        }}>{initials(group.title)}</Box>
-        <Typography sx={{ fontWeight: 700, fontSize: 17 }} noWrap>{group.title}</Typography>
-        <Box className="viewAll" sx={{ ml: 'auto', display: 'flex', alignItems: 'center', color: 'text.secondary', transition: 'color 120ms' }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>View all</Typography>
-          <ChevronRightIcon sx={{ fontSize: 20 }} />
-        </Box>
-      </Box>
-      <Box sx={{
-        display: 'flex', gap: 2, px: 2.5, pb: 1, overflowX: 'auto',
-        scrollbarWidth: 'thin', '&::-webkit-scrollbar': { height: 8 },
-        '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 4 },
-      }}>
-        {group.videos.map((v) => (
-          <YouTubeCard key={v.id} item={v} source={source} width={ROW_CARD_W} showChannel={false} />
-        ))}
-      </Box>
-    </Box>
   );
 }
