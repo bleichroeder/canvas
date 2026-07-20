@@ -18,11 +18,11 @@ import type { Item } from '../types';
 
 interface Props { source: string }
 
-interface SubGroup { title: string; ytId: string; kind: 'channel' | 'playlist'; videos: Item[] }
+interface SubGroup { title: string; ytId: string; kind: 'channel' | 'playlist'; thumbnail?: string | null; videos: Item[] }
 
 const YT_CARD_W = 300;
 const ROW_CARD_W = 260;
-const gridSx = { display: 'grid', gridTemplateColumns: `repeat(auto-fill, ${YT_CARD_W}px)`, gap: 3, px: 2.5 } as const;
+const gridSx = { display: 'grid', gridTemplateColumns: `repeat(auto-fill, ${YT_CARD_W}px)`, gap: 3, px: 2.5, justifyContent: 'center' } as const;
 
 function initials(name: string): string {
   return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '·';
@@ -56,7 +56,7 @@ export function YouTube({ source }: Props) {
             ...(it.channelId || f.kind !== 'channel' ? {} : { channelId: f.ytId }),
           })))
           .catch(() => [] as Item[]);
-        return { title: f.title, ytId: f.ytId, kind: f.kind, videos };
+        return { title: f.title, ytId: f.ytId, kind: f.kind, thumbnail: f.thumbnail, videos };
       }),
     );
     setGroups(loaded.filter((g) => g.videos.length > 0));
@@ -87,11 +87,15 @@ export function YouTube({ source }: Props) {
 
   return (
     <AppShell>
-      {/* Hero: centered YouTube logo + search, over a subtle red gradient. */}
+      {/* Red accent rising from the bottom of the viewport, behind the content,
+          so it doesn't clash with the blue/white nav at the top. */}
       <Box sx={{
-        position: 'relative', textAlign: 'center', pt: { xs: 4, sm: 6 }, pb: 3.5, px: 2,
-        background: 'linear-gradient(180deg, rgba(255,0,0,0.16) 0%, rgba(255,0,0,0.05) 42%, transparent 100%)',
-      }}>
+        position: 'fixed', left: 0, right: 0, bottom: 0, height: '48vh', pointerEvents: 'none', zIndex: 0,
+        background: 'linear-gradient(0deg, rgba(255,0,0,0.15) 0%, rgba(255,0,0,0.05) 32%, transparent 72%)',
+      }} />
+      <Box sx={{ position: 'relative', zIndex: 1 }}>
+      {/* Hero: centered YouTube logo + search. */}
+      <Box sx={{ textAlign: 'center', pt: { xs: 4, sm: 6 }, pb: 3.5, px: 2 }}>
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.25, mb: 3 }}>
           <Box sx={{
             width: 54, height: 38, borderRadius: 2, backgroundColor: '#ff0000',
@@ -153,11 +157,16 @@ export function YouTube({ source }: Props) {
                 items={g.videos.map((v) => ({ ...v, source }))}
                 renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} showChannel={false} />}
                 titlePrefix={
-                  <Box sx={{
-                    width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                    display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, color: '#fff',
-                    background: `linear-gradient(135deg, hsl(${hue(g.title)},55%,45%), hsl(${hue(g.title)},55%,28%))`,
-                  }}>{initials(g.title)}</Box>
+                  g.thumbnail ? (
+                    <Box component="img" src={g.thumbnail} alt="" loading="lazy"
+                      sx={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
+                  ) : (
+                    <Box sx={{
+                      width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                      display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, color: '#fff',
+                      background: `linear-gradient(135deg, hsl(${hue(g.title)},55%,45%), hsl(${hue(g.title)},55%,28%))`,
+                    }}>{initials(g.title)}</Box>
+                  )
                 }
                 action={
                   <Box onClick={viewAll} sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', '&:hover': { color: 'text.primary' } }}>
@@ -170,6 +179,7 @@ export function YouTube({ source }: Props) {
           })}
         </Box>
       )}
+      </Box>
     </AppShell>
   );
 }

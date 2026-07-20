@@ -29,6 +29,7 @@ export function YouTubeChannel({ source, channelId }: Props) {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [subId, setSubId] = useState<number | null>(null); // follow id when subscribed
+  const [avatar, setAvatar] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -43,6 +44,7 @@ export function YouTubeChannel({ source, channelId }: Props) {
         if (last?.name) setTitle(last.name);
         const sub = follows.find((f) => f.kind === 'channel' && f.ytId === channelId);
         setSubId(sub ? sub.id : null);
+        setAvatar(sub?.thumbnail ?? null);
       })
       .catch((e) => { if (!cancelled) setError((e as Error).message); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -73,13 +75,17 @@ export function YouTubeChannel({ source, channelId }: Props) {
     <AppShell>
       <Box sx={{ py: 2.5, px: 2.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, flexWrap: 'wrap', mb: 3 }}>
-          <Box sx={{
-            width: 88, height: 88, borderRadius: '50%', display: 'grid', placeItems: 'center',
-            fontWeight: 800, fontSize: 32, color: '#fff', flexShrink: 0,
-            background: `linear-gradient(135deg, hsl(${hue(title)},55%,45%), hsl(${hue(title)},55%,28%))`,
-          }}>
-            {initials(title)}
-          </Box>
+          {avatar ? (
+            <Box component="img" src={avatar} alt="" sx={{ width: 88, height: 88, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+          ) : (
+            <Box sx={{
+              width: 88, height: 88, borderRadius: '50%', display: 'grid', placeItems: 'center',
+              fontWeight: 800, fontSize: 32, color: '#fff', flexShrink: 0,
+              background: `linear-gradient(135deg, hsl(${hue(title)},55%,45%), hsl(${hue(title)},55%,28%))`,
+            }}>
+              {initials(title)}
+            </Box>
+          )}
           <Typography variant="h1" sx={{ m: 0 }}>{title}</Typography>
           <Button
             onClick={toggleSubscribe}
