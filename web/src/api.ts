@@ -208,6 +208,14 @@ export const api = {
     remove: (id: number) => request<void>(`/api/youtube/follows/${id}`, { method: 'DELETE' }),
   },
 
+  // Paged YouTube search for the YouTube page (infinite scroll). Distinct from
+  // the aggregated /api/search, which is a single capped shot across all sources.
+  youtubeSearch: (q: string, page: { offset: number; limit: number }, source?: string) => {
+    const params = new URLSearchParams({ q, offset: String(page.offset), limit: String(page.limit) });
+    if (source) params.set('source', source);
+    return request<{ items: Item[] }>(`/api/youtube/search?${params.toString()}`);
+  },
+
   // Liked/favorited YouTube videos (the YouTube page's quick-return shelf).
   youtubeLikes: {
     list: () => request<YoutubeLike[]>('/api/youtube/likes'),

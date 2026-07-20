@@ -128,3 +128,19 @@ describe('youtube likes routes', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('youtube search route', () => {
+  test('GET /search with no query returns empty', async () => {
+    const { app, bearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://t/api/youtube/search', { headers: auth(bearer) }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ items: [] });
+  });
+
+  test('GET /search returns empty when the user has no YouTube source', async () => {
+    const { app, bearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://t/api/youtube/search?q=cats&offset=0&limit=15', { headers: auth(bearer) }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ items: [] });
+  });
+});

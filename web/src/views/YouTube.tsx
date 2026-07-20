@@ -24,6 +24,8 @@ interface SubGroup { title: string; ytId: string; kind: 'channel' | 'playlist'; 
 
 const YT_CARD_W = 300;
 const ROW_CARD_W = 260;
+const SEARCH_PAGE = 15;   // results per search page
+const SEARCH_MAX = 90;    // stop paging past here — ytsearch depth gets unreliable
 const gridSx = { display: 'grid', gridTemplateColumns: `repeat(auto-fill, ${YT_CARD_W}px)`, gap: 3, px: 2.5, justifyContent: 'center' } as const;
 
 // A YouTube-TV-style open reveal: the logo pops in with a red ring flash, the
@@ -82,8 +84,15 @@ function hue(name: string): number {
 export function YouTube({ source }: Props) {
   const [q, setQ] = useState('');
   const [results, setResults] = useState<(Item & { source: string })[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [searching, setSearching] = useState(false);        // fetching the first page
+  const [searchingMore, setSearchingMore] = useState(false); // fetching a later page
+  const [searchHasMore, setSearchHasMore] = useState(false);
   const debounce = useRef<number | undefined>(undefined);
+  // Live refs so the scroll observer reads current paging state without rebinding.
+  const qRef = useRef('');
+  const searchOffsetRef = useRef(0);
+  const searchLoadingRef = useRef(false);
+  const searchHasMoreRef = useRef(false);
 
   const [groups, setGroups] = useState<SubGroup[] | null>(null); // null = loading
 
@@ -124,25 +133,78 @@ export function YouTube({ source }: Props) {
   useEffect(() => { void loadSubs(); }, [loadSubs]);
 
   // Debounced live search — no ENTER (no good Enter key in the car). 700ms is
-  // deliberately long: you're typing on a 16" touchscreen.
+  // deliberately long: you're typing on a 16" touchscreen. Fetches the first
+  // page; later pages come in via the infinite-scroll sentinel below.
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
-    if (q.trim().length < 2) { setResults([]); return; }
+    const query = q.trim();
+    if (query.length < 2) {
+      setResults([]);
+      searchHasMoreRef.current = false; setSearchHasMore(false);
+      return;
+    }
     debounce.current = window.setTimeout(async () => {
+      qRef.current = query;
+      searchOffsetRef.current = 0;
+      searchLoadingRef.current = true;
       setSearching(true);
       try {
-        const { hits } = await api.search(q.trim());
-        setResults(hits.filter((h) => h.source === source));
+        const { items } = await api.youtubeSearch(query, { offset: 0, limit: SEARCH_PAGE }, source);
+        setResults(items.map((it) => ({ ...it, source })));
+        searchOffsetRef.current = items.length;
+        const more = items.length >= SEARCH_PAGE;
+        searchHasMoreRef.current = more; setSearchHasMore(more);
       } catch {
         setResults([]);
+        searchHasMoreRef.current = false; setSearchHasMore(false);
       } finally {
+        searchLoadingRef.current = false;
         setSearching(false);
       }
     }, 700);
     return () => { if (debounce.current) clearTimeout(debounce.current); };
   }, [q, source]);
 
+  const loadMoreSearch = useCallback(async () => {
+    if (searchLoadingRef.current || !searchHasMoreRef.current) return;
+    const query = qRef.current;
+    if (query.length < 2) return;
+    searchLoadingRef.current = true;
+    setSearchingMore(true);
+    try {
+      const { items } = await api.youtubeSearch(query, { offset: searchOffsetRef.current, limit: SEARCH_PAGE }, source);
+      // Windowed yt-dlp search can re-emit a straddling item; dedup on id.
+      setResults((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        const fresh = items.filter((it) => !seen.has(it.id)).map((it) => ({ ...it, source }));
+        return [...prev, ...fresh];
+      });
+      searchOffsetRef.current += items.length;
+      // Cap depth — ytsearch gets unreliable past ~100 and pages re-fetch the head.
+      const more = items.length >= SEARCH_PAGE && searchOffsetRef.current < SEARCH_MAX;
+      searchHasMoreRef.current = more; setSearchHasMore(more);
+    } catch {
+      searchHasMoreRef.current = false; setSearchHasMore(false);
+    } finally {
+      searchLoadingRef.current = false;
+      setSearchingMore(false);
+    }
+  }, [source]);
+
   const isSearching = q.trim().length >= 2;
+
+  // Infinite scroll for search results: pull the next page as the sentinel nears view.
+  const searchSentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!isSearching) return;
+    const el = searchSentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadMoreSearch();
+    }, { rootMargin: '600px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [isSearching, loadMoreSearch, results.length]);
 
   return (
     <AppShell>
@@ -197,9 +259,21 @@ export function YouTube({ source }: Props) {
           {results.length === 0 && !searching ? (
             <EmptyState icon={<SearchOffOutlinedIcon />} title={`No results for "${q.trim()}"`} />
           ) : (
-            <Box sx={gridSx}>
-              {results.map((it) => <YouTubeCard key={it.id} item={it} source={source} width={YT_CARD_W} />)}
-            </Box>
+            <>
+              <Box sx={gridSx}>
+                {results.map((it) => <YouTubeCard key={it.id} item={it} source={source} width={YT_CARD_W} />)}
+              </Box>
+              {/* Sentinel — pulls the next search page in as it nears the viewport. */}
+              <Box ref={searchSentinelRef} sx={{ height: 1 }} />
+              {searchingMore && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={28} /></Box>
+              )}
+              {!searchHasMore && !searching && results.length >= SEARCH_PAGE && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', py: 4 }}>
+                  That's everything.
+                </Typography>
+              )}
+            </>
           )}
         </Box>
       ) : groups === null ? (

@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import type { Db } from '../db';
 import type { YtDlp } from '../lib/ytdlp';
 import { getAuthContext } from '../middleware/auth';
+import { getUserSources } from '../lib/user-sources';
+import { getAdapter } from '../sources/registry';
 import { listFollows, addFollow, removeFollow } from '../storage/youtube-follows';
 import { listLikes, addLike, removeLikeByYtId } from '../storage/youtube-likes';
 import { parseFollowUrl, resolveFollowMeta } from '../sources/youtube';
@@ -50,6 +52,24 @@ export function makeYoutubeRoutes(getDb: () => Db, yt: YtDlp) {
     if (!Number.isFinite(id)) return c.json({ error: 'invalid id' }, 400);
     const ok = removeFollow(getDb(), auth.userId, id);
     return ok ? c.body(null, 204) : c.json({ error: 'follow not found' }, 404);
+  });
+
+  // GET /search?q=&offset=&limit=[&source=] — paged YouTube search for the
+  // YouTube destination page. Unlike the aggregated /api/search (single shot,
+  // capped at 30), this windows results so the page can infinite-scroll.
+  r.get('/search', async (c) => {
+    const q = (c.req.query('q') ?? '').trim();
+    if (!q) return c.json({ items: [] });
+    const offset = Math.max(0, Math.trunc(Number(c.req.query('offset') ?? 0)) || 0);
+    const limit = Math.min(30, Math.max(1, Math.trunc(Number(c.req.query('limit') ?? 15)) || 15));
+    const sources = getUserSources(getDb(), getAuthContext(c));
+    const wantKey = c.req.query('source');
+    const entry = wantKey && sources[wantKey]?.type === 'youtube'
+      ? sources[wantKey]
+      : Object.values(sources).find((s) => s.type === 'youtube');
+    if (!entry) return c.json({ items: [] });
+    const items = await getAdapter('youtube').search({ baseUrl: entry.baseUrl, token: entry.token }, q, { offset, limit });
+    return c.json({ items });
   });
 
   // GET /likes — the caller's liked videos, newest first.

@@ -121,7 +121,7 @@ export interface SourceAdapter {
   readonly type: SourceType;
   startPair(code: string): Promise<{ pairUrl: string; expiresAt: number }>;
   home(ctx: SourceContext): Promise<HomeRow[]>;
-  search(ctx: SourceContext, query: string): Promise<Item[]>;
+  search(ctx: SourceContext, query: string, page?: BrowsePage): Promise<Item[]>;
   library(ctx: SourceContext, libraryId?: string, path?: string, page?: BrowsePage): Promise<BrowseResult>;
   item(ctx: SourceContext, id: string): Promise<ItemDetail>;
   /**

@@ -216,10 +216,18 @@ export function makeYoutubeAdapter(deps: YoutubeAdapterDeps): SourceAdapter {
       return [];
     },
 
-    async search(_ctx: SourceContext, query: string): Promise<Item[]> {
+    async search(_ctx: SourceContext, query: string, page?: BrowsePage): Promise<Item[]> {
       const q = query.trim();
       if (!q) return [];
-      const info = (await yt.json(['-J', '--flat-playlist', '--playlist-end', '30', `ytsearch30:${q}`])) as YtInfo;
+      // yt-dlp search has no cursor, so paging re-runs `ytsearch{end}` and windows
+      // the tail with --playlist-start/--playlist-end. Pages are small, so the
+      // extra depth per page stays cheap (flat-playlist = metadata only).
+      const offset = Math.max(0, page?.offset ?? 0);
+      const limit = page?.limit ?? 30;
+      const end = offset + limit;
+      const info = (await yt.json([
+        '-J', '--flat-playlist', '--playlist-start', String(offset + 1), '--playlist-end', String(end), `ytsearch${end}:${q}`,
+      ])) as YtInfo;
       return (info.entries ?? []).filter(isVideoEntry).map(mapVideo);
     },
 
