@@ -26,6 +26,50 @@ const YT_CARD_W = 300;
 const ROW_CARD_W = 260;
 const gridSx = { display: 'grid', gridTemplateColumns: `repeat(auto-fill, ${YT_CARD_W}px)`, gap: 3, px: 2.5, justifyContent: 'center' } as const;
 
+// A YouTube-TV-style open reveal: the logo pops in with a red ring flash, the
+// wordmark and search slide up staggered, and the ambient glow rises from the
+// bottom. Motion is suppressed under prefers-reduced-motion.
+const REDUCE = { '@media (prefers-reduced-motion: reduce)': { animation: 'none', opacity: 1, transform: 'none' } } as const;
+const introSx = {
+  glow: {
+    '@keyframes ytGlowRise': { from: { opacity: 0, transform: 'translateY(60px)' }, to: { opacity: 1, transform: 'none' } },
+    animation: 'ytGlowRise 900ms cubic-bezier(0.16,1,0.3,1) both',
+    ...REDUCE,
+  },
+  logo: {
+    '@keyframes ytLogoPop': {
+      '0%': { opacity: 0, transform: 'scale(0.35)' },
+      '55%': { opacity: 1, transform: 'scale(1.14)' },
+      '100%': { transform: 'scale(1)' },
+    },
+    animation: 'ytLogoPop 620ms cubic-bezier(0.34,1.56,0.64,1) both',
+    ...REDUCE,
+  },
+  ring: {
+    '@keyframes ytRing': {
+      '0%': { opacity: 0.55, transform: 'scale(0.6)' },
+      '100%': { opacity: 0, transform: 'scale(2.4)' },
+    },
+    animation: 'ytRing 720ms cubic-bezier(0.16,1,0.3,1) both',
+    '@media (prefers-reduced-motion: reduce)': { display: 'none' },
+  },
+  word: {
+    '@keyframes ytWord': { from: { opacity: 0, transform: 'translateX(-14px)' }, to: { opacity: 1, transform: 'none' } },
+    animation: 'ytWord 520ms cubic-bezier(0.16,1,0.3,1) 160ms both',
+    ...REDUCE,
+  },
+  up: {
+    '@keyframes ytUp': { from: { opacity: 0, transform: 'translateY(14px)' }, to: { opacity: 1, transform: 'none' } },
+    animation: 'ytUp 500ms cubic-bezier(0.16,1,0.3,1) 260ms both',
+    ...REDUCE,
+  },
+  body: {
+    '@keyframes ytUp': { from: { opacity: 0, transform: 'translateY(14px)' }, to: { opacity: 1, transform: 'none' } },
+    animation: 'ytUp 500ms cubic-bezier(0.16,1,0.3,1) 360ms both',
+    ...REDUCE,
+  },
+} as const;
+
 function initials(name: string): string {
   return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '·';
 }
@@ -107,22 +151,30 @@ export function YouTube({ source }: Props) {
       <Box sx={{
         position: 'fixed', left: 0, right: 0, bottom: 0, height: '48vh', pointerEvents: 'none', zIndex: 0,
         background: 'linear-gradient(0deg, rgba(255,0,0,0.15) 0%, rgba(255,0,0,0.05) 32%, transparent 72%)',
+        ...introSx.glow,
       }} />
       <Box sx={{ position: 'relative', zIndex: 1 }}>
       {/* Hero: centered YouTube logo + search. */}
       <Box sx={{ textAlign: 'center', pt: { xs: 4, sm: 6 }, pb: 3.5, px: 2 }}>
         <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.25, mb: 3 }}>
           <Box sx={{
+            position: 'relative',
             width: 54, height: 38, borderRadius: 2, backgroundColor: '#ff0000',
             display: 'grid', placeItems: 'center', boxShadow: '0 6px 18px rgba(255,0,0,0.45)',
+            ...introSx.logo,
           }}>
+            {/* One-shot ring flash on open. */}
+            <Box aria-hidden sx={{
+              position: 'absolute', inset: -6, borderRadius: 3, border: '2px solid rgba(255,0,0,0.7)',
+              pointerEvents: 'none', ...introSx.ring,
+            }} />
             <Box component="svg" viewBox="0 0 24 24" aria-hidden sx={{ width: 26, height: 26 }}>
               <path d="M8 5.5v13l11-6.5z" fill="#fff" />
             </Box>
           </Box>
-          <Typography variant="h1" sx={{ m: 0, fontWeight: 800, letterSpacing: '-0.5px' }}>YouTube</Typography>
+          <Typography variant="h1" sx={{ m: 0, fontWeight: 800, letterSpacing: '-0.5px', ...introSx.word }}>YouTube</Typography>
         </Box>
-        <Box sx={{ maxWidth: 640, mx: 'auto' }}>
+        <Box sx={{ maxWidth: 640, mx: 'auto', ...introSx.up }}>
           <TextField
             fullWidth placeholder="Search YouTube…"
             value={q} onChange={(e) => setQ(e.target.value)}
@@ -139,6 +191,7 @@ export function YouTube({ source }: Props) {
         </Box>
       </Box>
 
+      <Box sx={introSx.body}>
       {isSearching ? (
         <Box sx={{ mt: 1, opacity: searching ? 0.5 : 1, transition: 'opacity 120ms' }}>
           {results.length === 0 && !searching ? (
@@ -210,6 +263,7 @@ export function YouTube({ source }: Props) {
           })}
         </Box>
       )}
+      </Box>
       </Box>
     </AppShell>
   );
