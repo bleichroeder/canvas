@@ -11,6 +11,7 @@ import { api } from '../api';
 import { AppShell } from '../components/AppShell';
 import { useSources } from '../lib/SourcesContext';
 import { navigate } from '../router';
+import { isAddOnSource } from '../lib/source-style';
 import type { StoredSource } from '../storage';
 
 type SourceType = StoredSource['type'];
@@ -158,36 +159,51 @@ export function Pair() {
   return (
     <AppShell>
       <Box sx={{ p: 4, maxWidth: 720, mx: 'auto' }}>
-        {state.kind === 'choose' && (
-          <>
-            <Typography variant="h1" sx={{ mb: 1 }}>Pair a new source</Typography>
-            <Typography color="text.secondary" sx={{ mb: 1 }}>
-              Choose what kind of source you want to add.
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
-              You can unpair any source later in Settings → Sources.
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              {SOURCE_TYPES.map((s) => (
-                <Card key={s.type} sx={{ opacity: s.available ? 1 : 0.5 }}>
-                  <CardActionArea
-                    disabled={!s.available}
-                    onClick={() => (s.type === 'youtube' ? addPublic('youtube') : startPair(s.type))}
-                    sx={{ p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                  >
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>{s.label}</Typography>
-                    {!s.available && (
-                      <Typography variant="caption" color="text.secondary">(coming soon)</Typography>
-                    )}
-                    {s.available && s.note && (
-                      <Typography variant="caption" color="text.secondary">{s.note}</Typography>
-                    )}
-                  </CardActionArea>
-                </Card>
-              ))}
-            </Box>
-          </>
-        )}
+        {state.kind === 'choose' && (() => {
+          const servers = SOURCE_TYPES.filter((s) => !isAddOnSource(s.type));
+          const addons = SOURCE_TYPES.filter((s) => isAddOnSource(s.type));
+          const renderCard = (s: (typeof SOURCE_TYPES)[number]) => (
+            <Card key={s.type} sx={{ opacity: s.available ? 1 : 0.5 }}>
+              <CardActionArea
+                disabled={!s.available}
+                onClick={() => (s.type === 'youtube' ? addPublic('youtube') : startPair(s.type))}
+                sx={{ p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>{s.label}</Typography>
+                {!s.available && (
+                  <Typography variant="caption" color="text.secondary">(coming soon)</Typography>
+                )}
+                {s.available && s.note && (
+                  <Typography variant="caption" color="text.secondary">{s.note}</Typography>
+                )}
+              </CardActionArea>
+            </Card>
+          );
+          return (
+            <>
+              <Typography variant="h1" sx={{ mb: 1 }}>Add a source</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 3 }}>
+                You can remove any source later in Settings → Sources.
+              </Typography>
+
+              <Typography variant="body1" sx={{ fontWeight: 700, mb: 0.25 }}>Media servers</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                Pair over your network — scan the QR from your phone to connect.
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 4 }}>
+                {servers.map(renderCard)}
+              </Box>
+
+              <Typography variant="body1" sx={{ fontWeight: 700, mb: 0.25 }}>Add-ons</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                Public sources — no account, sign-in, or pairing needed.
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                {addons.map(renderCard)}
+              </Box>
+            </>
+          );
+        })()}
         {state.kind === 'paired' && (
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="h3" color="success.main" sx={{ mb: 1 }}>✓ Paired</Typography>

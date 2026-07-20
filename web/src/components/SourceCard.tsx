@@ -11,7 +11,7 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogActions from '@mui/material/DialogActions';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { api } from '../api';
-import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
+import { SOURCE_TYPE_COLOR, sourceGlyph, isAddOnSource } from '../lib/source-style';
 import type { StoredSource } from '../storage';
 
 export interface SourceCardProps {
@@ -46,6 +46,7 @@ function timeAgo(ms: number | null): string {
 }
 
 export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onEdit = undefined }: SourceCardProps) {
+  const addon = isAddOnSource(type);
   const [status, setStatus] = useState<'loading' | 'ok' | 'degraded' | 'unreachable' | 'lan-only'>('loading');
   const [lastSeenAt, setLastSeenAt] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -80,6 +81,7 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onEdit = un
     urlDraft.trim().replace(/\/+$/, '') !== baseUrl;
 
   useEffect(() => {
+    if (addon) return; // add-ons have no server to reach — skip the probe
     let cancelled = false;
     api.sourceStatus(srcKey).then(
       (res) => {
@@ -90,7 +92,7 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onEdit = un
       () => { if (!cancelled) setStatus('unreachable'); },
     );
     return () => { cancelled = true; };
-  }, [srcKey]);
+  }, [srcKey, addon]);
 
   const statusText =
     status === 'loading' ? 'Checking…' :
@@ -106,13 +108,15 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onEdit = un
           display: 'flex', alignItems: 'center', gap: 2, p: 2,
         }}
       >
-        <Box
-          sx={{
-            width: 8, height: 8, borderRadius: '50%',
-            backgroundColor: DOT_COLOR[status] ?? DOT_COLOR.loading,
-            flexShrink: 0,
-          }}
-        />
+        {!addon && (
+          <Box
+            sx={{
+              width: 8, height: 8, borderRadius: '50%',
+              backgroundColor: DOT_COLOR[status] ?? DOT_COLOR.loading,
+              flexShrink: 0,
+            }}
+          />
+        )}
         <Box
           sx={{
             width: 40, height: 40, borderRadius: 1,
@@ -141,11 +145,11 @@ export function SourceCard({ srcKey, label, type, baseUrl, onUnpair, onEdit = un
             )}
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {type} · {baseUrl}
+            {addon ? 'Add-on · public, no sign-in' : `${type} · ${baseUrl}`}
           </Typography>
-          <Typography variant="caption" color="text.secondary">{statusText}</Typography>
+          {!addon && <Typography variant="caption" color="text.secondary">{statusText}</Typography>}
         </Box>
-        <Button variant="text" color="error" onClick={() => setConfirmOpen(true)}>Unpair</Button>
+        <Button variant="text" color="error" onClick={() => setConfirmOpen(true)}>{addon ? 'Remove' : 'Unpair'}</Button>
       </Box>
 
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} fullWidth maxWidth="xs">

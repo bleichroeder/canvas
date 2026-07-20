@@ -8,6 +8,13 @@ export const SOURCE_TYPE_COLOR: Record<StoredSource['type'], string> = {
   youtube: '#ff0000',
 };
 
+// Add-ons are public/plugin sources (YouTube) — no pairing, no credentials, and
+// no server to reach, so they skip the reachability probe and group separately
+// from paired media servers.
+export function isAddOnSource(type: StoredSource['type']): boolean {
+  return type === 'youtube';
+}
+
 /**
  * 1-2 character glyph derived from a source's label, for color-coded badges.
  * Examples: "My Plex" → "MP", "Blackhawk" → "BL", "Plex" → "PL".
