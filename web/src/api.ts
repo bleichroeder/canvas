@@ -30,6 +30,17 @@ export interface YoutubeFollow {
   thumbnail: string | null;
   createdAt: number;
 }
+
+export interface YoutubeLike {
+  id: number;
+  ytId: string;
+  title: string;
+  thumbnail: string | null;
+  channelId: string | null;
+  channelTitle: string | null;
+  durationSec: number | null;
+  createdAt: number;
+}
 import type { StoredSource } from './storage';
 import type { SessionUser } from './lib/session';
 
@@ -195,6 +206,14 @@ export const api = {
     add: (body: { kind?: 'channel' | 'playlist'; ytId?: string; url?: string }) =>
       request<YoutubeFollow>('/api/youtube/follows', { method: 'POST', body: JSON.stringify(body) }),
     remove: (id: number) => request<void>(`/api/youtube/follows/${id}`, { method: 'DELETE' }),
+  },
+
+  // Liked/favorited YouTube videos (the YouTube page's quick-return shelf).
+  youtubeLikes: {
+    list: () => request<YoutubeLike[]>('/api/youtube/likes'),
+    add: (body: { ytId: string; title: string; thumbnail?: string | null; channelId?: string | null; channelTitle?: string | null; durationSec?: number | null }) =>
+      request<YoutubeLike>('/api/youtube/likes', { method: 'POST', body: JSON.stringify(body) }),
+    remove: (ytId: string) => request<void>(`/api/youtube/likes/${encodeURIComponent(ytId)}`, { method: 'DELETE' }),
   },
 
   // Setup (first-run wizard)

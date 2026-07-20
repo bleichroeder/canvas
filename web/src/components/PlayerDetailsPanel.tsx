@@ -11,6 +11,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { api } from '../api';
 import { navigate } from '../router';
 import { YouTubeCard } from './YouTubeCard';
+import { YouTubeLikeButton } from './YouTubeLikeButton';
 import type { Item, ItemDetail } from '../types';
 import type { PlaybackQueue } from '../lib/playback-queue';
 
@@ -127,7 +128,22 @@ function YouTubeDetails({ source, meta, currentId }: {
 
   return (
     <>
-      <Typography sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3 }}>{meta.title}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+        <Typography sx={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 700, lineHeight: 1.3 }}>{meta.title}</Typography>
+        <Box sx={{ flexShrink: 0, mt: -0.5, mr: -0.5 }}>
+          <YouTubeLikeButton
+            size="medium"
+            video={{
+              ytId: currentId,
+              title: meta.title,
+              thumbnail: meta.poster ?? null,
+              channelId: meta.channelId ?? null,
+              channelTitle: meta.channelTitle ?? null,
+              durationSec: meta.durationSec ?? null,
+            }}
+          />
+        </Box>
+      </Box>
       {(stats || meta.isLive) && (
         <Typography sx={{ mt: 0.5, fontSize: 12.5, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
           {meta.isLive && (

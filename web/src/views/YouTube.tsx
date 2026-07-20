@@ -8,12 +8,14 @@ import SearchIcon from '@mui/icons-material/Search';
 import SearchOffOutlinedIcon from '@mui/icons-material/SearchOffOutlined';
 import SubscriptionsOutlinedIcon from '@mui/icons-material/SubscriptionsOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import FavoriteIcon from '@mui/icons-material/Favorite';
 import { api } from '../api';
 import { navigate } from '../router';
 import { AppShell } from '../components/AppShell';
 import { YouTubeCard } from '../components/YouTubeCard';
 import { Rail } from '../components/Rail';
 import { EmptyState } from '../components/EmptyState';
+import { ensureLikesLoaded, useLikes } from '../lib/youtube-likes';
 import type { Item } from '../types';
 
 interface Props { source: string }
@@ -40,6 +42,19 @@ export function YouTube({ source }: Props) {
   const debounce = useRef<number | undefined>(undefined);
 
   const [groups, setGroups] = useState<SubGroup[] | null>(null); // null = loading
+
+  const likes = useLikes();
+  useEffect(() => { void ensureLikesLoaded(); }, []);
+  const likedItems: (Item & { source: string })[] = likes.map((l) => ({
+    id: l.ytId,
+    type: 'movie',
+    title: l.title,
+    source,
+    ...(l.thumbnail ? { poster: l.thumbnail } : {}),
+    ...(l.durationSec != null ? { durationSec: l.durationSec } : {}),
+    ...(l.channelId ? { channelId: l.channelId } : {}),
+    ...(l.channelTitle ? { channelTitle: l.channelTitle } : {}),
+  }));
 
   const loadSubs = useCallback(async () => {
     const follows = await api.youtubeFollows.list();
@@ -136,14 +151,30 @@ export function YouTube({ source }: Props) {
         </Box>
       ) : groups === null ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
-      ) : groups.length === 0 ? (
+      ) : groups.length === 0 && likedItems.length === 0 ? (
         <EmptyState
           icon={<SubscriptionsOutlinedIcon />}
           title="You haven't subscribed to any channels yet"
-          body="Search for something to watch, then open a channel and hit Subscribe — its latest videos show up here."
+          body="Search for something to watch, then open a channel and hit Subscribe — its latest videos show up here. Tap the ♥ on any video to keep it in Liked."
         />
       ) : (
         <Box sx={{ pb: 4 }}>
+          {likedItems.length > 0 && (
+            <Rail
+              title="Liked"
+              cardWidth={ROW_CARD_W}
+              items={likedItems}
+              renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} />}
+              titlePrefix={
+                <Box sx={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  display: 'grid', placeItems: 'center', backgroundColor: 'rgba(255,59,59,0.16)',
+                }}>
+                  <FavoriteIcon sx={{ fontSize: 20, color: '#ff3b3b' }} />
+                </Box>
+              }
+            />
+          )}
           {groups.map((g) => {
             const viewAll = () =>
               g.kind === 'channel'

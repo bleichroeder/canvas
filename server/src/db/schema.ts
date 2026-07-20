@@ -210,3 +210,27 @@ export const youtubeFollows = sqliteTable(
 
 export type YoutubeFollow = typeof youtubeFollows.$inferSelect;
 export type NewYoutubeFollow = typeof youtubeFollows.$inferInsert;
+
+// A user's liked/favorited YouTube videos — a quick-return shelf on the YouTube
+// page. Video metadata is cached so the "Liked" rail renders without a per-video
+// yt-dlp round-trip.
+export const youtubeLikes = sqliteTable(
+  'youtube_likes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    ytId: text('yt_id').notNull(),               // video id (watch?v=…)
+    title: text('title').notNull(),              // cached for display
+    thumbnail: text('thumbnail'),                // cached poster, nullable
+    channelId: text('channel_id'),               // for the channel link, nullable
+    channelTitle: text('channel_title'),         // cached, nullable
+    durationSec: integer('duration_sec'),        // cached, nullable
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    userItemUniq: uniqueIndex('youtube_likes_user_item').on(t.userId, t.ytId),
+  }),
+);
+
+export type YoutubeLike = typeof youtubeLikes.$inferSelect;
+export type NewYoutubeLike = typeof youtubeLikes.$inferInsert;

@@ -3,6 +3,7 @@ import type { Db } from '../db';
 import type { YtDlp } from '../lib/ytdlp';
 import { getAuthContext } from '../middleware/auth';
 import { listFollows, addFollow, removeFollow } from '../storage/youtube-follows';
+import { listLikes, addLike, removeLikeByYtId } from '../storage/youtube-likes';
 import { parseFollowUrl, resolveFollowMeta } from '../sources/youtube';
 import { logger } from '../log';
 
@@ -49,6 +50,44 @@ export function makeYoutubeRoutes(getDb: () => Db, yt: YtDlp) {
     if (!Number.isFinite(id)) return c.json({ error: 'invalid id' }, 400);
     const ok = removeFollow(getDb(), auth.userId, id);
     return ok ? c.body(null, 204) : c.json({ error: 'follow not found' }, 404);
+  });
+
+  // GET /likes — the caller's liked videos, newest first.
+  r.get('/likes', (c) => {
+    const auth = getAuthContext(c);
+    return c.json(listLikes(getDb(), auth.userId));
+  });
+
+  // POST /likes — like a video. Body carries the video id plus cached metadata
+  // (title/thumbnail/channel/duration) so the "Liked" rail renders without a
+  // per-video yt-dlp lookup. Idempotent.
+  r.post('/likes', async (c) => {
+    const auth = getAuthContext(c);
+    const body = await c.req.json().catch(() => ({})) as {
+      ytId?: unknown; title?: unknown; thumbnail?: unknown;
+      channelId?: unknown; channelTitle?: unknown; durationSec?: unknown;
+    };
+    if (typeof body.ytId !== 'string' || !body.ytId || typeof body.title !== 'string' || !body.title) {
+      return c.json({ error: 'provide {ytId, title}' }, 400);
+    }
+    const like = addLike(getDb(), auth.userId, {
+      ytId: body.ytId,
+      title: body.title,
+      thumbnail: typeof body.thumbnail === 'string' ? body.thumbnail : null,
+      channelId: typeof body.channelId === 'string' ? body.channelId : null,
+      channelTitle: typeof body.channelTitle === 'string' ? body.channelTitle : null,
+      durationSec: typeof body.durationSec === 'number' ? body.durationSec : null,
+    });
+    return c.json(like, 201);
+  });
+
+  // DELETE /likes/:ytId — unlike (owner-scoped).
+  r.delete('/likes/:ytId', (c) => {
+    const auth = getAuthContext(c);
+    const ytId = c.req.param('ytId');
+    if (!ytId) return c.json({ error: 'invalid id' }, 400);
+    const ok = removeLikeByYtId(getDb(), auth.userId, ytId);
+    return ok ? c.body(null, 204) : c.json({ error: 'like not found' }, 404);
   });
 
   return r;

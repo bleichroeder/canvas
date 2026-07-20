@@ -90,3 +90,41 @@ describe('youtube follows routes', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('youtube likes routes', () => {
+  test('POST /likes stores cached metadata, lists, then unlikes by ytId', async () => {
+    const { app, bearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://t/api/youtube/likes', {
+      method: 'POST', headers: auth(bearer),
+      body: JSON.stringify({ ytId: 'v:abc', title: 'A Video', thumbnail: 't://p', channelId: 'UCx', channelTitle: 'Chan', durationSec: 42 }),
+    }));
+    expect(res.status).toBe(201);
+    const like = await res.json() as { ytId: string; title: string; durationSec: number };
+    expect(like).toMatchObject({ ytId: 'v:abc', title: 'A Video', durationSec: 42 });
+
+    const list = await (await app.fetch(new Request('http://t/api/youtube/likes', { headers: auth(bearer) }))).json() as unknown[];
+    expect(list).toHaveLength(1);
+
+    const del = await app.fetch(new Request('http://t/api/youtube/likes/v%3Aabc', { method: 'DELETE', headers: auth(bearer) }));
+    expect(del.status).toBe(204);
+    const del2 = await app.fetch(new Request('http://t/api/youtube/likes/v%3Aabc', { method: 'DELETE', headers: auth(bearer) }));
+    expect(del2.status).toBe(404);
+  });
+
+  test('POST /likes is idempotent on (user, ytId)', async () => {
+    const { app, bearer } = await makeFixture();
+    const body = JSON.stringify({ ytId: 'v:dup', title: 'Dup' });
+    await app.fetch(new Request('http://t/api/youtube/likes', { method: 'POST', headers: auth(bearer), body }));
+    await app.fetch(new Request('http://t/api/youtube/likes', { method: 'POST', headers: auth(bearer), body }));
+    const list = await (await app.fetch(new Request('http://t/api/youtube/likes', { headers: auth(bearer) }))).json() as unknown[];
+    expect(list).toHaveLength(1);
+  });
+
+  test('POST /likes without ytId/title is 400', async () => {
+    const { app, bearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://t/api/youtube/likes', {
+      method: 'POST', headers: auth(bearer), body: JSON.stringify({ ytId: 'v:x' }),
+    }));
+    expect(res.status).toBe(400);
+  });
+});

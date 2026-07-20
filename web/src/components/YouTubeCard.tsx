@@ -2,6 +2,7 @@ import CardActionArea from '@mui/material/CardActionArea';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { navigate } from '../router';
+import { YouTubeLikeButton } from './YouTubeLikeButton';
 import type { Item } from '../types';
 
 // YouTube thumbnails are 16:9, not the 2:3 poster the rest of the app uses.
@@ -58,6 +59,7 @@ function channelHue(name: string): number {
 export function YouTubeCard({ item, source, width = 300, showChannel = true }: YouTubeCardProps) {
   const href = item.type === 'folder' ? `/lib/${source}/${item.id}` : `/play/${source}/${item.id}`;
   const hasChannel = showChannel && !!item.channelTitle;
+  const likeable = item.type !== 'folder';
 
   const openChannel = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -67,7 +69,22 @@ export function YouTubeCard({ item, source, width = 300, showChannel = true }: Y
   };
 
   return (
-    <Box sx={{ flexShrink: 0, width }}>
+    <Box sx={{ position: 'relative', flexShrink: 0, width }}>
+      {likeable && (
+        <Box sx={{ position: 'absolute', top: 6, right: 6, zIndex: 2 }}>
+          <YouTubeLikeButton
+            overlay
+            video={{
+              ytId: item.id,
+              title: item.title,
+              thumbnail: item.poster ?? null,
+              channelId: item.channelId ?? null,
+              channelTitle: item.channelTitle ?? null,
+              durationSec: item.durationSec ?? null,
+            }}
+          />
+        </Box>
+      )}
       <CardActionArea onClick={() => navigate(href)} sx={{ borderRadius: 1 }}>
         <Box sx={{
           position: 'relative', width, aspectRatio: '16 / 9',
