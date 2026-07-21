@@ -284,6 +284,9 @@ export function makeYoutubeAdapter(deps: YoutubeAdapterDeps): SourceAdapter {
       return {
         url: `/api/yt/stream/${encodeURIComponent(videoId)}?${query}`,
         durationSec,
+        // Live transcode pipe: the client resumes drops by re-opening at a time
+        // offset, never with a byte-Range (which /stream can't honor).
+        live: true,
         ...(subtitleTracks.length > 0 ? { subtitleTracks } : {}),
       };
     },

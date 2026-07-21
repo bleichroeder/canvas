@@ -129,6 +129,13 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
   const seekTokenRef = useRef(0);
   const sessionBaseRef = useRef(0);
   const tapStateRef = useRef<{ times: number[] }>({ times: [] });
+  // Live-stream auto-recovery bookkeeping (see onStreamInterrupted). Refs, not
+  // state, so the engine callback (captured once at boot) always reads fresh
+  // values instead of a stale render closure.
+  const recoverRef = useRef<{ count: number; lastMs: number }>({ count: 0, lastMs: 0 });
+  const errMsgRef = useRef<string | null>(null);
+  const interruptHandlerRef = useRef<() => void>(() => {});
+  errMsgRef.current = errMsg;
 
   useEffect(() => {
     let t: number | undefined;
@@ -341,6 +348,8 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
         const canvas = canvasRef.current!;
         engineRef.current = bootEngine({
           url: resolution.url,
+          live: resolution.live ?? false,
+          onInterrupted: () => interruptHandlerRef.current(),
           getClock: () => audioRef.current?.currentTime() ?? 0,
           onReady: (info) => {
             if (cancelled) return;
@@ -547,9 +556,10 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
     }
   }
 
-  async function reseek(targetSec: number): Promise<void> {
+  async function reseek(targetSec: number, o?: { auto?: boolean }): Promise<void> {
     if (errMsg) return;
-    emit('user_gesture', { kind: 'seek' });
+    if (o?.auto) emit('stream_recover', { targetSec: Math.round(targetSec) });
+    else emit('user_gesture', { kind: 'seek' });
     const target = Math.max(0, Math.min(targetSec, duration > 0 ? duration - 1 : targetSec));
     setReseeking(true);
     const myToken = ++seekTokenRef.current;
@@ -605,6 +615,30 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
 
   function onSeek(sec: number): void { void reseek(sec); }
   function onSeekRelative(delta: number): void { void reseek(pos + delta); }
+
+  // A live stream (YouTube) dropped mid-transfer. The stream isn't byte-
+  // seekable, so the only correct recovery is to re-open at the current time —
+  // a fresh, keyframe-aligned session (same path as a manual scrub, so the A/V
+  // alignment is identical). Guard against loops: debounce concurrent triggers
+  // and give up (surface an error) after too many drops in a short window.
+  function onStreamInterrupted(): void {
+    if (errMsgRef.current) return;
+    const now = performance.now();
+    const st = recoverRef.current;
+    if (now - st.lastMs < 1500) return;              // a recovery is already in flight
+    if (now - st.lastMs > 30_000) st.count = 0;      // stable for a while → reset the streak
+    st.lastMs = now;
+    st.count += 1;
+    if (st.count > 5) {
+      setErrMsg('The stream keeps dropping — check your connection and try again.');
+      setReseeking(false);
+      return;
+    }
+    const a = audioRef.current;
+    const target = a && startedRef.current ? sessionBaseRef.current + a.currentTime() : pos;
+    void reseek(target, { auto: true });
+  }
+  interruptHandlerRef.current = onStreamInterrupted;
 
   async function onFullscreenToggle(): Promise<void> {
     try {

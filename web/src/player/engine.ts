@@ -12,6 +12,10 @@ export interface BootEngineOptions {
   onAudioSample: (chunk: EncodedAudioChunk) => void;
   onFatal: (err: Error) => void;
   onDone: () => void;
+  /** True for a live transcode pipe (YouTube) — resume drops by time, not byte-Range. */
+  live?: boolean;
+  /** Live-source drop: the engine can't self-recover; the view re-opens by time. */
+  onInterrupted?: () => void;
 }
 
 export interface EngineHandle {
@@ -57,9 +61,13 @@ export function bootEngine(opts: BootEngineOptions): EngineHandle {
   const fetcher = new RangeFetcher({
     url: opts.url,
     chunkSize: 4 * 1024 * 1024,
+    seekable: !opts.live,
     onChunk: (offset, bytes) => { if (!disposed) source.appendChunk(offset, bytes); },
     onError: (e) => { if (!disposed) opts.onFatal(e); },
     onDone: () => { if (!disposed) { source.flush(); opts.onDone(); } },
+    ...(opts.live && opts.onInterrupted
+      ? { onInterrupted: () => { if (!disposed) opts.onInterrupted!(); } }
+      : {}),
   });
   fetcher.start();
 

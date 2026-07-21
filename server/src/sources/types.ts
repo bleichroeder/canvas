@@ -115,6 +115,13 @@ export interface PlayResolution {
    * substring "{ms}" the client replaces with a rounded millisecond offset.
    */
   thumbnailUrlTemplate?: string;
+  /**
+   * True when `url` is a live transcode pipe (YouTube) rather than a
+   * byte-seekable file/transcode (Plex, Flixify). A live stream can't be
+   * resumed with an HTTP byte-Range — the client must re-open by *time*
+   * (?fromSec=…) instead. Absent/false ⇒ byte-seekable (default).
+   */
+  live?: boolean;
 }
 
 export interface SourceAdapter {

@@ -70,6 +70,11 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
   // byte ranges at full speed (this is why yt-dlp downloads in chunks). We proxy
   // in chunks this size to defeat the throttle.
   const DASH_CHUNK = 4_000_000;
+  // Transient googlevideo hiccups (a reset mid-chunk, an empty body) are common
+  // on a moving connection. Retry the *same* byte range a few times before
+  // giving up, so one blip doesn't truncate the whole stream.
+  const DASH_CHUNK_RETRIES = 4;
+  const DASH_RETRY_DELAYS_MS = [150, 400, 900, 1500];
 
   // Internal: serves one DASH stream (video|audio) starting at the seek segment:
   // init bytes + a byte-range fetch from the computed offset. Public but signed;
@@ -89,33 +94,61 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
 
     const signal = c.req.raw.signal;
     const init = s.initBytes;
+    // The exact end of media, straight from the sidx: media segments run from
+    // firstSegmentByte for the summed size of every referenced subsegment. This
+    // is the authoritative EOF — we fetch [byteOffset, mediaEnd) and stop there,
+    // never guessing from a short read (a googlevideo range response may return
+    // fewer bytes than asked, or a connection blip truncates one) which used to
+    // end the whole stream early → mid-playback freeze.
+    const mediaEnd = s.index.firstSegmentByte + s.index.references.reduce((sum, ref) => sum + ref.size, 0);
+
     // ffmpeg opens the URL open-ended, which googlevideo throttles to ~real-time
     // (video buffer never fills → audio starves → freeze). So we proxy it as
     // sequential bounded-range fetches instead. Pull-based so we only fetch the
     // next chunk when ffmpeg has drained the previous one (no unbounded memory).
     let pos = byteOffset;
-    let ended = false;
+    let done = false;
     const body = new ReadableStream<Uint8Array>({
       start(controller) { controller.enqueue(init); },
       async pull(controller) {
-        if (ended) { controller.close(); return; }
-        try {
-          const resp = await fetch(s.url, {
-            headers: { Range: `bytes=${pos}-${pos + DASH_CHUNK - 1}`, 'user-agent': UA },
-            ...(signal ? { signal } : {}),
-          });
-          if (resp.status !== 206 && resp.status !== 200) { ended = true; controller.close(); return; }
-          const buf = new Uint8Array(await resp.arrayBuffer());
-          if (buf.length === 0) { ended = true; controller.close(); return; }
-          controller.enqueue(buf);
-          pos += buf.length;
-          if (buf.length < DASH_CHUNK) ended = true; // short read → EOF
-        } catch {
-          ended = true;
-          try { controller.close(); } catch { /* already closed */ }
+        if (done || pos >= mediaEnd) { done = true; controller.close(); return; }
+        // Bound the request to the real media end so we never over-read past it.
+        const wantEnd = Math.min(pos + DASH_CHUNK, mediaEnd) - 1;
+        let lastErr: unknown;
+        for (let attempt = 0; attempt <= DASH_CHUNK_RETRIES; attempt++) {
+          if (signal?.aborted) { done = true; controller.close(); return; }
+          if (attempt > 0) {
+            await new Promise((r) => setTimeout(r, DASH_RETRY_DELAYS_MS[Math.min(attempt - 1, DASH_RETRY_DELAYS_MS.length - 1)]));
+            if (signal?.aborted) { done = true; controller.close(); return; }
+          }
+          try {
+            const resp = await fetch(s.url, {
+              headers: { Range: `bytes=${pos}-${wantEnd}`, 'user-agent': UA },
+              ...(signal ? { signal } : {}),
+            });
+            if (resp.status === 416) { done = true; controller.close(); return; } // past EOF
+            if (resp.status !== 206 && resp.status !== 200) throw new Error(`dash upstream ${resp.status}`);
+            const buf = new Uint8Array(await resp.arrayBuffer());
+            if (buf.length === 0) throw new Error('dash empty chunk'); // transient → retry
+            // A short read is NOT end-of-file: advance by whatever arrived and let
+            // the next pull() request the remaining bytes from the new position.
+            controller.enqueue(buf);
+            pos += buf.length;
+            if (pos >= mediaEnd) done = true;
+            return;
+          } catch (e) {
+            if (signal?.aborted) { done = true; controller.close(); return; }
+            lastErr = e;
+          }
         }
+        // Retries exhausted mid-stream: end the input so ffmpeg finalizes what it
+        // has. The client (live source) re-opens by time and re-resolves a fresh
+        // googlevideo URL, so this is recoverable rather than a hard failure.
+        logger.warn({ videoId, stream, pos, mediaEnd, err: String(lastErr) }, 'yt _dash chunk retries exhausted');
+        done = true;
+        try { controller.close(); } catch { /* already closed */ }
       },
-      cancel() { ended = true; },
+      cancel() { done = true; },
     });
     return new Response(body, { headers: { 'content-type': 'video/mp4', 'cache-control': 'no-store' } });
   });

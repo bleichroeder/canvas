@@ -81,25 +81,75 @@ describe('GET /stream/:videoId', () => {
 });
 
 describe('GET /_dash/:videoId (internal assembly)', () => {
-  test('serves init bytes + ranged fetch from the seek offset', async () => {
-    let capturedRange: string | undefined;
-    const original = globalThis.fetch;
-    globalThis.fetch = mock(async (_url: string | URL, init?: RequestInit) => {
-      capturedRange = (init?.headers as Record<string, string>)?.Range;
-      return new Response(new Uint8Array([7, 7, 7]), { status: 206 });
+  // mediaEnd for SOURCES.video = firstSegmentByte(10) + Σ ref.size(100+200) = 310.
+  // A seek to 3s lands on segment 1 → byteOffset 10+100 = 110, so the served
+  // media is the byte range [110, 310) prefixed with the init segment.
+  const MEDIA_END = 310;
+
+  /** A fake seekable byte server over a synthetic file (byte i === i & 0xff). */
+  function byteServer(opts: { cap?: number; failFirst?: number } = {}) {
+    const len = MEDIA_END;
+    const file = new Uint8Array(len);
+    for (let i = 0; i < len; i++) file[i] = i & 0xff;
+    let calls = 0;
+    let firstRange: string | undefined;
+    const fn = mock(async (_url: string | URL, init?: RequestInit) => {
+      calls += 1;
+      const range = (init?.headers as Record<string, string>)?.Range;
+      if (firstRange === undefined) firstRange = range;
+      if (opts.failFirst && calls <= opts.failFirst) throw new Error('network fail');
+      const m = /bytes=(\d+)-(\d+)/.exec(range ?? '');
+      if (!m) return new Response(file, { status: 200 });
+      const start = Number(m[1]);
+      if (start >= len) return new Response(null, { status: 416 });
+      const reqEnd = Math.min(Number(m[2]), len - 1);
+      // Optionally cap the response short of what was asked (a legit partial 206).
+      const sliceEnd = opts.cap ? Math.min(reqEnd + 1, start + opts.cap) : reqEnd + 1;
+      return new Response(file.slice(start, sliceEnd), {
+        status: 206,
+        headers: { 'content-range': `bytes ${start}-${sliceEnd - 1}/${len}` },
+      });
     }) as unknown as typeof fetch;
+    return { fn, file, calls: () => calls, firstRange: () => firstRange };
+  }
+
+  async function dashBody(fetchImpl: typeof fetch): Promise<number[]> {
+    const original = globalThis.fetch;
+    globalThis.fetch = fetchImpl;
     try {
       const r = makeYtStreamRoutes({ ...base, ytDash: fakeDash(SOURCES), maxConcurrent: 2, spawnFfmpeg: fakeSpawn().spawn });
-      // seek to 3s → segment 1 → byteOffset firstSegmentByte(10)+100 = 110
       const res = await r.request(`/_dash/vid?stream=v&${await signer.signQuery('vid', 3)}`);
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toBe('video/mp4');
-      const body = new Uint8Array(await res.arrayBuffer());
-      expect(Array.from(body)).toEqual([1, 2, 3, 7, 7, 7]); // initBytes ++ fetched
-      expect(capturedRange).toBe('bytes=110-4000109'); // bounded chunk, not open-ended
+      return Array.from(new Uint8Array(await res.arrayBuffer()));
     } finally {
       globalThis.fetch = original;
     }
+  }
+
+  test('serves init bytes + the full media range [byteOffset, mediaEnd)', async () => {
+    const srv = byteServer();
+    const body = await dashBody(srv.fn);
+    const expected = [1, 2, 3, ...Array.from(srv.file.slice(110, MEDIA_END))];
+    expect(body).toEqual(expected);
+    // Bounded chunk, clamped to mediaEnd (never open-ended, never past EOF).
+    expect(srv.firstRange()).toBe('bytes=110-309');
+  });
+
+  test('short reads do NOT end the stream — the full range is reconstructed', async () => {
+    // Each response returns at most 50 bytes, well under the requested range.
+    const srv = byteServer({ cap: 50 });
+    const body = await dashBody(srv.fn);
+    const expected = [1, 2, 3, ...Array.from(srv.file.slice(110, MEDIA_END))];
+    expect(body).toEqual(expected);
+    expect(srv.calls()).toBeGreaterThan(1); // took several ranged reads
+  });
+
+  test('a transient fetch error is retried, not fatal', async () => {
+    const srv = byteServer({ failFirst: 1 }); // first fetch throws, then serves
+    const body = await dashBody(srv.fn);
+    const expected = [1, 2, 3, ...Array.from(srv.file.slice(110, MEDIA_END))];
+    expect(body).toEqual(expected);
   });
 
   test('403 on bad signature', async () => {
