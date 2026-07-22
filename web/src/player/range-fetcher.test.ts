@@ -48,6 +48,32 @@ describe('RangeFetcher resume behaviour', () => {
     }
   });
 
+  test('live source: a consumer (demux/decode) error is fatal, not an interrupt loop', async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(cleanBody(new Uint8Array([1, 2, 3, 4])), { status: 200 })) as unknown as typeof fetch;
+    try {
+      let interrupted = 0, errored = 0, done = 0;
+      const f = new RangeFetcher({
+        url: 'http://localhost/stream',
+        seekable: false,
+        // Simulates the demuxer throwing (e.g. `EncodedVideoChunk is not defined`
+        // in an insecure context) — must surface as fatal, never reseek forever.
+        onChunk: () => { throw new Error('EncodedVideoChunk is not defined'); },
+        onError: () => { errored += 1; },
+        onDone: () => { done += 1; },
+        onInterrupted: () => { interrupted += 1; },
+      });
+      f.start();
+      await new Promise((r) => setTimeout(r, 100));
+      expect(errored).toBe(1);
+      expect(interrupted).toBe(0);   // NOT routed to the live-recovery loop
+      expect(done).toBe(0);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   test('seekable source: a drop retries with Range: bytes=<offset>- and completes', async () => {
     const original = globalThis.fetch;
     const ranges: (string | undefined)[] = [];

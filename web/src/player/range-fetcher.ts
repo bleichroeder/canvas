@@ -186,7 +186,24 @@ export class RangeFetcher {
         this.offset += value.length;
         this.totalRead += value.length;
         this.emitChunk(offsetForChunk, value.length);
-        await this.onChunk(offsetForChunk, value);
+        try {
+          await this.onChunk(offsetForChunk, value);
+        } catch (e) {
+          // An error thrown by the consumer is a demux/decode failure (corrupt
+          // container, or WebCodecs unavailable in an insecure context) — NOT a
+          // transport drop. Neither a byte-range retry nor a time-reseek can fix
+          // it, so surface it as fatal immediately rather than letting loop()
+          // treat it as retryable / (for live sources) route it to onInterrupted
+          // and spin forever.
+          this.running = false;
+          emit('fetch_error', {
+            message: sanitizeMessage((e as Error).message),
+            offset: this.offset,
+            status: this.lastStatus,
+          });
+          this.onError(e as Error);
+          return;
+        }
       }
       if (this.running) {
         this.running = false;
