@@ -23,8 +23,12 @@ export interface DashStream {
 export interface DashSources { video: DashStream; audio: DashStream; at: number }
 
 export interface YtDash {
-  /** Resolve video+audio DASH streams, or null if the video isn't separate-avc DASH. */
-  resolve(videoId: string): Promise<DashSources | null>;
+  /**
+   * Resolve video+audio DASH streams, or null if the video isn't separate-avc
+   * DASH. Pass `{ forceRefresh: true }` to bypass (and replace) the cache — used
+   * when googlevideo poisons a URL with a 403 and we need fresh signed URLs.
+   */
+  resolve(videoId: string, opts?: { forceRefresh?: boolean }): Promise<DashSources | null>;
   clearCache(): void;
 }
 
@@ -47,9 +51,13 @@ export function makeYtDash(yt: YtDlp, opts: MakeYtDashOpts = {}): YtDash {
 
   return {
     clearCache() { cache.clear(); },
-    async resolve(videoId) {
-      const hit = cache.get(videoId);
-      if (hit && now() - hit.at < CACHE_TTL_MS) return hit;
+    async resolve(videoId, opts) {
+      if (opts?.forceRefresh) {
+        cache.delete(videoId);
+      } else {
+        const hit = cache.get(videoId);
+        if (hit && now() - hit.at < CACHE_TTL_MS) return hit;
+      }
 
       const out = await yt.text(['-f', `${VIDEO_SEL}+${AUDIO_SEL}`, '-g', watchUrl(videoId)]).catch(() => '');
       const urls = out.split('\n').map((s) => s.trim()).filter(Boolean);

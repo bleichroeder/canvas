@@ -75,6 +75,12 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
   // giving up, so one blip doesn't truncate the whole stream.
   const DASH_CHUNK_RETRIES = 4;
   const DASH_RETRY_DELAYS_MS = [150, 400, 900, 1500];
+  // googlevideo intermittently 403s a media URL (rate-limiting / expiry). The
+  // URL is poisoned but the underlying media is fine, so re-resolve fresh signed
+  // URLs and retry the same byte range. Bounded so a genuinely dead video can't
+  // spin. The format selectors are deterministic → same byte layout, so the
+  // already-computed sidx offsets stay valid across a re-resolve.
+  const DASH_MAX_RERESOLVE = 2;
 
   // Internal: serves one DASH stream (video|audio) starting at the seek segment:
   // init bytes + a byte-range fetch from the computed offset. Public but signed;
@@ -108,6 +114,8 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
     // next chunk when ffmpeg has drained the previous one (no unbounded memory).
     let pos = byteOffset;
     let done = false;
+    let url = s.url;
+    let reResolves = 0;
     const body = new ReadableStream<Uint8Array>({
       start(controller) { controller.enqueue(init); },
       async pull(controller) {
@@ -122,11 +130,20 @@ export function makeYtStreamRoutes(opts: MakeYtStreamRoutesOpts) {
             if (signal?.aborted) { done = true; controller.close(); return; }
           }
           try {
-            const resp = await fetch(s.url, {
+            const resp = await fetch(url, {
               headers: { Range: `bytes=${pos}-${wantEnd}`, 'user-agent': UA },
               ...(signal ? { signal } : {}),
             });
             if (resp.status === 416) { done = true; controller.close(); return; } // past EOF
+            // Poisoned/expired URL: re-resolve fresh signed URLs and retry the
+            // same range. Same format ⇒ same byte layout, so pos/mediaEnd hold.
+            if ((resp.status === 403 || resp.status === 410) && reResolves < DASH_MAX_RERESOLVE) {
+              reResolves += 1;
+              logger.warn({ videoId, stream, status: resp.status, reResolves }, 'yt _dash url rejected — re-resolving');
+              const fresh = await opts.ytDash.resolve(videoId, { forceRefresh: true }).catch(() => null);
+              if (fresh) url = stream === 'a' ? fresh.audio.url : fresh.video.url;
+              continue;
+            }
             if (resp.status !== 206 && resp.status !== 200) throw new Error(`dash upstream ${resp.status}`);
             const buf = new Uint8Array(await resp.arrayBuffer());
             if (buf.length === 0) throw new Error('dash empty chunk'); // transient → retry

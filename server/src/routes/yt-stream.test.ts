@@ -152,6 +152,42 @@ describe('GET /_dash/:videoId (internal assembly)', () => {
     expect(body).toEqual(expected);
   });
 
+  test('re-resolves fresh URLs when googlevideo 403s a media URL', async () => {
+    const len = MEDIA_END;
+    const file = new Uint8Array(len);
+    for (let i = 0; i < len; i++) file[i] = i & 0xff;
+    const original = globalThis.fetch;
+    // Original url (https://gv/v) is poisoned (403); the re-resolved url (…/v2) serves.
+    globalThis.fetch = mock(async (u: string | URL, init?: RequestInit) => {
+      if (!String(u).includes('/v2')) return new Response(null, { status: 403 });
+      const m = /bytes=(\d+)-(\d+)/.exec((init?.headers as Record<string, string>)?.Range ?? '');
+      const start = Number(m![1]);
+      const end = Math.min(Number(m![2]), len - 1);
+      return new Response(file.slice(start, end + 1), {
+        status: 206,
+        headers: { 'content-range': `bytes ${start}-${end}/${len}` },
+      });
+    }) as unknown as typeof fetch;
+    try {
+      let refreshed = false;
+      const dash: YtDash = {
+        resolve: async (_id: string, o?: { forceRefresh?: boolean }) => {
+          if (o?.forceRefresh) { refreshed = true; return { ...SOURCES, video: { ...SOURCES.video, url: 'https://gv/v2' } }; }
+          return SOURCES;
+        },
+        clearCache() {},
+      };
+      const r = makeYtStreamRoutes({ ...base, ytDash: dash, maxConcurrent: 2, spawnFfmpeg: fakeSpawn().spawn });
+      const res = await r.request(`/_dash/vid?stream=v&${await signer.signQuery('vid', 3)}`);
+      expect(res.status).toBe(200);
+      const body = Array.from(new Uint8Array(await res.arrayBuffer()));
+      expect(body).toEqual([1, 2, 3, ...Array.from(file.slice(110, MEDIA_END))]);
+      expect(refreshed).toBe(true);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   test('403 on bad signature', async () => {
     const r = makeYtStreamRoutes({ ...base, ytDash: fakeDash(SOURCES), maxConcurrent: 2, spawnFfmpeg: fakeSpawn().spawn });
     expect((await r.request('/_dash/vid?stream=v&from=0&exp=9999999999&sig=bad')).status).toBe(403);
