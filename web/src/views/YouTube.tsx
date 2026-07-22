@@ -9,6 +9,7 @@ import SearchOffOutlinedIcon from '@mui/icons-material/SearchOffOutlined';
 import SubscriptionsOutlinedIcon from '@mui/icons-material/SubscriptionsOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import FavoriteIcon from '@mui/icons-material/Favorite';
+import HistoryIcon from '@mui/icons-material/History';
 import { api } from '../api';
 import { navigate } from '../router';
 import { AppShell } from '../components/AppShell';
@@ -16,6 +17,7 @@ import { YouTubeCard } from '../components/YouTubeCard';
 import { Rail } from '../components/Rail';
 import { EmptyState } from '../components/EmptyState';
 import { ensureLikesLoaded, useLikes } from '../lib/youtube-likes';
+import { ensureHistoryLoaded, useHistory } from '../lib/youtube-history';
 import { loadYouTubeSearch, saveYouTubeSearch } from '../lib/youtube-search-cache';
 import type { Item } from '../types';
 
@@ -122,6 +124,19 @@ export function YouTube({ source }: Props) {
   }, [source]);
 
   const [groups, setGroups] = useState<SubGroup[] | null>(null); // null = loading
+
+  const historyEntries = useHistory();
+  useEffect(() => { void ensureHistoryLoaded(); }, []);
+  const historyItems: (Item & { source: string })[] = historyEntries.map((h) => ({
+    id: h.ytId,
+    type: 'movie',
+    title: h.title,
+    source,
+    ...(h.thumbnail ? { poster: h.thumbnail } : {}),
+    ...(h.durationSec != null ? { durationSec: h.durationSec } : {}),
+    ...(h.channelId ? { channelId: h.channelId } : {}),
+    ...(h.channelTitle ? { channelTitle: h.channelTitle } : {}),
+  }));
 
   const likes = useLikes();
   useEffect(() => { void ensureLikesLoaded(); }, []);
@@ -307,7 +322,7 @@ export function YouTube({ source }: Props) {
         </Box>
       ) : groups === null ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
-      ) : groups.length === 0 && likedItems.length === 0 ? (
+      ) : groups.length === 0 && likedItems.length === 0 && historyItems.length === 0 ? (
         <EmptyState
           icon={<SubscriptionsOutlinedIcon />}
           title="You haven't subscribed to any channels yet"
@@ -315,6 +330,22 @@ export function YouTube({ source }: Props) {
         />
       ) : (
         <Box sx={{ pb: 4 }}>
+          {historyItems.length > 0 && (
+            <Rail
+              title="Continue watching"
+              cardWidth={ROW_CARD_W}
+              items={historyItems}
+              renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} />}
+              titlePrefix={
+                <Box sx={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  display: 'grid', placeItems: 'center', backgroundColor: 'rgba(255,255,255,0.10)',
+                }}>
+                  <HistoryIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                </Box>
+              }
+            />
+          )}
           {likedItems.length > 0 && (
             <Rail
               title="Liked"

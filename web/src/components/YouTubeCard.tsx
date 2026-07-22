@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { navigate } from '../router';
 import { YouTubeLikeButton } from './YouTubeLikeButton';
+import { getResumeSec } from '../lib/youtube-history';
 import type { Item } from '../types';
 
 // YouTube thumbnails are 16:9, not the 2:3 poster the rest of the app uses.
@@ -57,7 +58,14 @@ function channelHue(name: string): number {
 }
 
 export function YouTubeCard({ item, source, width = 300, showChannel = true }: YouTubeCardProps) {
-  const href = item.type === 'folder' ? `/lib/${source}/${item.id}` : `/play/${source}/${item.id}`;
+  // Resume from watch history — unless we're within 15s of the end (start over).
+  const resumeSec = item.type === 'folder' ? 0 : getResumeSec(item.id);
+  const from = resumeSec > 10 && (item.durationSec === undefined || resumeSec < item.durationSec - 15)
+    ? Math.floor(resumeSec)
+    : 0;
+  const href = item.type === 'folder'
+    ? `/lib/${source}/${item.id}`
+    : `/play/${source}/${item.id}${from > 0 ? `?from=${from}` : ''}`;
   const hasChannel = showChannel && !!item.channelTitle;
   const likeable = item.type !== 'folder';
 

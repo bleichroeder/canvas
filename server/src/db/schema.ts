@@ -234,3 +234,28 @@ export const youtubeLikes = sqliteTable(
 
 export type YoutubeLike = typeof youtubeLikes.$inferSelect;
 export type NewYoutubeLike = typeof youtubeLikes.$inferInsert;
+
+// A user's YouTube watch history + resume positions. One row per video (upserted
+// on the latest position), newest-watched first — powers the "Continue watching"
+// rail and resume-on-click. Metadata cached like youtube_likes.
+export const youtubeHistory = sqliteTable(
+  'youtube_history',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    ytId: text('yt_id').notNull(),               // video id (watch?v=…)
+    title: text('title').notNull(),              // cached for display
+    thumbnail: text('thumbnail'),                // cached poster, nullable
+    channelId: text('channel_id'),               // for the channel link, nullable
+    channelTitle: text('channel_title'),         // cached, nullable
+    durationSec: integer('duration_sec'),        // cached, nullable
+    posSec: integer('pos_sec').notNull().default(0), // last playback position
+    updatedAt: integer('updated_at').notNull(),  // last watched — sort key
+  },
+  (t) => ({
+    userItemUniq: uniqueIndex('youtube_history_user_item').on(t.userId, t.ytId),
+  }),
+);
+
+export type YoutubeHistory = typeof youtubeHistory.$inferSelect;
+export type NewYoutubeHistory = typeof youtubeHistory.$inferInsert;

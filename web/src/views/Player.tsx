@@ -19,6 +19,7 @@ import {
 } from '../storage';
 import { getQueue, setQueue, type PlaybackQueue } from '../lib/playback-queue';
 import { type PlayerMode, closePlayer, openPlayer, setPlayerMode } from '../lib/player-session';
+import { recordWatch } from '../lib/youtube-history';
 import { useSources } from '../lib/SourcesContext';
 import { PlayerDetailsPanel } from '../components/PlayerDetailsPanel';
 import {
@@ -184,6 +185,24 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // YouTube watch-history recording (powers resume + the Continue-watching
+  // rail). Reads via refs so the interval/unmount closures see fresh values.
+  const itemMetaRef = useRef(itemMeta); itemMetaRef.current = itemMeta;
+  const sourceTypeRef = useRef(sourceType); sourceTypeRef.current = sourceType;
+  const recordYtHistory = (posSec: number) => {
+    if (sourceTypeRef.current !== 'youtube') return;
+    const meta = itemMetaRef.current;
+    if (!meta || posSec < 5) return; // skip accidental brief opens
+    void recordWatch({
+      ytId: id,
+      title: meta.title,
+      thumbnail: meta.poster ?? meta.backdrop ?? null,
+      channelId: meta.channelId ?? null,
+      channelTitle: meta.channelTitle ?? null,
+      durationSec: resolutionRef.current?.durationSec ?? meta.durationSec ?? null,
+    }, posSec);
+  };
+
   useEffect(() => {
     const t = window.setInterval(() => {
       const a = audioRef.current;
@@ -195,6 +214,7 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
         const cur = a ? sessionBaseRef.current + a.currentTime() : 0;
         void api.progress(source, id, cur, false).catch(() => {});
         updateNowPlayingProgress(source, id, cur);
+        recordYtHistory(cur);
       }
       // Refresh the crash-telemetry session marker. A renderer kill leaves
       // this stale; checkForPreviousCrash() on next cold load surfaces it.
@@ -541,8 +561,10 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
         );
         navigator.sendBeacon?.(url, blob);
         updateNowPlayingProgress(source, id, cur);
+        recordYtHistory(cur);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, id]);
 
   async function onPlayPause() {

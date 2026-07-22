@@ -10,6 +10,7 @@ import { YouTubeCard } from '../components/YouTubeCard';
 import { EmptyState } from '../components/EmptyState';
 import VideocamOffOutlinedIcon from '@mui/icons-material/VideocamOffOutlined';
 import { useRoute } from '../router';
+import { ensureHistoryLoaded, useHistory } from '../lib/youtube-history';
 import type { Item } from '../types';
 
 interface Props { source: string; channelId: string }
@@ -27,6 +28,9 @@ function hue(name: string): number {
 
 export function YouTubeChannel({ source, channelId }: Props) {
   const { query } = useRoute();
+  // Subscribe to watch history so cards re-render with resume positions once loaded.
+  useHistory();
+  useEffect(() => { void ensureHistoryLoaded(); }, []);
   const [title, setTitle] = useState(query.t ?? 'Channel');
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);

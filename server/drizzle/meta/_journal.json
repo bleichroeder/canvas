@@ -57,6 +57,13 @@
       "when": 1784510516832,
       "tag": "0007_amused_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784685461306,
+      "tag": "0008_many_the_hand",
+      "breakpoints": true
     }
   ]
 }

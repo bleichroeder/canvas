@@ -41,6 +41,18 @@ export interface YoutubeLike {
   durationSec: number | null;
   createdAt: number;
 }
+
+export interface YoutubeHistoryEntry {
+  id: number;
+  ytId: string;
+  title: string;
+  thumbnail: string | null;
+  channelId: string | null;
+  channelTitle: string | null;
+  durationSec: number | null;
+  posSec: number;
+  updatedAt: number;
+}
 import type { StoredSource } from './storage';
 import type { SessionUser } from './lib/session';
 
@@ -222,6 +234,15 @@ export const api = {
     add: (body: { ytId: string; title: string; thumbnail?: string | null; channelId?: string | null; channelTitle?: string | null; durationSec?: number | null }) =>
       request<YoutubeLike>('/api/youtube/likes', { method: 'POST', body: JSON.stringify(body) }),
     remove: (ytId: string) => request<void>(`/api/youtube/likes/${encodeURIComponent(ytId)}`, { method: 'DELETE' }),
+  },
+
+  // YouTube watch history + resume positions ("Continue watching").
+  youtubeHistory: {
+    list: () => request<YoutubeHistoryEntry[]>('/api/youtube/history'),
+    record: (body: { ytId: string; title: string; posSec: number; thumbnail?: string | null; channelId?: string | null; channelTitle?: string | null; durationSec?: number | null }) =>
+      request<YoutubeHistoryEntry>('/api/youtube/history', { method: 'POST', body: JSON.stringify(body) }),
+    remove: (ytId: string) => request<void>(`/api/youtube/history/${encodeURIComponent(ytId)}`, { method: 'DELETE' }),
+    clear: () => request<void>('/api/youtube/history', { method: 'DELETE' }),
   },
 
   // Setup (first-run wizard)

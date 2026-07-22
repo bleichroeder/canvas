@@ -129,6 +129,60 @@ describe('youtube likes routes', () => {
   });
 });
 
+describe('youtube history routes', () => {
+  test('POST /history records + lists with resume position, newest first', async () => {
+    const { app, bearer } = await makeFixture();
+    await app.fetch(new Request('http://t/api/youtube/history', {
+      method: 'POST', headers: auth(bearer),
+      body: JSON.stringify({ ytId: 'v:a', title: 'A', posSec: 30, durationSec: 100 }),
+    }));
+    await app.fetch(new Request('http://t/api/youtube/history', {
+      method: 'POST', headers: auth(bearer),
+      body: JSON.stringify({ ytId: 'v:b', title: 'B', posSec: 5 }),
+    }));
+    const list = await (await app.fetch(new Request('http://t/api/youtube/history', { headers: auth(bearer) }))).json() as Array<{ ytId: string; posSec: number }>;
+    expect(list.map((h) => h.ytId)).toEqual(['v:b', 'v:a']); // most-recent first
+    expect(list.find((h) => h.ytId === 'v:a')?.posSec).toBe(30);
+  });
+
+  test('POST /history upserts position and bumps to top', async () => {
+    const { app, bearer } = await makeFixture();
+    const rec = (ytId: string, posSec: number) => app.fetch(new Request('http://t/api/youtube/history', {
+      method: 'POST', headers: auth(bearer), body: JSON.stringify({ ytId, title: ytId, posSec }),
+    }));
+    await rec('v:a', 10);
+    await rec('v:b', 10);
+    await new Promise((r) => setTimeout(r, 3)); // ensure a later ms stamp
+    await rec('v:a', 42); // re-watch A → moves to top, pos updated
+    const list = await (await app.fetch(new Request('http://t/api/youtube/history', { headers: auth(bearer) }))).json() as Array<{ ytId: string; posSec: number }>;
+    expect(list).toHaveLength(2);
+    expect(list[0]!.ytId).toBe('v:a');
+    expect(list[0]!.posSec).toBe(42);
+  });
+
+  test('POST /history without ytId/title is 400', async () => {
+    const { app, bearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://t/api/youtube/history', {
+      method: 'POST', headers: auth(bearer), body: JSON.stringify({ posSec: 5 }),
+    }));
+    expect(res.status).toBe(400);
+  });
+
+  test('DELETE /history/:ytId removes one; DELETE /history clears all', async () => {
+    const { app, bearer } = await makeFixture();
+    const rec = (ytId: string) => app.fetch(new Request('http://t/api/youtube/history', {
+      method: 'POST', headers: auth(bearer), body: JSON.stringify({ ytId, title: ytId, posSec: 1 }),
+    }));
+    await rec('v:a'); await rec('v:b');
+    expect((await app.fetch(new Request('http://t/api/youtube/history/v%3Aa', { method: 'DELETE', headers: auth(bearer) }))).status).toBe(204);
+    let list = await (await app.fetch(new Request('http://t/api/youtube/history', { headers: auth(bearer) }))).json() as unknown[];
+    expect(list).toHaveLength(1);
+    expect((await app.fetch(new Request('http://t/api/youtube/history', { method: 'DELETE', headers: auth(bearer) }))).status).toBe(204);
+    list = await (await app.fetch(new Request('http://t/api/youtube/history', { headers: auth(bearer) }))).json() as unknown[];
+    expect(list).toHaveLength(0);
+  });
+});
+
 describe('youtube search route', () => {
   test('GET /search with no query returns empty', async () => {
     const { app, bearer } = await makeFixture();

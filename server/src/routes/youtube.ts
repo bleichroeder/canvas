@@ -6,6 +6,7 @@ import { getUserSources } from '../lib/user-sources';
 import { getAdapter } from '../sources/registry';
 import { listFollows, addFollow, removeFollow } from '../storage/youtube-follows';
 import { listLikes, addLike, removeLikeByYtId } from '../storage/youtube-likes';
+import { listHistory, recordHistory, removeHistory, clearHistory } from '../storage/youtube-history';
 import { parseFollowUrl, resolveFollowMeta } from '../sources/youtube';
 import { logger } from '../log';
 
@@ -108,6 +109,48 @@ export function makeYoutubeRoutes(getDb: () => Db, yt: YtDlp) {
     if (!ytId) return c.json({ error: 'invalid id' }, 400);
     const ok = removeLikeByYtId(getDb(), auth.userId, ytId);
     return ok ? c.body(null, 204) : c.json({ error: 'like not found' }, 404);
+  });
+
+  // GET /history — the caller's watch history, most-recent first.
+  r.get('/history', (c) => {
+    const auth = getAuthContext(c);
+    return c.json(listHistory(getDb(), auth.userId));
+  });
+
+  // POST /history — record a watched video + its latest position (upsert).
+  r.post('/history', async (c) => {
+    const auth = getAuthContext(c);
+    const body = await c.req.json().catch(() => ({})) as {
+      ytId?: unknown; title?: unknown; thumbnail?: unknown;
+      channelId?: unknown; channelTitle?: unknown; durationSec?: unknown; posSec?: unknown;
+    };
+    if (typeof body.ytId !== 'string' || !body.ytId || typeof body.title !== 'string' || !body.title) {
+      return c.json({ error: 'provide {ytId, title}' }, 400);
+    }
+    const entry = recordHistory(getDb(), auth.userId, {
+      ytId: body.ytId,
+      title: body.title,
+      thumbnail: typeof body.thumbnail === 'string' ? body.thumbnail : null,
+      channelId: typeof body.channelId === 'string' ? body.channelId : null,
+      channelTitle: typeof body.channelTitle === 'string' ? body.channelTitle : null,
+      durationSec: typeof body.durationSec === 'number' ? body.durationSec : null,
+      posSec: typeof body.posSec === 'number' ? body.posSec : 0,
+    });
+    return c.json(entry, 201);
+  });
+
+  // DELETE /history — clear all; DELETE /history/:ytId — remove one.
+  r.delete('/history', (c) => {
+    const auth = getAuthContext(c);
+    clearHistory(getDb(), auth.userId);
+    return c.body(null, 204);
+  });
+  r.delete('/history/:ytId', (c) => {
+    const auth = getAuthContext(c);
+    const ytId = c.req.param('ytId');
+    if (!ytId) return c.json({ error: 'invalid id' }, 400);
+    const ok = removeHistory(getDb(), auth.userId, ytId);
+    return ok ? c.body(null, 204) : c.json({ error: 'history entry not found' }, 404);
   });
 
   return r;
