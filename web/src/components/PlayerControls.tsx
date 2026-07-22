@@ -70,6 +70,8 @@ interface PlayerControlsProps {
   queueContext: QueueControlProps | null;
   onSubtitleChange(id: string | null): void;
   onCaptionsOffsetChange(ms: number): void;
+  /** Called on pointer activity within the controls, to re-arm their auto-hide. */
+  onActivity?(): void;
 }
 
 function fmt(sec: number): string {
@@ -157,7 +159,11 @@ export function PlayerControls(p: PlayerControlsProps) {
     : null;
 
   return (
-    <Box onClick={(e) => e.stopPropagation()}>
+    <Box
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={() => p.onActivity?.()}
+      onPointerMove={() => p.onActivity?.()}
+    >
       <Fade in={p.visible} timeout={200}>
         <Box sx={{ position: 'absolute', top: 20, right: 20, zIndex: 10, display: 'flex', gap: 1 }}>
           <Tooltip title="Minimize">
@@ -325,15 +331,6 @@ export function PlayerControls(p: PlayerControlsProps) {
                 </IconButton>
               </Tooltip>
             )}
-            <Tooltip title="More">
-              <IconButton
-                onClick={(e) => setMoreAnchor(e.currentTarget)}
-                aria-label="more"
-                sx={{ ml: 1 }}
-              >
-                <MoreVertIcon />
-              </IconButton>
-            </Tooltip>
             <Tooltip title={p.detailsOpen ? 'Hide details' : 'Show details'}>
               <IconButton
                 onClick={p.onToggleDetails}
@@ -343,14 +340,19 @@ export function PlayerControls(p: PlayerControlsProps) {
                 <ViewSidebarOutlinedIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Minimize">
-              <IconButton onClick={p.onMinimize} aria-label="minimize" sx={{ ml: 1.5 }}>
-                <PictureInPictureAltIcon />
-              </IconButton>
-            </Tooltip>
             <Tooltip title={p.fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
               <IconButton onClick={p.onFullscreenToggle} aria-label="fullscreen toggle" sx={{ ml: 1.5 }}>
                 {p.fullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+              </IconButton>
+            </Tooltip>
+            {/* Overflow last — Minimize lives only in the top-right chrome now. */}
+            <Tooltip title="More">
+              <IconButton
+                onClick={(e) => setMoreAnchor(e.currentTarget)}
+                aria-label="more"
+                sx={{ ml: 1.5 }}
+              >
+                <MoreVertIcon />
               </IconButton>
             </Tooltip>
           </Box>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { emit, reportFatal, getSessionId } from '../player/diagnostics';
 import { createStallWatchdog } from '../player/watchdog';
 import { api } from '../api';
@@ -137,22 +137,44 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
   const interruptHandlerRef = useRef<() => void>(() => {});
   errMsgRef.current = errMsg;
 
-  useEffect(() => {
-    let t: number | undefined;
-    const reset = () => {
-      setControlsVisible(true);
-      if (t) clearTimeout(t);
-      t = window.setTimeout(() => setControlsVisible(false), 4500);
-    };
-    window.addEventListener('pointerdown', reset);
-    window.addEventListener('keydown', reset);
-    reset();
-    return () => {
-      if (t) clearTimeout(t);
-      window.removeEventListener('pointerdown', reset);
-      window.removeEventListener('keydown', reset);
-    };
+  // Controls visibility. Mirrored into a ref so the video-tap handler can read
+  // the *pre-tap* state synchronously — otherwise a listener that reveals the
+  // controls on the same gesture races ahead of the click and turns a
+  // reveal-tap into a pause.
+  const controlsVisibleRef = useRef(true);
+  const hideTimerRef = useRef<number | undefined>(undefined);
+  const showControls = useCallback(() => {
+    controlsVisibleRef.current = true;
+    setControlsVisible(true);
+    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = window.setTimeout(() => {
+      controlsVisibleRef.current = false;
+      setControlsVisible(false);
+    }, 4500);
   }, []);
+
+  useEffect(() => {
+    showControls(); // visible on mount, then auto-hide
+    const onKey = () => showControls();
+    window.addEventListener('keydown', onKey);
+    // Reveal on genuine mouse movement (desktop only). Gated to fine pointers
+    // so a touch tap's synthetic mousemove can't pre-reveal the controls and
+    // turn the first tap into a play/pause instead of a reveal.
+    const fine = window.matchMedia?.('(pointer: fine)').matches ?? false;
+    let lastMove = 0;
+    const onMove = () => {
+      const now = performance.now();
+      if (now - lastMove < 200) return;
+      lastMove = now;
+      showControls();
+    };
+    if (fine) window.addEventListener('mousemove', onMove);
+    return () => {
+      if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+      window.removeEventListener('keydown', onKey);
+      if (fine) window.removeEventListener('mousemove', onMove);
+    };
+  }, [showControls]);
 
   // Auto-open diagnostics overlay when ?diag=1 is present in the hash query.
   useEffect(() => {
@@ -739,12 +761,19 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
 
   const onVideoAreaClick = () => {
     if (errMsg) return;
-    // Mini: a tap expands back to the full route. Otherwise: before first play
-    // any tap starts playback; once running, taps toggle pause only when
-    // controls were already visible.
+    // Mini: a tap expands back to the full route.
     if (isMini) { navigate(`/play/${encodeURIComponent(source)}/${encodeURIComponent(id)}`); return; }
+    // Before first play, any tap starts playback.
     if (!hasEverStarted) { void onPlayPause(); return; }
-    if (controlsVisible) void onPlayPause();
+    // Hidden controls → the first tap only reveals them (never pauses). With the
+    // controls already up, a tap on the video toggles play/pause and re-arms the
+    // auto-hide. Reads the ref (pre-tap state) since nothing else reveals on tap.
+    if (!controlsVisibleRef.current) {
+      showControls();
+    } else {
+      void onPlayPause();
+      showControls();
+    }
   };
 
   return (
@@ -899,6 +928,7 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
         } : null}
         onSubtitleChange={onSubtitleChange}
         onCaptionsOffsetChange={onCaptionsOffsetChange}
+        onActivity={showControls}
       />}
       {!isMini && <CaptionsLayer
         cues={captionCues}
