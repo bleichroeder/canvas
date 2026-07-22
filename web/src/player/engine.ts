@@ -39,9 +39,18 @@ export function bootEngine(opts: BootEngineOptions): EngineHandle {
 
   const buffer = new ChunkBuffer({
     getClock: opts.getClock,
+    // feedLeadSec governs how far ahead of the clock the decoder is fed — it sets
+    // A/V timing, so it stays put. pauseLead/resumeLead only govern the *network*
+    // buffer depth (demuxed-but-not-fed samples). The old 3s/2s band kept just
+    // ~2s buffered ahead, so the fetcher burst-and-drained on a ~7-8s cycle and
+    // each trough (videoDepth ~19 frames) left no cushion — one late chunk on a
+    // jittery 4G link starved the decoder for a frame or two (the intermittent
+    // micro-stutter). Deepening to 12s/6s keeps a ~6s floor at all times so
+    // network jitter is absorbed, while the fetcher still pauses well within the
+    // server's 120s idle timeout. Decode/render/clock path is unchanged.
     feedLeadSec: 1.5,
-    pauseLeadSec: 3.0,
-    resumeLeadSec: 2.0,
+    pauseLeadSec: 12.0,
+    resumeLeadSec: 6.0,
     onFeedVideo: (c) => { if (!disposed) opts.onVideoSample(c); },
     onFeedAudio: (c) => { if (!disposed) opts.onAudioSample(c); },
     onBackpressure: (state) => {
