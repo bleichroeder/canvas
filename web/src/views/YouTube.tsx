@@ -16,6 +16,7 @@ import { YouTubeCard } from '../components/YouTubeCard';
 import { Rail } from '../components/Rail';
 import { EmptyState } from '../components/EmptyState';
 import { ensureLikesLoaded, useLikes } from '../lib/youtube-likes';
+import { loadYouTubeSearch, saveYouTubeSearch } from '../lib/youtube-search-cache';
 import type { Item } from '../types';
 
 interface Props { source: string }
@@ -82,17 +83,43 @@ function hue(name: string): number {
 }
 
 export function YouTube({ source }: Props) {
-  const [q, setQ] = useState('');
-  const [results, setResults] = useState<(Item & { source: string })[]>([]);
+  // Restore a prior search (query + results + paging + scroll) so closing a
+  // played video returns you to your results instead of a blank search.
+  const [restored] = useState(() => loadYouTubeSearch(source));
+  const [q, setQ] = useState(restored?.q ?? '');
+  const [results, setResults] = useState<(Item & { source: string })[]>(restored?.results ?? []);
   const [searching, setSearching] = useState(false);        // fetching the first page
   const [searchingMore, setSearchingMore] = useState(false); // fetching a later page
-  const [searchHasMore, setSearchHasMore] = useState(false);
+  const [searchHasMore, setSearchHasMore] = useState(restored?.hasMore ?? false);
   const debounce = useRef<number | undefined>(undefined);
   // Live refs so the scroll observer reads current paging state without rebinding.
-  const qRef = useRef('');
-  const searchOffsetRef = useRef(0);
+  const qRef = useRef(restored?.q ?? '');
+  const searchOffsetRef = useRef(restored?.offset ?? 0);
   const searchLoadingRef = useRef(false);
-  const searchHasMoreRef = useRef(false);
+  const searchHasMoreRef = useRef(restored?.hasMore ?? false);
+  // On the first debounced-search pass after a restore, skip the fetch — the
+  // results are already in state — so we don't re-hit the network needlessly.
+  const skipNextSearchRef = useRef(!!restored?.q);
+  // Mirrors of q/results for the save-on-unmount closure (avoids stale state).
+  const qStateRef = useRef(q); qStateRef.current = q;
+  const resultsRef = useRef(results); resultsRef.current = results;
+
+  // Save the search on unmount; restore scroll on mount.
+  useEffect(() => {
+    if (restored?.q && restored.scrollY) {
+      requestAnimationFrame(() => window.scrollTo(0, restored.scrollY));
+    }
+    return () => {
+      saveYouTubeSearch(source, {
+        q: qStateRef.current,
+        results: resultsRef.current,
+        offset: searchOffsetRef.current,
+        hasMore: searchHasMoreRef.current,
+        scrollY: window.scrollY,
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source]);
 
   const [groups, setGroups] = useState<SubGroup[] | null>(null); // null = loading
 
@@ -137,6 +164,8 @@ export function YouTube({ source }: Props) {
   // page; later pages come in via the infinite-scroll sentinel below.
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
+    // Restored results are already in state — don't re-fetch on the first pass.
+    if (skipNextSearchRef.current) { skipNextSearchRef.current = false; return; }
     const query = q.trim();
     if (query.length < 2) {
       setResults([]);
