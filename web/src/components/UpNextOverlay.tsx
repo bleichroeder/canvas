@@ -4,12 +4,15 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
-import type { Episode } from '../types';
 
 interface UpNextOverlayProps {
   open: boolean;
-  showTitle: string;
-  nextEpisode: Episode;
+  /** Small uppercase label, e.g. "Up next" or "Up next · <show>". */
+  eyebrow: string;
+  title: string;
+  poster?: string;
+  /** Optional secondary line (episode synopsis, channel name, …). */
+  detail?: string;
   /** Total countdown length in seconds. Default 10. */
   countdownSec?: number;
   onPlayNow(): void;
@@ -52,24 +55,24 @@ export function UpNextOverlay(p: UpNextOverlayProps) {
       }}
     >
       <Stack direction="row" alignItems="center" spacing={3} sx={{ maxWidth: 1200, mx: 'auto' }}>
-        {p.nextEpisode.poster && (
+        {p.poster && (
           <Box
             component="img"
-            src={p.nextEpisode.poster}
+            src={p.poster}
             alt=""
             sx={{ width: 200, height: 112, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }}
           />
         )}
         <Box sx={{ flex: 1, color: 'common.white' }}>
           <Typography variant="caption" sx={{ opacity: 0.7, letterSpacing: 1.5, textTransform: 'uppercase' }}>
-            Up next · {p.showTitle}
+            {p.eyebrow}
           </Typography>
           <Typography variant="h5" sx={{ mt: 0.5, fontWeight: 600 }}>
-            S{p.nextEpisode.season}·E{p.nextEpisode.episode} · {p.nextEpisode.title}
+            {p.title}
           </Typography>
-          {p.nextEpisode.synopsis && (
-            <Typography variant="body2" sx={{ mt: 0.75, opacity: 0.85, maxWidth: 700 }}>
-              {p.nextEpisode.synopsis}
+          {p.detail && (
+            <Typography variant="body2" sx={{ mt: 0.75, opacity: 0.85, maxWidth: 700, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              {p.detail}
             </Typography>
           )}
         </Box>

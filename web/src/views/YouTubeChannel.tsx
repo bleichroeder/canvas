@@ -169,7 +169,7 @@ export function YouTubeChannel({ source, channelId }: Props) {
         ) : (
           <>
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 300px)', gap: 3 }}>
-              {items.map((it) => <YouTubeCard key={it.id} item={it} source={source} width={300} showChannel={false} />)}
+              {items.map((it) => <YouTubeCard key={it.id} item={it} source={source} width={300} showChannel={false} queue={items} />)}
             </Box>
             {/* Sentinel — pulls the next page in as it nears the viewport. */}
             <Box ref={sentinelRef} sx={{ height: 1 }} />

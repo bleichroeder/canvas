@@ -19,7 +19,8 @@ import {
 } from '../storage';
 import { getQueue, setQueue, type PlaybackQueue } from '../lib/playback-queue';
 import { type PlayerMode, closePlayer, openPlayer, setPlayerMode } from '../lib/player-session';
-import { recordWatch } from '../lib/youtube-history';
+import { recordWatch, getResumeSec } from '../lib/youtube-history';
+import { getYouTubeNext, getYouTubePrev } from '../lib/youtube-queue';
 import { useSources } from '../lib/SourcesContext';
 import { PlayerDetailsPanel } from '../components/PlayerDetailsPanel';
 import {
@@ -28,7 +29,7 @@ import {
   endSession,
   currentHeapMB,
 } from '../lib/crash-telemetry';
-import type { PlayResolution, ItemDetail } from '../types';
+import type { PlayResolution, ItemDetail, Item } from '../types';
 import Backdrop from '@mui/material/Backdrop';
 import Stack from '@mui/material/Stack';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -239,10 +240,12 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
       ) {
         endReachedRef.current = true;
         const q = queue;
-        if (q && q.currentIndex + 1 < q.episodes.length) {
-          setUpNextOpen(true);
+        const hasEpisodeNext = !!q && q.currentIndex + 1 < q.episodes.length;
+        const hasYtNext = sourceTypeRef.current === 'youtube' && !!getYouTubeNext(source, id);
+        if (hasEpisodeNext || hasYtNext) {
+          setUpNextOpen(true); // Up-next countdown → advances (episode or YouTube).
         } else {
-          // No queue OR at last episode — close the player and unwind.
+          // Nothing queued next — close the player and unwind.
           closePlayer();
           if (mode !== 'mini') {
             if (window.history.length > 1) window.history.back();
@@ -723,6 +726,26 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
     goToEpisode(queue.currentIndex + 1);
   }
 
+  // YouTube autoplay/queue: switch the session to another video from the queue,
+  // resuming from history if partway through (else from the start).
+  function playYtVideo(v: Item): void {
+    const resume = getResumeSec(v.id);
+    const nextFrom = resume > 10 && (v.durationSec === undefined || resume < v.durationSec - 15)
+      ? Math.floor(resume)
+      : 0;
+    openPlayer(source, v.id, { fromSec: nextFrom, mode });
+    if (mode === 'full') navigate(`/play/${source}/${v.id}${nextFrom > 0 ? `?from=${nextFrom}` : ''}`, { replace: true });
+  }
+  function onYtPrev(): void {
+    if (pos > 5) { void reseek(0); return; }
+    const prev = getYouTubePrev(source, id);
+    if (prev) playYtVideo(prev);
+  }
+  function onYtNext(): void {
+    const next = getYouTubeNext(source, id);
+    if (next) playYtVideo(next);
+  }
+
   function onCornerTap() {
     const now = performance.now();
     const times = tapStateRef.current.times.filter((t) => now - t <= 1500);
@@ -767,6 +790,47 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
   // playback starts.
   const splashVisible = !isMini && !errMsg && !reseeking && (isAudioOnly || !hasEverStarted);
   const engineReady = status === '';
+
+  // YouTube autoplay queue (context list the video was launched from).
+  const ytNext = sourceType === 'youtube' ? getYouTubeNext(source, id) : null;
+  const ytPrev = sourceType === 'youtube' ? getYouTubePrev(source, id) : null;
+
+  // Next/Prev context: episode queue, else the YouTube queue if present.
+  const queueContext = queue
+    ? {
+        canPrev: queue.currentIndex > 0 || pos > 5,
+        canNext: queue.currentIndex < queue.episodes.length - 1,
+        onPrev,
+        onNext,
+      }
+    : (ytNext || ytPrev)
+      ? { canPrev: !!ytPrev || pos > 5, canNext: !!ytNext, onPrev: onYtPrev, onNext: onYtNext }
+      : null;
+
+  // What the end-of-video "Up next" countdown will play — an episode or a
+  // YouTube queue item; null when there's nothing to advance to.
+  const nextUp = (() => {
+    if (queue && queue.currentIndex + 1 < queue.episodes.length) {
+      const ep = queue.episodes[queue.currentIndex + 1]!;
+      return {
+        eyebrow: `Up next · ${queue.showTitle}`,
+        title: `S${ep.season}·E${ep.episode} · ${ep.title}`,
+        poster: ep.poster,
+        detail: ep.synopsis,
+        play: () => goToEpisode(queue.currentIndex + 1),
+      };
+    }
+    if (ytNext) {
+      return {
+        eyebrow: 'Up next',
+        title: ytNext.title,
+        poster: ytNext.poster,
+        detail: ytNext.channelTitle,
+        play: () => playYtVideo(ytNext),
+      };
+    }
+    return null;
+  })();
   // Center button icon: spinner while engine is warming up, Pause if we're
   // playing (audio-only's persistent splash needs to flip), Play otherwise.
   const splashShowingPause = isAudioOnly && startedRef.current && !paused;
@@ -942,12 +1006,7 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
         onMuteToggle={onMuteToggle}
         onFullscreenToggle={onFullscreenToggle}
         onOpenDiagnostics={() => setDiagOpen(true)}
-        queueContext={queue ? {
-          canPrev: queue.currentIndex > 0 || pos > 5,
-          canNext: queue.currentIndex < queue.episodes.length - 1,
-          onPrev,
-          onNext,
-        } : null}
+        queueContext={queueContext}
         onSubtitleChange={onSubtitleChange}
         onCaptionsOffsetChange={onCaptionsOffsetChange}
         onActivity={showControls}
@@ -981,14 +1040,16 @@ export function PlayerInstance({ source, id, fromSec, mode }: Props) {
           exitPlayer();
         }}
       />
-      {!isMini && queue && queue.currentIndex + 1 < queue.episodes.length && (
+      {!isMini && nextUp && (
         <UpNextOverlay
           open={upNextOpen}
-          showTitle={queue.showTitle}
-          nextEpisode={queue.episodes[queue.currentIndex + 1]!}
+          eyebrow={nextUp.eyebrow}
+          title={nextUp.title}
+          poster={nextUp.poster}
+          detail={nextUp.detail}
           onPlayNow={() => {
             setUpNextOpen(false);
-            goToEpisode(queue.currentIndex + 1);
+            nextUp.play();
           }}
           onCancel={() => {
             setUpNextOpen(false);

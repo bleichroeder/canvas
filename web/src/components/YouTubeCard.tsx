@@ -4,6 +4,7 @@ import Typography from '@mui/material/Typography';
 import { navigate } from '../router';
 import { YouTubeLikeButton } from './YouTubeLikeButton';
 import { getResumeSec } from '../lib/youtube-history';
+import { setYouTubeQueue, clearYouTubeQueue } from '../lib/youtube-queue';
 import type { Item } from '../types';
 
 // YouTube thumbnails are 16:9, not the 2:3 poster the rest of the app uses.
@@ -15,6 +16,8 @@ export interface YouTubeCardProps {
   width?: number;
   /** Hide the channel avatar/name (e.g. on a channel page, where it's redundant). */
   showChannel?: boolean;
+  /** The sibling list this card belongs to — sets the autoplay queue on open. */
+  queue?: Item[];
 }
 
 function formatDuration(sec: number): string {
@@ -57,7 +60,7 @@ function channelHue(name: string): number {
   return h;
 }
 
-export function YouTubeCard({ item, source, width = 300, showChannel = true }: YouTubeCardProps) {
+export function YouTubeCard({ item, source, width = 300, showChannel = true, queue }: YouTubeCardProps) {
   // Resume from watch history — unless we're within 15s of the end (start over).
   const resumeSec = item.type === 'folder' ? 0 : getResumeSec(item.id);
   const from = resumeSec > 10 && (item.durationSec === undefined || resumeSec < item.durationSec - 15)
@@ -68,6 +71,13 @@ export function YouTubeCard({ item, source, width = 300, showChannel = true }: Y
     : `/play/${source}/${item.id}${from > 0 ? `?from=${from}` : ''}`;
   const hasChannel = showChannel && !!item.channelTitle;
   const likeable = item.type !== 'folder';
+
+  const open = () => {
+    // Seed (or clear) the autoplay queue from this card's sibling list.
+    if (item.type !== 'folder' && queue && queue.length > 0) setYouTubeQueue(source, queue);
+    else clearYouTubeQueue();
+    navigate(href);
+  };
 
   const openChannel = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -93,7 +103,7 @@ export function YouTubeCard({ item, source, width = 300, showChannel = true }: Y
           />
         </Box>
       )}
-      <CardActionArea onClick={() => navigate(href)} sx={{ borderRadius: 1 }}>
+      <CardActionArea onClick={open} sx={{ borderRadius: 1 }}>
         <Box sx={{
           position: 'relative', width, aspectRatio: '16 / 9',
           backgroundColor: 'background.paper', borderRadius: 1,
@@ -144,7 +154,7 @@ export function YouTubeCard({ item, source, width = 300, showChannel = true }: Y
         )}
         <Box sx={{ minWidth: 0 }}>
           <Typography
-            onClick={() => navigate(href)}
+            onClick={open}
             sx={{
               fontWeight: 600, fontSize: 14, lineHeight: 1.3, color: 'text.primary', cursor: 'pointer',
               display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',

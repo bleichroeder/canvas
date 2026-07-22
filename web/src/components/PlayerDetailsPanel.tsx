@@ -190,7 +190,7 @@ function YouTubeDetails({ source, meta, currentId }: {
           <Typography sx={{ fontWeight: 700, fontSize: 13.5, mb: 1.5, color: 'text.secondary' }}>Up next</Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {related.slice(0, 20).map((it) => (
-              <YouTubeCard key={it.id} item={it} source={source} width={Math.min(360, 400)} showChannel={false} />
+              <YouTubeCard key={it.id} item={it} source={source} width={Math.min(360, 400)} showChannel={false} queue={related} />
             ))}
           </Box>
         </Box>

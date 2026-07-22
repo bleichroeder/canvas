@@ -305,7 +305,7 @@ export function YouTube({ source }: Props) {
           ) : (
             <>
               <Box sx={gridSx}>
-                {results.map((it) => <YouTubeCard key={it.id} item={it} source={source} width={YT_CARD_W} />)}
+                {results.map((it) => <YouTubeCard key={it.id} item={it} source={source} width={YT_CARD_W} queue={results} />)}
               </Box>
               {/* Sentinel — pulls the next search page in as it nears the viewport. */}
               <Box ref={searchSentinelRef} sx={{ height: 1 }} />
@@ -335,7 +335,7 @@ export function YouTube({ source }: Props) {
               title="Continue watching"
               cardWidth={ROW_CARD_W}
               items={historyItems}
-              renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} />}
+              renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} queue={historyItems} />}
               titlePrefix={
                 <Box sx={{
                   width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
@@ -351,7 +351,7 @@ export function YouTube({ source }: Props) {
               title="Liked"
               cardWidth={ROW_CARD_W}
               items={likedItems}
-              renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} />}
+              renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} queue={likedItems} />}
               titlePrefix={
                 <Box sx={{
                   width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
@@ -367,13 +367,14 @@ export function YouTube({ source }: Props) {
               g.kind === 'channel'
                 ? navigate(`/yt/${source}/channel/${encodeURIComponent(g.ytId)}?t=${encodeURIComponent(g.title)}`)
                 : navigate(`/lib/${source}/p:${encodeURIComponent(g.ytId)}`);
+            const groupItems: (Item & { source: string })[] = g.videos.map((v) => ({ ...v, source }));
             return (
               <Rail
                 key={`${g.kind}:${g.ytId}`}
                 title={g.title}
                 cardWidth={ROW_CARD_W}
-                items={g.videos.map((v) => ({ ...v, source }))}
-                renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} showChannel={false} />}
+                items={groupItems}
+                renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} showChannel={false} queue={groupItems} />}
                 titlePrefix={
                   g.thumbnail ? (
                     <Box component="img" src={g.thumbnail} alt="" loading="lazy"
