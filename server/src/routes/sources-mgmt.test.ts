@@ -58,6 +58,63 @@ describe('sources-mgmt routes', () => {
     expect(body.map((b) => b.label)).toEqual(['S1']);
   });
 
+  test('POST / adds a tokenless YouTube source and grants the creator', async () => {
+    const { app, memberBearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://test/api/sources', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${memberBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'youtube' }),
+    }));
+    expect(res.status).toBe(201);
+    const created = await res.json() as { id: number; type: string; label: string; baseUrl: string };
+    expect(created).toMatchObject({ type: 'youtube', label: 'YouTube', baseUrl: '' });
+    // Creator was granted access, so it now shows in their listing.
+    const list = await app.fetch(new Request('http://test/api/sources', { headers: { authorization: `Bearer ${memberBearer}` } }));
+    const body = await list.json() as { type: string }[];
+    expect(body.some((b) => b.type === 'youtube')).toBe(true);
+  });
+
+  test('POST / is idempotent — a second YouTube add returns the existing source', async () => {
+    const { app, memberBearer } = await makeFixture();
+    const first = await app.fetch(new Request('http://test/api/sources', {
+      method: 'POST', headers: { authorization: `Bearer ${memberBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'youtube' }),
+    }));
+    expect(first.status).toBe(201);
+    const a = await first.json() as { id: number };
+    const second = await app.fetch(new Request('http://test/api/sources', {
+      method: 'POST', headers: { authorization: `Bearer ${memberBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'youtube' }),
+    }));
+    expect(second.status).toBe(200);
+    const b = await second.json() as { id: number };
+    expect(b.id).toBe(a.id);
+    // Only one YouTube source in the member's listing.
+    const list = await (await app.fetch(new Request('http://test/api/sources', { headers: { authorization: `Bearer ${memberBearer}` } }))).json() as { type: string }[];
+    expect(list.filter((s) => s.type === 'youtube')).toHaveLength(1);
+  });
+
+  test('POST / with a custom label uses it', async () => {
+    const { app, adminBearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://test/api/sources', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'youtube', label: 'Family YouTube' }),
+    }));
+    const created = await res.json() as { label: string };
+    expect(created.label).toBe('Family YouTube');
+  });
+
+  test('POST / rejects pairing-based types (plex) with 400', async () => {
+    const { app, adminBearer } = await makeFixture();
+    const res = await app.fetch(new Request('http://test/api/sources', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminBearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'plex', baseUrl: 'http://x', token: 't' }),
+    }));
+    expect(res.status).toBe(400);
+  });
+
   test('DELETE /:id by admin removes any source', async () => {
     const { app, adminBearer, s2 } = await makeFixture();
     const res = await app.fetch(new Request(`http://test/api/sources/${s2.id}`, { method: 'DELETE', headers: { authorization: `Bearer ${adminBearer}` } }));

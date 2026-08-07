@@ -61,6 +61,13 @@ export function makeSourceStatusRoutes(getDb: () => Db) {
     const src = sources[key];
     if (!src) return c.json({ error: 'unknown source key' }, 404);
 
+    // Add-on sources (YouTube) are public and have no server to reach — the
+    // reachability probe doesn't apply. Report ok (the UI also drops the chip).
+    if (src.type === 'youtube') {
+      const body: StatusResponse = { status: 'ok', lastSeenAt: Date.now() };
+      return c.json(body);
+    }
+
     let host = '';
     try { host = new URL(src.baseUrl).hostname; } catch { host = ''; }
     if (isRfc1918Host(host)) {

@@ -49,6 +49,16 @@ const app = buildApp(db, () => serverRef, watchtowerClient);
 const server = Bun.serve({
   port: config.PORT,
   hostname: config.HOST,
+  // Bun's default idle timeout (10s) kills a connection that sends/receives no
+  // bytes for that long. The YouTube /stream response is a long-lived media
+  // pipe the client reads with backpressure — when its playback buffer fills
+  // (~10-15s ahead) it stops reading the socket, which read as "idle" and got
+  // the connection killed mid-playback (client saw a 200 whose body then
+  // errored, every few minutes). 120s is far longer than any backpressure
+  // pause or reasonable user pause, yet still reaps a half-open connection
+  // (e.g. the car dropping signal without a clean close) within ~2min so it
+  // doesn't hold one of the YT_MAX_CONCURRENT_STREAMS slots indefinitely.
+  idleTimeout: 120,
   fetch: app.fetch,
 });
 serverRef = server;

@@ -9,16 +9,19 @@ import Fade from '@mui/material/Fade';
 import { theme } from './theme';
 import { useRoute, matchRoute, navigate } from './router';
 import { getUser, clearSession } from './lib/session';
-import { SourcesProvider } from './lib/SourcesContext';
+import { SourcesProvider, useSources } from './lib/SourcesContext';
 import { Home } from './views/Home';
 import { SourceHome } from './views/SourceHome';
+import { YouTube } from './views/YouTube';
+import { YouTubeChannel } from './views/YouTubeChannel';
 import { Library } from './views/Library';
 import { ItemDetailView } from './views/ItemDetail';
 import { SearchView } from './views/Search';
 import { Settings } from './views/Settings';
 import { Pair } from './views/Pair';
 import { PhonePair } from './views/PhonePair';
-import { Player } from './views/Player';
+import { PlayerHost } from './components/PlayerHost';
+import { openPlayer, setPlayerMode, getPlayerSession } from './lib/player-session';
 import { Claim } from './views/Claim';
 import { SignIn } from './views/SignIn';
 import { SetPassword } from './views/SetPassword';
@@ -30,6 +33,15 @@ import { DrivingDisclaimer } from './components/DrivingDisclaimer';
 import { checkForPreviousCrash } from './lib/crash-telemetry';
 import { api } from './api';
 
+// Routes a source card to its type-specific page: YouTube gets a dedicated
+// search + followed-feed page; personal-media sources use SourceHome.
+function SourceRoute({ source }: { source: string }) {
+  const { sources } = useSources();
+  return sources[source]?.type === 'youtube'
+    ? <YouTube source={source} />
+    : <SourceHome source={source} />;
+}
+
 // Detect renderer-killed-mid-playback once at cold load. Logs to console and
 // appends to canvas.crashLog (surfaced in Settings → About → Diagnostics).
 const previousCrash = checkForPreviousCrash();
@@ -39,6 +51,25 @@ if (previousCrash) {
 
 function NotFound() {
   return <div style={{ padding: 20 }}><h1>Not found</h1></div>;
+}
+
+// The /play route no longer mounts the player itself (it lives in PlayerHost,
+// above the router, so it survives navigation). This just drives the session:
+// open the item full-screen on entry, and dock it to a mini player when the
+// user navigates away while it's still playing.
+function PlayerRoute({ source, id }: { source: string; id: string }) {
+  const route = useRoute();
+  const raw = route.query.from;
+  const fromSec = raw !== undefined && Number.isFinite(Number(raw)) ? Math.max(0, Math.floor(Number(raw))) : 0;
+  useEffect(() => {
+    openPlayer(source, id, { fromSec, mode: 'full' });
+    return () => {
+      const s = getPlayerSession();
+      if (s && s.source === source && s.id === id) setPlayerMode('mini');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, id]);
+  return null;
 }
 
 // Routes accessible without a canvas account. /pair is the phone-side
@@ -125,11 +156,12 @@ function App() {
   const routes: Array<[string, (params: Record<string, string>) => React.JSX.Element]> = [
     ['/', () => <Home />],
     ['/search', () => <SearchView />],
-    ['/source/:src', (p) => <SourceHome source={p.src!} />],
+    ['/source/:src', (p) => <SourceRoute source={p.src!} />],
+    ['/yt/:src/channel/:cid', (p) => <YouTubeChannel source={p.src!} channelId={p.cid!} />],
     ['/lib/:src', (p) => <Library source={p.src!} />],
     ['/lib/:src/:libId', (p) => <Library source={p.src!} libraryId={p.libId} />],
     ['/item/:src/:id', (p) => <ItemDetailView source={p.src!} id={p.id!} />],
-    ['/play/:src/:id', (p) => <Player source={p.src!} id={p.id!} />],
+    ['/play/:src/:id', (p) => <PlayerRoute source={p.src!} id={p.id!} />],
     ['/settings', () => <Settings />],
     ['/settings/pair', () => <Pair />],
     ['/settings/users', () => <Users />],
@@ -160,6 +192,9 @@ function App() {
       <Fade in key={route.path} timeout={250}>
         <div>{element}</div>
       </Fade>
+      {/* Persistent player — above the routed tree so it survives navigation
+          (enables the docked mini-player and the in-player details panel). */}
+      <PlayerHost />
       <NowPlayingStrip />
       <DrivingDisclaimer isPublicRoute={isPublicRoute} />
     </>

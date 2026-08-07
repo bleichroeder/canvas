@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { emit, reportFatal, getSessionId } from '../player/diagnostics';
 import { createStallWatchdog } from '../player/watchdog';
 import { api } from '../api';
@@ -18,13 +18,18 @@ import {
   setCaptionsOffsetMs,
 } from '../storage';
 import { getQueue, setQueue, type PlaybackQueue } from '../lib/playback-queue';
+import { type PlayerMode, closePlayer, openPlayer, setPlayerMode } from '../lib/player-session';
+import { recordWatch, getResumeSec } from '../lib/youtube-history';
+import { getYouTubeNext, getYouTubePrev } from '../lib/youtube-queue';
+import { useSources } from '../lib/SourcesContext';
+import { PlayerDetailsPanel } from '../components/PlayerDetailsPanel';
 import {
   startSession,
   updateSession,
   endSession,
   currentHeapMB,
 } from '../lib/crash-telemetry';
-import type { PlayResolution, ItemDetail } from '../types';
+import type { PlayResolution, ItemDetail, Item } from '../types';
 import Backdrop from '@mui/material/Backdrop';
 import Stack from '@mui/material/Stack';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -35,8 +40,10 @@ import Fade from '@mui/material/Fade';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import CloseIcon from '@mui/icons-material/Close';
+import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 
-interface Props { source: string; id: string }
+interface Props { source: string; id: string; fromSec: number; mode: PlayerMode }
 
 function classifyError(e: Error): string {
   const m = (e.message ?? '').toLowerCase();
@@ -60,14 +67,12 @@ const PROGRESS_INTERVAL_MS = 15_000;
 const MAX_PENDING_VIDEO_CHUNKS = 240;
 const MAX_PENDING_AUDIO_CHUNKS = 480;
 
-export function Player({ source, id }: Props) {
+export function PlayerInstance({ source, id, fromSec, mode }: Props) {
   const route = useRoute();
-  const fromQuery = (() => {
-    const raw = route.query.from;
-    if (raw === undefined) return 0;
-    const n = Number(raw);
-    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
-  })();
+  const isMini = mode === 'mini';
+  const { sources } = useSources();
+  const sourceType = sources[source]?.type ?? 'unknown';
+  const [showDetails, setShowDetails] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [paused, setPaused] = useState(true);
@@ -111,6 +116,10 @@ export function Player({ source, id }: Props) {
   const pendingAudioRef = useRef<EncodedAudioChunk[]>([]);
   const snapshotIntervalRef = useRef<number | null>(null);
   const startedRef = useRef(false);
+  // While true, audio chunks are buffered (not fed to the decoder) so the
+  // audio-mastered clock stays at 0 until the first video frame is decoded —
+  // otherwise audio plays ahead during the video decoder's post-seek spin-up.
+  const audioHeldRef = useRef(false);
   const reportRef = useRef(0);
   const resolutionRef = useRef<PlayResolution | null>(null);
   // Start as true so the first onReady auto-plays. The user already gestured
@@ -122,23 +131,52 @@ export function Player({ source, id }: Props) {
   const seekTokenRef = useRef(0);
   const sessionBaseRef = useRef(0);
   const tapStateRef = useRef<{ times: number[] }>({ times: [] });
+  // Live-stream auto-recovery bookkeeping (see onStreamInterrupted). Refs, not
+  // state, so the engine callback (captured once at boot) always reads fresh
+  // values instead of a stale render closure.
+  const recoverRef = useRef<{ count: number; lastMs: number }>({ count: 0, lastMs: 0 });
+  const errMsgRef = useRef<string | null>(null);
+  const interruptHandlerRef = useRef<() => void>(() => {});
+  errMsgRef.current = errMsg;
+
+  // Controls visibility. Mirrored into a ref so the video-tap handler can read
+  // the *pre-tap* state synchronously — otherwise a listener that reveals the
+  // controls on the same gesture races ahead of the click and turns a
+  // reveal-tap into a pause.
+  const controlsVisibleRef = useRef(true);
+  const hideTimerRef = useRef<number | undefined>(undefined);
+  const showControls = useCallback(() => {
+    controlsVisibleRef.current = true;
+    setControlsVisible(true);
+    if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = window.setTimeout(() => {
+      controlsVisibleRef.current = false;
+      setControlsVisible(false);
+    }, 4500);
+  }, []);
 
   useEffect(() => {
-    let t: number | undefined;
-    const reset = () => {
-      setControlsVisible(true);
-      if (t) clearTimeout(t);
-      t = window.setTimeout(() => setControlsVisible(false), 4500);
+    showControls(); // visible on mount, then auto-hide
+    const onKey = () => showControls();
+    window.addEventListener('keydown', onKey);
+    // Reveal on genuine mouse movement (desktop only). Gated to fine pointers
+    // so a touch tap's synthetic mousemove can't pre-reveal the controls and
+    // turn the first tap into a play/pause instead of a reveal.
+    const fine = window.matchMedia?.('(pointer: fine)').matches ?? false;
+    let lastMove = 0;
+    const onMove = () => {
+      const now = performance.now();
+      if (now - lastMove < 200) return;
+      lastMove = now;
+      showControls();
     };
-    window.addEventListener('pointerdown', reset);
-    window.addEventListener('keydown', reset);
-    reset();
+    if (fine) window.addEventListener('mousemove', onMove);
     return () => {
-      if (t) clearTimeout(t);
-      window.removeEventListener('pointerdown', reset);
-      window.removeEventListener('keydown', reset);
+      if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+      window.removeEventListener('keydown', onKey);
+      if (fine) window.removeEventListener('mousemove', onMove);
     };
-  }, []);
+  }, [showControls]);
 
   // Auto-open diagnostics overlay when ?diag=1 is present in the hash query.
   useEffect(() => {
@@ -147,6 +185,24 @@ export function Player({ source, id }: Props) {
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // YouTube watch-history recording (powers resume + the Continue-watching
+  // rail). Reads via refs so the interval/unmount closures see fresh values.
+  const itemMetaRef = useRef(itemMeta); itemMetaRef.current = itemMeta;
+  const sourceTypeRef = useRef(sourceType); sourceTypeRef.current = sourceType;
+  const recordYtHistory = (posSec: number) => {
+    if (sourceTypeRef.current !== 'youtube') return;
+    const meta = itemMetaRef.current;
+    if (!meta || posSec < 5) return; // skip accidental brief opens
+    void recordWatch({
+      ytId: id,
+      title: meta.title,
+      thumbnail: meta.poster ?? meta.backdrop ?? null,
+      channelId: meta.channelId ?? null,
+      channelTitle: meta.channelTitle ?? null,
+      durationSec: resolutionRef.current?.durationSec ?? meta.durationSec ?? null,
+    }, posSec);
+  };
 
   useEffect(() => {
     const t = window.setInterval(() => {
@@ -159,6 +215,7 @@ export function Player({ source, id }: Props) {
         const cur = a ? sessionBaseRef.current + a.currentTime() : 0;
         void api.progress(source, id, cur, false).catch(() => {});
         updateNowPlayingProgress(source, id, cur);
+        recordYtHistory(cur);
       }
       // Refresh the crash-telemetry session marker. A renderer kill leaves
       // this stale; checkForPreviousCrash() on next cold load surfaces it.
@@ -183,12 +240,17 @@ export function Player({ source, id }: Props) {
       ) {
         endReachedRef.current = true;
         const q = queue;
-        if (q && q.currentIndex + 1 < q.episodes.length) {
-          setUpNextOpen(true);
+        const hasEpisodeNext = !!q && q.currentIndex + 1 < q.episodes.length;
+        const hasYtNext = sourceTypeRef.current === 'youtube' && !!getYouTubeNext(source, id);
+        if (hasEpisodeNext || hasYtNext) {
+          setUpNextOpen(true); // Up-next countdown → advances (episode or YouTube).
         } else {
-          // No queue OR at last episode — navigate back to browse (or item detail).
-          if (window.history.length > 1) window.history.back();
-          else navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
+          // Nothing queued next — close the player and unwind.
+          closePlayer();
+          if (mode !== 'mini') {
+            if (window.history.length > 1) window.history.back();
+            else navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
+          }
         }
       }
     }, 250);
@@ -262,13 +324,38 @@ export function Player({ source, id }: Props) {
   }, []);
 
   async function autoStartPlayback(): Promise<void> {
-    if (audioRef.current) await audioRef.current.start();
-    videoRef.current?.start();
-    for (const c of pendingVideoRef.current) videoRef.current?.feed(c);
-    for (const c of pendingAudioRef.current) audioRef.current?.feed(c);
-    pendingVideoRef.current = [];
-    pendingAudioRef.current = [];
+    const video = videoRef.current;
+    const audio = audioRef.current;
+    // Start the audio context now (needs the user gesture), but HOLD audio: with
+    // an empty worklet queue the audio-mastered clock stays at 0. Route video
+    // chunks straight to the decoder and wait for its first decoded frame, then
+    // release audio. This keeps audio from racing ahead while the (slower) 1080p
+    // video decoder spins up after a seek — the post-seek "audio ahead / audio
+    // before video" drift. At from=0 the first keyframe is already there so the
+    // wait is negligible.
+    if (audio) await audio.start(); // ctx.resume; no samples fed yet → clock 0
+    video?.start();
     startedRef.current = true;
+    audioHeldRef.current = !!video && !!audio; // only hold when we have both tracks
+    for (const c of pendingVideoRef.current) video?.feed(c);
+    pendingVideoRef.current = [];
+    if (!audioHeldRef.current) {
+      for (const c of pendingAudioRef.current) audio?.feed(c);
+      pendingAudioRef.current = [];
+    }
+    // Wait for the first decoded video frame (VideoSink.frames populated by the
+    // decoder, independent of the clock), with a fallback so we never hang.
+    if (audioHeldRef.current && video) {
+      const deadline = performance.now() + 3000;
+      while (video.queuedFrames === 0 && performance.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 16));
+      }
+      // Release audio: feed what buffered during the wait; future chunks flow
+      // directly again once the hold is cleared.
+      audioHeldRef.current = false;
+      for (const c of pendingAudioRef.current) audio?.feed(c);
+      pendingAudioRef.current = [];
+    }
     setPaused(false);
     setHasEverStarted(true);
     // Drained the pending buffers — let the fetcher run free again.
@@ -306,6 +393,8 @@ export function Player({ source, id }: Props) {
         const canvas = canvasRef.current!;
         engineRef.current = bootEngine({
           url: resolution.url,
+          live: resolution.live ?? false,
+          onInterrupted: () => interruptHandlerRef.current(),
           getClock: () => audioRef.current?.currentTime() ?? 0,
           onReady: (info) => {
             if (cancelled) return;
@@ -376,7 +465,7 @@ export function Player({ source, id }: Props) {
             }
           },
           onAudioSample: (chunk) => {
-            if (startedRef.current && audioRef.current) audioRef.current.feed(chunk);
+            if (startedRef.current && !audioHeldRef.current && audioRef.current) audioRef.current.feed(chunk);
             else {
               pendingAudioRef.current.push(chunk);
               if (pendingAudioRef.current.length >= MAX_PENDING_AUDIO_CHUNKS) {
@@ -437,10 +526,10 @@ export function Player({ source, id }: Props) {
       source,
       id,
       startedAt: Date.now(),
-      posSec: fromQuery,
+      posSec: fromSec,
       heapMB: currentHeapMB(),
     });
-    const handle = bootSession(fromQuery);
+    const handle = bootSession(fromSec);
     return () => {
       handle.cancel();
       if (snapshotIntervalRef.current !== null) {
@@ -475,8 +564,10 @@ export function Player({ source, id }: Props) {
         );
         navigator.sendBeacon?.(url, blob);
         updateNowPlayingProgress(source, id, cur);
+        recordYtHistory(cur);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, id]);
 
   async function onPlayPause() {
@@ -512,9 +603,10 @@ export function Player({ source, id }: Props) {
     }
   }
 
-  async function reseek(targetSec: number): Promise<void> {
+  async function reseek(targetSec: number, o?: { auto?: boolean }): Promise<void> {
     if (errMsg) return;
-    emit('user_gesture', { kind: 'seek' });
+    if (o?.auto) emit('stream_recover', { targetSec: Math.round(targetSec) });
+    else emit('user_gesture', { kind: 'seek' });
     const target = Math.max(0, Math.min(targetSec, duration > 0 ? duration - 1 : targetSec));
     setReseeking(true);
     const myToken = ++seekTokenRef.current;
@@ -571,6 +663,30 @@ export function Player({ source, id }: Props) {
   function onSeek(sec: number): void { void reseek(sec); }
   function onSeekRelative(delta: number): void { void reseek(pos + delta); }
 
+  // A live stream (YouTube) dropped mid-transfer. The stream isn't byte-
+  // seekable, so the only correct recovery is to re-open at the current time —
+  // a fresh, keyframe-aligned session (same path as a manual scrub, so the A/V
+  // alignment is identical). Guard against loops: debounce concurrent triggers
+  // and give up (surface an error) after too many drops in a short window.
+  function onStreamInterrupted(): void {
+    if (errMsgRef.current) return;
+    const now = performance.now();
+    const st = recoverRef.current;
+    if (now - st.lastMs < 1500) return;              // a recovery is already in flight
+    if (now - st.lastMs > 30_000) st.count = 0;      // stable for a while → reset the streak
+    st.lastMs = now;
+    st.count += 1;
+    if (st.count > 5) {
+      setErrMsg('The stream keeps dropping — check your connection and try again.');
+      setReseeking(false);
+      return;
+    }
+    const a = audioRef.current;
+    const target = a && startedRef.current ? sessionBaseRef.current + a.currentTime() : pos;
+    void reseek(target, { auto: true });
+  }
+  interruptHandlerRef.current = onStreamInterrupted;
+
   async function onFullscreenToggle(): Promise<void> {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -589,8 +705,11 @@ export function Player({ source, id }: Props) {
     if (!nextEp) return;
     const updated: PlaybackQueue = { ...queue, currentIndex: nextIndex };
     setQueue(updated);
-    const fromSec = Math.floor(nextEp.viewOffsetSec ?? 0);
-    navigate(`/play/${source}/${nextEp.id}?from=${fromSec}`, { replace: true });
+    const nextFrom = Math.floor(nextEp.viewOffsetSec ?? 0);
+    // Switch the persistent session to the next item (re-boots via the host's
+    // key); keep the URL in step when we're the full-screen route.
+    openPlayer(source, nextEp.id, { fromSec: nextFrom, mode });
+    if (mode === 'full') navigate(`/play/${source}/${nextEp.id}?from=${nextFrom}`, { replace: true });
   }
 
   function onPrev(): void {
@@ -607,6 +726,26 @@ export function Player({ source, id }: Props) {
     goToEpisode(queue.currentIndex + 1);
   }
 
+  // YouTube autoplay/queue: switch the session to another video from the queue,
+  // resuming from history if partway through (else from the start).
+  function playYtVideo(v: Item): void {
+    const resume = getResumeSec(v.id);
+    const nextFrom = resume > 10 && (v.durationSec === undefined || resume < v.durationSec - 15)
+      ? Math.floor(resume)
+      : 0;
+    openPlayer(source, v.id, { fromSec: nextFrom, mode });
+    if (mode === 'full') navigate(`/play/${source}/${v.id}${nextFrom > 0 ? `?from=${nextFrom}` : ''}`, { replace: true });
+  }
+  function onYtPrev(): void {
+    if (pos > 5) { void reseek(0); return; }
+    const prev = getYouTubePrev(source, id);
+    if (prev) playYtVideo(prev);
+  }
+  function onYtNext(): void {
+    const next = getYouTubeNext(source, id);
+    if (next) playYtVideo(next);
+  }
+
   function onCornerTap() {
     const now = performance.now();
     const times = tapStateRef.current.times.filter((t) => now - t <= 1500);
@@ -618,53 +757,166 @@ export function Player({ source, id }: Props) {
     }
   }
 
+  // Tear the persistent player down. When it's the full/embed surface we also
+  // unwind the route we're on (rather than pushing a new entry, which would
+  // trap /play in the back-stack); a mini player just closes in place.
+  function exitPlayer() {
+    closePlayer();
+    if (mode !== 'mini') {
+      if (window.history.length > 1) window.history.back();
+      else navigate('/');
+    }
+  }
+
   async function onClose() {
     const a = audioRef.current;
     if (a && startedRef.current) {
       await api.progress(source, id, sessionBaseRef.current + a.currentTime(), false).catch(() => {});
     }
-    // Unwind to wherever the user came from rather than pushing a new entry
-    // (which would leave /play/ in the back-stack and trap the user there).
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
-    }
+    exitPlayer();
+  }
+
+  // Dock to the corner mini-player and return to whatever's behind /play, so
+  // playback continues while browsing. (Leaving /play also docks it, but the
+  // explicit button doesn't depend on how the user got here.)
+  function minimizePlayer() {
+    setPlayerMode('mini');
+    if (window.history.length > 1) window.history.back();
+    else navigate('/');
   }
 
   // Audio-only keeps the splash on screen the entire session as the
   // now-playing surface (album art + title); audio+video hides it once
   // playback starts.
-  const splashVisible = !errMsg && !reseeking && (isAudioOnly || !hasEverStarted);
+  const splashVisible = !isMini && !errMsg && !reseeking && (isAudioOnly || !hasEverStarted);
   const engineReady = status === '';
+
+  // YouTube autoplay queue (context list the video was launched from).
+  const ytNext = sourceType === 'youtube' ? getYouTubeNext(source, id) : null;
+  const ytPrev = sourceType === 'youtube' ? getYouTubePrev(source, id) : null;
+
+  // Next/Prev context: episode queue, else the YouTube queue if present.
+  const queueContext = queue
+    ? {
+        canPrev: queue.currentIndex > 0 || pos > 5,
+        canNext: queue.currentIndex < queue.episodes.length - 1,
+        onPrev,
+        onNext,
+      }
+    : (ytNext || ytPrev)
+      ? { canPrev: !!ytPrev || pos > 5, canNext: !!ytNext, onPrev: onYtPrev, onNext: onYtNext }
+      : null;
+
+  // What the end-of-video "Up next" countdown will play — an episode or a
+  // YouTube queue item; null when there's nothing to advance to.
+  const nextUp = (() => {
+    if (queue && queue.currentIndex + 1 < queue.episodes.length) {
+      const ep = queue.episodes[queue.currentIndex + 1]!;
+      return {
+        eyebrow: `Up next · ${queue.showTitle}`,
+        title: `S${ep.season}·E${ep.episode} · ${ep.title}`,
+        poster: ep.poster,
+        detail: ep.synopsis,
+        play: () => goToEpisode(queue.currentIndex + 1),
+      };
+    }
+    if (ytNext) {
+      return {
+        eyebrow: 'Up next',
+        title: ytNext.title,
+        poster: ytNext.poster,
+        detail: ytNext.channelTitle,
+        play: () => playYtVideo(ytNext),
+      };
+    }
+    return null;
+  })();
   // Center button icon: spinner while engine is warming up, Pause if we're
   // playing (audio-only's persistent splash needs to flip), Play otherwise.
   const splashShowingPause = isAudioOnly && startedRef.current && !paused;
 
+  // Outer shell: full = fullscreen flex-row (video region + optional details
+  // panel); mini = docked corner box.
+  const outerStyle: CSSProperties = isMini
+    ? {
+        position: 'fixed', bottom: 16, right: 16, width: 384, height: 216,
+        background: '#000', borderRadius: 10, overflow: 'hidden',
+        boxShadow: '0 10px 34px rgba(0,0,0,0.6)', zIndex: 1200, display: 'flex',
+      }
+    : { position: 'fixed', inset: 0, background: '#000', display: 'flex', flexDirection: 'row' };
+
+  const onVideoAreaClick = () => {
+    if (errMsg) return;
+    // Mini: a tap expands back to the full route.
+    if (isMini) { navigate(`/play/${encodeURIComponent(source)}/${encodeURIComponent(id)}`); return; }
+    // Before first play, any tap starts playback.
+    if (!hasEverStarted) { void onPlayPause(); return; }
+    // Hidden controls → the first tap only reveals them (never pauses). With the
+    // controls already up, a tap on the video toggles play/pause and re-arms the
+    // auto-hide. Reads the ref (pre-tap state) since nothing else reveals on tap.
+    if (!controlsVisibleRef.current) {
+      showControls();
+    } else {
+      void onPlayPause();
+      showControls();
+    }
+  };
+
   return (
-    <div
-      onClick={() => {
-        if (errMsg) return;
-        // Before first play, any tap on the canvas starts playback (with or
-        // without controls visible). Once running, the standard rule applies:
-        // taps only toggle pause when controls were already visible.
-        if (!hasEverStarted) { void onPlayPause(); return; }
-        if (controlsVisible) void onPlayPause();
-      }}
-      style={{
-        position: 'fixed', inset: 0, background: '#000',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: 'pointer',
-      }}
-    >
+    <div style={outerStyle}>
+      {/* Video region — the canvas + all player chrome position within this
+          box, so when the details panel is open the controls stay under the
+          video and don't run beneath the panel. */}
+      <div
+        onClick={onVideoAreaClick}
+        style={{
+          position: 'relative', flex: '1 1 0', minWidth: 0, height: '100%', background: '#000',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+        }}
+      >
       <canvas
         ref={canvasRef}
-        style={{ maxWidth: '100vw', maxHeight: '100vh', display: 'block' }}
+        // Fill the video region and scale the decoded frame to fit, preserving
+        // aspect (letterbox). object-fit lets a low-res stream upscale instead
+        // of rendering tiny at its native size, and adapts to the mini/panel
+        // sizes too. The backing-store size stays the decoded resolution.
+        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
       />
+      {isMini && (
+        <>
+          <Box
+            onClick={(e) => e.stopPropagation()}
+            sx={{
+              position: 'absolute', top: 0, left: 0, right: 0,
+              display: 'flex', justifyContent: 'flex-end', gap: 0.25, p: 0.25,
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0.65), transparent)',
+            }}
+          >
+            <IconButton size="small" aria-label="expand" sx={{ color: '#fff' }}
+              onClick={() => navigate(`/play/${encodeURIComponent(source)}/${encodeURIComponent(id)}`)}>
+              <OpenInFullIcon sx={{ fontSize: 17 }} />
+            </IconButton>
+            <IconButton size="small" aria-label="close" sx={{ color: '#fff' }}
+              onClick={() => { void onClose(); }}>
+              <CloseIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Box>
+          <IconButton
+            aria-label={paused ? 'play' : 'pause'}
+            onClick={(e) => { e.stopPropagation(); void onPlayPause(); }}
+            sx={{
+              position: 'absolute', color: '#fff', backgroundColor: 'rgba(0,0,0,0.45)',
+              '&:hover': { backgroundColor: 'rgba(0,0,0,0.65)' },
+            }}
+          >
+            {paused ? <PlayArrowIcon /> : <PauseIcon />}
+          </IconButton>
+        </>
+      )}
       <Fade in={splashVisible} timeout={300} unmountOnExit>
         <Box
           sx={{
-            position: 'fixed', inset: 0,
+            position: 'absolute', inset: 0,
             backgroundColor: '#0e0f12',
             backgroundImage: itemMeta?.backdrop ? `url(${itemMeta.backdrop})` : 'none',
             backgroundSize: 'cover',
@@ -731,7 +983,7 @@ export function Player({ source, id }: Props) {
           </Stack>
         </Box>
       </Fade>
-      <PlayerControls
+      {!isMini && <PlayerControls
         paused={paused}
         posSec={pos}
         durationSec={duration}
@@ -747,25 +999,36 @@ export function Player({ source, id }: Props) {
         onSeek={onSeek}
         onSeekRelative={onSeekRelative}
         onClose={onClose}
+        onMinimize={minimizePlayer}
+        detailsOpen={showDetails}
+        onToggleDetails={() => setShowDetails((v) => !v)}
         onVolumeChange={onVolumeChange}
         onMuteToggle={onMuteToggle}
         onFullscreenToggle={onFullscreenToggle}
         onOpenDiagnostics={() => setDiagOpen(true)}
-        queueContext={queue ? {
-          canPrev: queue.currentIndex > 0 || pos > 5,
-          canNext: queue.currentIndex < queue.episodes.length - 1,
-          onPrev,
-          onNext,
-        } : null}
+        queueContext={queueContext}
         onSubtitleChange={onSubtitleChange}
         onCaptionsOffsetChange={onCaptionsOffsetChange}
-      />
-      <CaptionsLayer
+        onActivity={showControls}
+      />}
+      {!isMini && <CaptionsLayer
         cues={captionCues}
         posSec={pos}
         offsetMs={captionsOffsetMs}
         controlsVisible={controlsVisible}
-      />
+      />}
+      </div>{/* /video region */}
+      {!isMini && showDetails && (
+        <PlayerDetailsPanel
+          source={source}
+          sourceType={sourceType}
+          itemMeta={itemMeta}
+          queue={queue}
+          currentId={id}
+          onPlayEpisodeIndex={goToEpisode}
+          onClose={() => setShowDetails(false)}
+        />
+      )}
       <PlayerErrorDialog
         open={!!errMsg}
         message={errMsg ?? ''}
@@ -774,40 +1037,41 @@ export function Player({ source, id }: Props) {
         onShowDiagnostics={() => setDiagOpen(true)}
         onBackToBrowse={() => {
           setErrMsg(null);
-          if (window.history.length > 1) {
-            window.history.back();
-          } else {
-            navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(id)}`);
-          }
+          exitPlayer();
         }}
       />
-      {queue && queue.currentIndex + 1 < queue.episodes.length && (
+      {!isMini && nextUp && (
         <UpNextOverlay
           open={upNextOpen}
-          showTitle={queue.showTitle}
-          nextEpisode={queue.episodes[queue.currentIndex + 1]!}
+          eyebrow={nextUp.eyebrow}
+          title={nextUp.title}
+          poster={nextUp.poster}
+          detail={nextUp.detail}
           onPlayNow={() => {
             setUpNextOpen(false);
-            goToEpisode(queue.currentIndex + 1);
+            nextUp.play();
           }}
           onCancel={() => {
             setUpNextOpen(false);
-            if (window.history.length > 1) window.history.back();
-            else navigate(`/item/${encodeURIComponent(source)}/${encodeURIComponent(queue.showId)}`);
+            exitPlayer();
           }}
         />
       )}
-      <Backdrop open={reseeking} sx={{ zIndex: 5, bgcolor: 'rgba(0,0,0,0.6)' }}>
-        <Stack alignItems="center" spacing={2}>
-          <CircularProgress />
-          <Typography color="common.white">Seeking…</Typography>
-        </Stack>
-      </Backdrop>
-      <div
-        onClick={onCornerTap}
-        style={{ position: 'fixed', top: 0, left: 0, width: 100, height: 100, zIndex: 9998, cursor: 'default' }}
-        aria-hidden="true"
-      />
+      {!isMini && (
+        <Backdrop open={reseeking} sx={{ zIndex: 5, bgcolor: 'rgba(0,0,0,0.6)' }}>
+          <Stack alignItems="center" spacing={2}>
+            <CircularProgress />
+            <Typography color="common.white">Seeking…</Typography>
+          </Stack>
+        </Backdrop>
+      )}
+      {mode === 'full' && (
+        <div
+          onClick={onCornerTap}
+          style={{ position: 'fixed', top: 0, left: 0, width: 100, height: 100, zIndex: 9998, cursor: 'default' }}
+          aria-hidden="true"
+        />
+      )}
       <DiagnosticsOverlay open={diagOpen} onClose={() => setDiagOpen(false)} sourceType={source ?? 'unknown'} />
     </div>
   );

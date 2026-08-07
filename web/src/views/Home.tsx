@@ -17,6 +17,7 @@ import { Hero } from '../components/Hero';
 import { Rail } from '../components/Rail';
 import { SectionHeading } from '../components/SectionHeading';
 import { SourcePickerCard } from '../components/SourcePickerCard';
+import { isAddOnSource } from '../lib/source-style';
 import { LibraryCard } from '../components/LibraryCard';
 import { useNowPlaying } from '../components/NowPlayingStrip';
 import { navigate } from '../router';
@@ -197,7 +198,7 @@ export function Home() {
               );
             })()}
 
-            {sourceCount === 1 && singleSourceKey && singleSourceLibraries.length > 0 && (
+            {sourceCount === 1 && singleSourceKey && sources[singleSourceKey]?.type !== 'youtube' && singleSourceLibraries.length > 0 && (
               <Box component="section">
                 <SectionHeading title="Libraries" />
                 <Box
@@ -216,7 +217,7 @@ export function Home() {
               </Box>
             )}
 
-            {sourceCount > 1 && (() => {
+            {(sourceCount > 1 || (sourceCount === 1 && singleSourceKey != null && sources[singleSourceKey]?.type === 'youtube')) && (() => {
               const backdrops: Record<string, string | undefined> = {};
               for (const row of state.rows) {
                 if (row.kind !== 'recent') continue;
@@ -224,30 +225,38 @@ export function Home() {
                 const firstWithPoster = row.items.find((i) => i.poster);
                 if (firstWithPoster?.poster) backdrops[row.source] = firstWithPoster.poster;
               }
-              return (
-                <Box component="section">
-                  <SectionHeading title="Your sources" />
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, 240px)',
-                      gap: 3,
-                      px: 2.5,
-                      pb: 4,
-                    }}
-                  >
-                    {Object.entries(sources).map(([key, src]) => (
-                      <SourcePickerCard
-                        key={key}
-                        srcKey={key}
-                        label={src.label}
-                        type={src.type}
-                        libraryCount={state.libraryCounts[key]}
-                        backdropUrl={backdrops[key]}
-                      />
-                    ))}
-                  </Box>
+              const entries = Object.entries(sources);
+              const servers = entries.filter(([, s]) => !isAddOnSource(s.type));
+              const addons = entries.filter(([, s]) => isAddOnSource(s.type));
+              const cardGrid = (list: typeof entries) => (
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 240px)', gap: 3, px: 2.5, pb: 4 }}>
+                  {list.map(([key, src]) => (
+                    <SourcePickerCard
+                      key={key}
+                      srcKey={key}
+                      label={src.label}
+                      type={src.type}
+                      libraryCount={state.libraryCounts[key]}
+                      backdropUrl={backdrops[key]}
+                    />
+                  ))}
                 </Box>
+              );
+              return (
+                <>
+                  {servers.length > 0 && (
+                    <Box component="section">
+                      <SectionHeading title={addons.length > 0 ? 'Your servers' : 'Your sources'} />
+                      {cardGrid(servers)}
+                    </Box>
+                  )}
+                  {addons.length > 0 && (
+                    <Box component="section">
+                      <SectionHeading title="Add-ons" />
+                      {cardGrid(addons)}
+                    </Box>
+                  )}
+                </>
               );
             })()}
 

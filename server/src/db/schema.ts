@@ -18,7 +18,7 @@ export const pairSessions = sqliteTable(
   'pair_sessions',
   {
     code: text('code').primaryKey(),
-    type: text('type', { enum: ['plex', 'flixify'] }).notNull(),
+    type: text('type', { enum: ['plex', 'flixify', 'youtube'] }).notNull(),
     status: text('status', { enum: ['pending', 'approved', 'expired'] }).notNull(),
     payload: text('payload', { mode: 'json' }).$type<PairPayload>().notNull(),
     createdAt: integer('created_at').notNull(),
@@ -99,7 +99,7 @@ export const sources = sqliteTable(
   'sources',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    type: text('type', { enum: ['plex', 'flixify'] }).notNull(),
+    type: text('type', { enum: ['plex', 'flixify', 'youtube'] }).notNull(),
     baseUrl: text('base_url').notNull(),
     token: text('token').notNull(),
     label: text('label').notNull(),
@@ -187,3 +187,75 @@ export const errorReports = sqliteTable(
 
 export type ErrorReport = typeof errorReports.$inferSelect;
 export type NewErrorReport = typeof errorReports.$inferInsert;
+
+// ── Sub-project Q tables (YouTube source) ─────────────────────────────────────
+
+// A user's followed YouTube channels/playlists — the self-curated feed shown on
+// the YouTube destination page (in lieu of a sign-in-backed subscriptions feed).
+export const youtubeFollows = sqliteTable(
+  'youtube_follows',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['channel', 'playlist'] }).notNull(),
+    ytId: text('yt_id').notNull(),        // channel id (UC…) or playlist id (PL…)
+    title: text('title').notNull(),       // cached for display
+    thumbnail: text('thumbnail'),         // cached poster, nullable
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    userItemUniq: uniqueIndex('youtube_follows_user_item').on(t.userId, t.kind, t.ytId),
+  }),
+);
+
+export type YoutubeFollow = typeof youtubeFollows.$inferSelect;
+export type NewYoutubeFollow = typeof youtubeFollows.$inferInsert;
+
+// A user's liked/favorited YouTube videos — a quick-return shelf on the YouTube
+// page. Video metadata is cached so the "Liked" rail renders without a per-video
+// yt-dlp round-trip.
+export const youtubeLikes = sqliteTable(
+  'youtube_likes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    ytId: text('yt_id').notNull(),               // video id (watch?v=…)
+    title: text('title').notNull(),              // cached for display
+    thumbnail: text('thumbnail'),                // cached poster, nullable
+    channelId: text('channel_id'),               // for the channel link, nullable
+    channelTitle: text('channel_title'),         // cached, nullable
+    durationSec: integer('duration_sec'),        // cached, nullable
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    userItemUniq: uniqueIndex('youtube_likes_user_item').on(t.userId, t.ytId),
+  }),
+);
+
+export type YoutubeLike = typeof youtubeLikes.$inferSelect;
+export type NewYoutubeLike = typeof youtubeLikes.$inferInsert;
+
+// A user's YouTube watch history + resume positions. One row per video (upserted
+// on the latest position), newest-watched first — powers the "Continue watching"
+// rail and resume-on-click. Metadata cached like youtube_likes.
+export const youtubeHistory = sqliteTable(
+  'youtube_history',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    ytId: text('yt_id').notNull(),               // video id (watch?v=…)
+    title: text('title').notNull(),              // cached for display
+    thumbnail: text('thumbnail'),                // cached poster, nullable
+    channelId: text('channel_id'),               // for the channel link, nullable
+    channelTitle: text('channel_title'),         // cached, nullable
+    durationSec: integer('duration_sec'),        // cached, nullable
+    posSec: integer('pos_sec').notNull().default(0), // last playback position
+    updatedAt: integer('updated_at').notNull(),  // last watched — sort key
+  },
+  (t) => ({
+    userItemUniq: uniqueIndex('youtube_history_user_item').on(t.userId, t.ytId),
+  }),
+);
+
+export type YoutubeHistory = typeof youtubeHistory.$inferSelect;
+export type NewYoutubeHistory = typeof youtubeHistory.$inferInsert;

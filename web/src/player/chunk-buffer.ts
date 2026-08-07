@@ -77,10 +77,22 @@ export class ChunkBuffer {
   }
 
   private updateBackpressure(): void {
-    const { tailPtsSec } = this.snapshot();
-    if (tailPtsSec === null) return;
+    // Gate on the LESSER-buffered stream's lead, not the max. Using the max let
+    // video race ahead and pause the fetcher while audio was still starving —
+    // audio then drained to empty, the audio-mastered clock froze, and the lead
+    // (dominated by the far-ahead video) never fell back below resumeLeadSec, so
+    // the fetcher never resumed: a hard stall a few seconds after a seek. Taking
+    // the min keeps bytes flowing until BOTH tracks have enough buffered, and
+    // resumes as soon as EITHER runs low.
+    const tailV = this.videoQueue.length > 0 ? this.videoQueue[this.videoQueue.length - 1]!.ptsSec : null;
+    const tailA = this.audioQueue.length > 0 ? this.audioQueue[this.audioQueue.length - 1]!.ptsSec : null;
+    let tail: number;
+    if (tailV != null && tailA != null) tail = Math.min(tailV, tailA);
+    else if (tailV != null) tail = tailV;
+    else if (tailA != null) tail = tailA;
+    else return;
     const clock = this.opts.getClock();
-    const lead = tailPtsSec - clock;
+    const lead = tail - clock;
     if (lead >= this.opts.pauseLeadSec) {
       // Always re-emit pause while over threshold — the fetcher may have been
       // unpaused by VideoSink's onBackpressure signal even while our internal

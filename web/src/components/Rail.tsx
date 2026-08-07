@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { SectionHeading } from './SectionHeading';
@@ -11,11 +11,17 @@ export interface RailProps {
   items: (Item & { source: string })[];
   cardWidth?: number;
   showSourceBadge?: boolean;
+  /** Optional element before the title (e.g. a channel avatar). */
+  titlePrefix?: ReactNode;
+  /** Optional control rendered at the end of the rail heading (e.g. unfollow). */
+  action?: ReactNode;
+  /** Override the card renderer (e.g. YouTube's 16:9 card). Defaults to PosterCard. */
+  renderItem?: (item: Item & { source: string }) => ReactNode;
 }
 
 const GAP_PX = 20; // matches sx gap: 2.5 (8 * 2.5)
 
-export function Rail({ title, items, cardWidth = 220, showSourceBadge = false }: RailProps) {
+export function Rail({ title, items, cardWidth = 220, showSourceBadge = false, titlePrefix, action, renderItem }: RailProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -56,7 +62,7 @@ export function Rail({ title, items, cardWidth = 220, showSourceBadge = false }:
 
   return (
     <Box component="section" sx={{ mb: 4 }}>
-      <SectionHeading title={title} sx={{ mt: 4, mb: 1.5 }} />
+      <SectionHeading title={title} sx={{ mt: 4, mb: 1.5 }} {...(titlePrefix ? { titlePrefix } : {})} {...(action ? { action } : {})} />
       <Box sx={{ position: 'relative' }}>
         <Box
           ref={scrollerRef}
@@ -73,7 +79,7 @@ export function Rail({ title, items, cardWidth = 220, showSourceBadge = false }:
         >
           {items.map((it) => (
             <Box key={`${it.source}:${it.id}`} sx={{ scrollSnapAlign: 'start', contain: 'layout style' }}>
-              <PosterCard item={it} source={it.source} width={cardWidth} showSourceBadge={showSourceBadge} />
+              {renderItem ? renderItem(it) : <PosterCard item={it} source={it.source} width={cardWidth} showSourceBadge={showSourceBadge} />}
             </Box>
           ))}
         </Box>

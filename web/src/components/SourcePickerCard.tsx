@@ -60,7 +60,15 @@ export function SourcePickerCard({ srcKey, label, type, libraryCount, backdropUr
             flexShrink: 0,
           }}
         >
-          {sourceGlyph(label)}
+          {type === 'youtube' ? (
+            // YouTube: white play triangle on the red badge (its brand mark),
+            // instead of a two-letter monogram.
+            <Box component="svg" viewBox="0 0 24 24" aria-hidden sx={{ width: 30, height: 30 }}>
+              <path d="M8 5.5v13l11-6.5z" fill="#fff" />
+            </Box>
+          ) : (
+            sourceGlyph(label)
+          )}
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography
@@ -86,7 +94,10 @@ export function SourcePickerCard({ srcKey, label, type, libraryCount, backdropUr
               mt: 0.25,
             }}
           >
-            {libraryCount === undefined
+            {/* YouTube has no library concept — no misleading count. */}
+            {type === 'youtube'
+              ? ' '
+              : libraryCount === undefined
               ? ' '
               : `${libraryCount} ${libraryCount === 1 ? 'library' : 'libraries'}`}
           </Typography>

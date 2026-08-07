@@ -4,7 +4,7 @@
 
 <p align="center">
   Self-hosted streaming client for constrained in-vehicle browser environments.<br/>
-  Plays Plex and Flixify sources via a canvas + WebCodecs pipeline instead of <code>&lt;video&gt;</code>,<br/>
+  Plays Plex, Flixify, and YouTube sources via a canvas + WebCodecs pipeline instead of <code>&lt;video&gt;</code>,<br/>
   so it works where native HTML5 playback is restricted.
 </p>
 
@@ -67,7 +67,9 @@ Bookmark that URL on your in-car browser (or any device); sign in with the admin
 
 ## Adding sources
 
-Once signed in: **Settings → Sources → Pair new source**. Scan the QR from your phone, complete the Plex sign-in on the phone. Canvas remembers the source per-user; multi-user households can grant/revoke each source per-user in Settings → Users.
+Once signed in: **Settings → Sources → Add a source → Media servers → Plex**. Scan the QR from your phone, complete the Plex sign-in on the phone. Canvas remembers the source per-user; multi-user households can grant/revoke each source per-user in Settings → Users.
+
+**YouTube** (public, ad-free) is added without pairing — pick it under **Add-ons** on the same **Add a source** screen. See [docs/youtube.md](docs/youtube.md).
 
 ## Adding users
 

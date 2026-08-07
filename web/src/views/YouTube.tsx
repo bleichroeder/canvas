@@ -1,0 +1,405 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import CircularProgress from '@mui/material/CircularProgress';
+import SearchIcon from '@mui/icons-material/Search';
+import SearchOffOutlinedIcon from '@mui/icons-material/SearchOffOutlined';
+import SubscriptionsOutlinedIcon from '@mui/icons-material/SubscriptionsOutlined';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import HistoryIcon from '@mui/icons-material/History';
+import { api } from '../api';
+import { navigate } from '../router';
+import { AppShell } from '../components/AppShell';
+import { YouTubeCard } from '../components/YouTubeCard';
+import { Rail } from '../components/Rail';
+import { EmptyState } from '../components/EmptyState';
+import { ensureLikesLoaded, useLikes } from '../lib/youtube-likes';
+import { ensureHistoryLoaded, useHistory } from '../lib/youtube-history';
+import { loadYouTubeSearch, saveYouTubeSearch } from '../lib/youtube-search-cache';
+import type { Item } from '../types';
+
+interface Props { source: string }
+
+interface SubGroup { title: string; ytId: string; kind: 'channel' | 'playlist'; thumbnail?: string | null; videos: Item[] }
+
+const YT_CARD_W = 300;
+const ROW_CARD_W = 260;
+const SEARCH_PAGE = 15;   // results per search page
+const SEARCH_MAX = 90;    // stop paging past here — ytsearch depth gets unreliable
+const gridSx = { display: 'grid', gridTemplateColumns: `repeat(auto-fill, ${YT_CARD_W}px)`, gap: 3, px: 2.5, justifyContent: 'center' } as const;
+
+// A YouTube-TV-style open reveal: the logo pops in with a red ring flash, the
+// wordmark and search slide up staggered, and the ambient glow rises from the
+// bottom. Motion is suppressed under prefers-reduced-motion.
+const REDUCE = { '@media (prefers-reduced-motion: reduce)': { animation: 'none', opacity: 1, transform: 'none' } } as const;
+const introSx = {
+  glow: {
+    '@keyframes ytGlowRise': { from: { opacity: 0, transform: 'translateY(60px)' }, to: { opacity: 1, transform: 'none' } },
+    animation: 'ytGlowRise 900ms cubic-bezier(0.16,1,0.3,1) both',
+    ...REDUCE,
+  },
+  logo: {
+    '@keyframes ytLogoPop': {
+      '0%': { opacity: 0, transform: 'scale(0.35)' },
+      '55%': { opacity: 1, transform: 'scale(1.14)' },
+      '100%': { transform: 'scale(1)' },
+    },
+    animation: 'ytLogoPop 620ms cubic-bezier(0.34,1.56,0.64,1) both',
+    ...REDUCE,
+  },
+  ring: {
+    '@keyframes ytRing': {
+      '0%': { opacity: 0.55, transform: 'scale(0.6)' },
+      '100%': { opacity: 0, transform: 'scale(2.4)' },
+    },
+    animation: 'ytRing 720ms cubic-bezier(0.16,1,0.3,1) both',
+    '@media (prefers-reduced-motion: reduce)': { display: 'none' },
+  },
+  word: {
+    '@keyframes ytWord': { from: { opacity: 0, transform: 'translateX(-14px)' }, to: { opacity: 1, transform: 'none' } },
+    animation: 'ytWord 520ms cubic-bezier(0.16,1,0.3,1) 160ms both',
+    ...REDUCE,
+  },
+  up: {
+    '@keyframes ytUp': { from: { opacity: 0, transform: 'translateY(14px)' }, to: { opacity: 1, transform: 'none' } },
+    animation: 'ytUp 500ms cubic-bezier(0.16,1,0.3,1) 260ms both',
+    ...REDUCE,
+  },
+  body: {
+    '@keyframes ytUp': { from: { opacity: 0, transform: 'translateY(14px)' }, to: { opacity: 1, transform: 'none' } },
+    animation: 'ytUp 500ms cubic-bezier(0.16,1,0.3,1) 360ms both',
+    ...REDUCE,
+  },
+} as const;
+
+function initials(name: string): string {
+  return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '·';
+}
+function hue(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+
+export function YouTube({ source }: Props) {
+  // Restore a prior search (query + results + paging + scroll) so closing a
+  // played video returns you to your results instead of a blank search.
+  const [restored] = useState(() => loadYouTubeSearch(source));
+  const [q, setQ] = useState(restored?.q ?? '');
+  const [results, setResults] = useState<(Item & { source: string })[]>(restored?.results ?? []);
+  const [searching, setSearching] = useState(false);        // fetching the first page
+  const [searchingMore, setSearchingMore] = useState(false); // fetching a later page
+  const [searchHasMore, setSearchHasMore] = useState(restored?.hasMore ?? false);
+  const debounce = useRef<number | undefined>(undefined);
+  // Live refs so the scroll observer reads current paging state without rebinding.
+  const qRef = useRef(restored?.q ?? '');
+  const searchOffsetRef = useRef(restored?.offset ?? 0);
+  const searchLoadingRef = useRef(false);
+  const searchHasMoreRef = useRef(restored?.hasMore ?? false);
+  // On the first debounced-search pass after a restore, skip the fetch — the
+  // results are already in state — so we don't re-hit the network needlessly.
+  const skipNextSearchRef = useRef(!!restored?.q);
+  // Mirrors of q/results for the save-on-unmount closure (avoids stale state).
+  const qStateRef = useRef(q); qStateRef.current = q;
+  const resultsRef = useRef(results); resultsRef.current = results;
+
+  // Save the search on unmount; restore scroll on mount.
+  useEffect(() => {
+    if (restored?.q && restored.scrollY) {
+      requestAnimationFrame(() => window.scrollTo(0, restored.scrollY));
+    }
+    return () => {
+      saveYouTubeSearch(source, {
+        q: qStateRef.current,
+        results: resultsRef.current,
+        offset: searchOffsetRef.current,
+        hasMore: searchHasMoreRef.current,
+        scrollY: window.scrollY,
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source]);
+
+  const [groups, setGroups] = useState<SubGroup[] | null>(null); // null = loading
+
+  const historyEntries = useHistory();
+  useEffect(() => { void ensureHistoryLoaded(); }, []);
+  const historyItems: (Item & { source: string })[] = historyEntries.map((h) => ({
+    id: h.ytId,
+    type: 'movie',
+    title: h.title,
+    source,
+    ...(h.thumbnail ? { poster: h.thumbnail } : {}),
+    ...(h.durationSec != null ? { durationSec: h.durationSec } : {}),
+    ...(h.channelId ? { channelId: h.channelId } : {}),
+    ...(h.channelTitle ? { channelTitle: h.channelTitle } : {}),
+  }));
+
+  const likes = useLikes();
+  useEffect(() => { void ensureLikesLoaded(); }, []);
+  const likedItems: (Item & { source: string })[] = likes.map((l) => ({
+    id: l.ytId,
+    type: 'movie',
+    title: l.title,
+    source,
+    ...(l.thumbnail ? { poster: l.thumbnail } : {}),
+    ...(l.durationSec != null ? { durationSec: l.durationSec } : {}),
+    ...(l.channelId ? { channelId: l.channelId } : {}),
+    ...(l.channelTitle ? { channelTitle: l.channelTitle } : {}),
+  }));
+
+  const loadSubs = useCallback(async () => {
+    const follows = await api.youtubeFollows.list();
+    if (follows.length === 0) { setGroups([]); return; }
+    const loaded = await Promise.all(
+      follows.map(async (f): Promise<SubGroup> => {
+        const kind = f.kind === 'channel' ? 'c' : 'p';
+        const videos = await api.library(source, `${kind}:${f.ytId}`)
+          // Channel-browse entries don't repeat the channel per-video, so stamp
+          // the follow's identity on so cards still show the channel.
+          .then((r) => r.items.slice(0, 12).map((it) => ({
+            ...it,
+            ...(it.channelTitle ? {} : { channelTitle: f.title }),
+            ...(it.channelId || f.kind !== 'channel' ? {} : { channelId: f.ytId }),
+          })))
+          .catch(() => [] as Item[]);
+        return { title: f.title, ytId: f.ytId, kind: f.kind, thumbnail: f.thumbnail, videos };
+      }),
+    );
+    setGroups(loaded.filter((g) => g.videos.length > 0));
+  }, [source]);
+
+  useEffect(() => { void loadSubs(); }, [loadSubs]);
+
+  // Debounced live search — no ENTER (no good Enter key in the car). 700ms is
+  // deliberately long: you're typing on a 16" touchscreen. Fetches the first
+  // page; later pages come in via the infinite-scroll sentinel below.
+  useEffect(() => {
+    if (debounce.current) clearTimeout(debounce.current);
+    // Restored results are already in state — don't re-fetch on the first pass.
+    if (skipNextSearchRef.current) { skipNextSearchRef.current = false; return; }
+    const query = q.trim();
+    if (query.length < 2) {
+      setResults([]);
+      searchHasMoreRef.current = false; setSearchHasMore(false);
+      return;
+    }
+    debounce.current = window.setTimeout(async () => {
+      qRef.current = query;
+      searchOffsetRef.current = 0;
+      searchLoadingRef.current = true;
+      setSearching(true);
+      try {
+        const { items } = await api.youtubeSearch(query, { offset: 0, limit: SEARCH_PAGE }, source);
+        setResults(items.map((it) => ({ ...it, source })));
+        searchOffsetRef.current = items.length;
+        const more = items.length >= SEARCH_PAGE;
+        searchHasMoreRef.current = more; setSearchHasMore(more);
+      } catch {
+        setResults([]);
+        searchHasMoreRef.current = false; setSearchHasMore(false);
+      } finally {
+        searchLoadingRef.current = false;
+        setSearching(false);
+      }
+    }, 700);
+    return () => { if (debounce.current) clearTimeout(debounce.current); };
+  }, [q, source]);
+
+  const loadMoreSearch = useCallback(async () => {
+    if (searchLoadingRef.current || !searchHasMoreRef.current) return;
+    const query = qRef.current;
+    if (query.length < 2) return;
+    searchLoadingRef.current = true;
+    setSearchingMore(true);
+    try {
+      const { items } = await api.youtubeSearch(query, { offset: searchOffsetRef.current, limit: SEARCH_PAGE }, source);
+      // Windowed yt-dlp search can re-emit a straddling item; dedup on id.
+      setResults((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        const fresh = items.filter((it) => !seen.has(it.id)).map((it) => ({ ...it, source }));
+        return [...prev, ...fresh];
+      });
+      searchOffsetRef.current += items.length;
+      // Cap depth — ytsearch gets unreliable past ~100 and pages re-fetch the head.
+      const more = items.length >= SEARCH_PAGE && searchOffsetRef.current < SEARCH_MAX;
+      searchHasMoreRef.current = more; setSearchHasMore(more);
+    } catch {
+      searchHasMoreRef.current = false; setSearchHasMore(false);
+    } finally {
+      searchLoadingRef.current = false;
+      setSearchingMore(false);
+    }
+  }, [source]);
+
+  const isSearching = q.trim().length >= 2;
+
+  // Infinite scroll for search results: pull the next page as the sentinel nears view.
+  const searchSentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!isSearching) return;
+    const el = searchSentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadMoreSearch();
+    }, { rootMargin: '600px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [isSearching, loadMoreSearch, results.length]);
+
+  return (
+    <AppShell>
+      {/* Red accent rising from the bottom of the viewport, behind the content,
+          so it doesn't clash with the blue/white nav at the top. */}
+      <Box sx={{
+        position: 'fixed', left: 0, right: 0, bottom: 0, height: '48vh', pointerEvents: 'none', zIndex: 0,
+        background: 'linear-gradient(0deg, rgba(255,0,0,0.15) 0%, rgba(255,0,0,0.05) 32%, transparent 72%)',
+        ...introSx.glow,
+      }} />
+      <Box sx={{ position: 'relative', zIndex: 1 }}>
+      {/* Hero: centered YouTube logo + search. */}
+      <Box sx={{ textAlign: 'center', pt: { xs: 4, sm: 6 }, pb: 3.5, px: 2 }}>
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1.25, mb: 3 }}>
+          <Box sx={{
+            position: 'relative',
+            width: 54, height: 38, borderRadius: 2, backgroundColor: '#ff0000',
+            display: 'grid', placeItems: 'center', boxShadow: '0 6px 18px rgba(255,0,0,0.45)',
+            ...introSx.logo,
+          }}>
+            {/* One-shot ring flash on open. */}
+            <Box aria-hidden sx={{
+              position: 'absolute', inset: -6, borderRadius: 3, border: '2px solid rgba(255,0,0,0.7)',
+              pointerEvents: 'none', ...introSx.ring,
+            }} />
+            <Box component="svg" viewBox="0 0 24 24" aria-hidden sx={{ width: 26, height: 26 }}>
+              <path d="M8 5.5v13l11-6.5z" fill="#fff" />
+            </Box>
+          </Box>
+          <Typography variant="h1" sx={{ m: 0, fontWeight: 800, letterSpacing: '-0.5px', ...introSx.word }}>YouTube</Typography>
+        </Box>
+        <Box sx={{ maxWidth: 640, mx: 'auto', ...introSx.up }}>
+          <TextField
+            fullWidth placeholder="Search YouTube…"
+            value={q} onChange={(e) => setQ(e.target.value)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.06)',
+              },
+            }}
+            InputProps={{
+              startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment>,
+              endAdornment: searching ? <CircularProgress size={18} /> : undefined,
+            }}
+          />
+        </Box>
+      </Box>
+
+      <Box sx={introSx.body}>
+      {isSearching ? (
+        <Box sx={{ mt: 1, opacity: searching ? 0.5 : 1, transition: 'opacity 120ms' }}>
+          {results.length === 0 && !searching ? (
+            <EmptyState icon={<SearchOffOutlinedIcon />} title={`No results for "${q.trim()}"`} />
+          ) : (
+            <>
+              <Box sx={gridSx}>
+                {results.map((it) => <YouTubeCard key={it.id} item={it} source={source} width={YT_CARD_W} queue={results} />)}
+              </Box>
+              {/* Sentinel — pulls the next search page in as it nears the viewport. */}
+              <Box ref={searchSentinelRef} sx={{ height: 1 }} />
+              {searchingMore && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={28} /></Box>
+              )}
+              {!searchHasMore && !searching && results.length >= SEARCH_PAGE && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', py: 4 }}>
+                  That's everything.
+                </Typography>
+              )}
+            </>
+          )}
+        </Box>
+      ) : groups === null ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
+      ) : groups.length === 0 && likedItems.length === 0 && historyItems.length === 0 ? (
+        <EmptyState
+          icon={<SubscriptionsOutlinedIcon />}
+          title="You haven't subscribed to any channels yet"
+          body="Search for something to watch, then open a channel and hit Subscribe — its latest videos show up here. Tap the ♥ on any video to keep it in Liked."
+        />
+      ) : (
+        <Box sx={{ pb: 4 }}>
+          {historyItems.length > 0 && (
+            <Rail
+              title="Continue watching"
+              cardWidth={ROW_CARD_W}
+              items={historyItems}
+              renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} queue={historyItems} />}
+              titlePrefix={
+                <Box sx={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  display: 'grid', placeItems: 'center', backgroundColor: 'rgba(255,255,255,0.10)',
+                }}>
+                  <HistoryIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                </Box>
+              }
+            />
+          )}
+          {likedItems.length > 0 && (
+            <Rail
+              title="Liked"
+              cardWidth={ROW_CARD_W}
+              items={likedItems}
+              renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} queue={likedItems} />}
+              titlePrefix={
+                <Box sx={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  display: 'grid', placeItems: 'center', backgroundColor: 'rgba(255,59,59,0.16)',
+                }}>
+                  <FavoriteIcon sx={{ fontSize: 20, color: '#ff3b3b' }} />
+                </Box>
+              }
+            />
+          )}
+          {groups.map((g) => {
+            const viewAll = () =>
+              g.kind === 'channel'
+                ? navigate(`/yt/${source}/channel/${encodeURIComponent(g.ytId)}?t=${encodeURIComponent(g.title)}`)
+                : navigate(`/lib/${source}/p:${encodeURIComponent(g.ytId)}`);
+            const groupItems: (Item & { source: string })[] = g.videos.map((v) => ({ ...v, source }));
+            return (
+              <Rail
+                key={`${g.kind}:${g.ytId}`}
+                title={g.title}
+                cardWidth={ROW_CARD_W}
+                items={groupItems}
+                renderItem={(it) => <YouTubeCard item={it} source={source} width={ROW_CARD_W} showChannel={false} queue={groupItems} />}
+                titlePrefix={
+                  g.thumbnail ? (
+                    <Box component="img" src={g.thumbnail} alt="" loading="lazy"
+                      sx={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
+                  ) : (
+                    <Box sx={{
+                      width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                      display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, color: '#fff',
+                      background: `linear-gradient(135deg, hsl(${hue(g.title)},55%,45%), hsl(${hue(g.title)},55%,28%))`,
+                    }}>{initials(g.title)}</Box>
+                  )
+                }
+                action={
+                  <Box onClick={viewAll} sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: 'text.secondary', '&:hover': { color: 'text.primary' } }}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 600 }}>View all</Typography>
+                    <ChevronRightIcon sx={{ fontSize: 20 }} />
+                  </Box>
+                }
+              />
+            );
+          })}
+        </Box>
+      )}
+      </Box>
+      </Box>
+    </AppShell>
+  );
+}

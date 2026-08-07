@@ -14,6 +14,7 @@ import {
   NOW_PLAYING_EVENT,
 } from '../storage';
 import { useSources } from '../lib/SourcesContext';
+import { usePlayerSession } from '../lib/player-session';
 import { SOURCE_TYPE_COLOR, sourceGlyph } from '../lib/source-style';
 import type { NowPlaying } from '../storage';
 
@@ -45,12 +46,16 @@ export function NowPlayingStrip() {
   const route = useRoute();
   const np = useNowPlaying();
   const { sources } = useSources();
+  // Hide while the persistent player is active in ANY mode — the docked
+  // mini-player is already the now-playing surface, and it would otherwise
+  // overlap this full-width strip.
+  const playerActive = usePlayerSession() !== null;
 
   // Hide while the player itself is mounted, on the phone-pair page, or before
   // anything's ever been played.
   const isPlayer = route.path.startsWith('/play/');
   const isPhonePair = route.path === '/pair';
-  if (!np || isPlayer || isPhonePair) return null;
+  if (!np || isPlayer || isPhonePair || playerActive) return null;
 
   const pct = np.durationSec > 0
     ? Math.min(100, Math.max(0, (np.posSec / np.durationSec) * 100))

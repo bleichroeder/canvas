@@ -36,6 +36,16 @@ export interface Item {
   artistName?: string;
   /** Music: 1-indexed track number within the album. */
   trackNumber?: number;
+  /** YouTube: originating channel id (UC…) — lets a card open the channel page. */
+  channelId?: string;
+  /** YouTube: channel / uploader display name, shown on the card byline. */
+  channelTitle?: string;
+  /** YouTube: view count, rendered as the "N views" card stat. */
+  viewCount?: number;
+  /** YouTube: upload date as ISO `YYYY-MM-DD`; rendered as a relative "3 days ago". */
+  uploadDate?: string;
+  /** YouTube: true for a live / currently-streaming video — shows a LIVE badge. */
+  isLive?: boolean;
 }
 
 export interface Episode {
@@ -88,6 +98,12 @@ export interface PlayResolution {
   audioTracks?: { id: string; language?: string; label?: string }[];
   subtitleTracks?: { id: string; language?: string; label?: string; url: string; format: 'vtt' | 'srt' }[];
   thumbnailUrlTemplate?: string;
+  /**
+   * True when `url` is a live transcode pipe (YouTube) that can't be resumed
+   * with an HTTP byte-Range — a mid-stream drop is recovered by re-opening at
+   * the current time. Absent/false ⇒ byte-seekable (Plex, Flixify).
+   */
+  live?: boolean;
 }
 
 export interface SourceHomeResponse {

@@ -23,10 +23,17 @@ import { makeSetupRoutes } from './routes/setup';
 import { makeTelemetryRoutes } from './routes/telemetry';
 import { makeAdminTelemetryRoutes } from './routes/admin-telemetry';
 import { makeAdminUpdatesRoutes } from './routes/admin-updates';
+import { makeYtStreamRoutes } from './routes/yt-stream';
+import { makeYoutubeRoutes } from './routes/youtube';
 import { makeWatchtowerClient, type WatchtowerClient } from './lib/watchtower-client';
+import { makeYtDlp } from './lib/ytdlp';
+import { makeYtDash } from './lib/yt-dash';
+import { makeStreamSigner } from './lib/yt-stream-sign';
+import { generateBearer } from './lib/bearer';
 import { registerAdapter } from './sources/registry';
 import { plexAdapter } from './sources/plex';
 import { flixifyAdapter } from './sources/flixify';
+import { makeYoutubeAdapter } from './sources/youtube';
 import type { Db } from './db';
 
 // Register source adapters at module scope so they are available before any
@@ -43,6 +50,15 @@ export function buildApp(
     url: config.WATCHTOWER_URL,
     token: config.WATCHTOWER_TOKEN,
   });
+
+  // Sub-project Q: YouTube source. The adapter and the public stream route
+  // share one yt-dlp wrapper + URL signer. An empty YT_STREAM_SECRET yields an
+  // ephemeral per-boot secret (fine single-instance; stream URLs are short-lived).
+  const ytdlp = makeYtDlp({ ytdlpPath: config.YTDLP_PATH, jsRuntime: config.YT_JS_RUNTIME });
+  const ytDash = makeYtDash(ytdlp);
+  const streamSigner = makeStreamSigner(config.YT_STREAM_SECRET || generateBearer());
+  registerAdapter(makeYoutubeAdapter({ yt: ytdlp, signer: streamSigner }));
+
   const app = new Hono();
   app.use('*', corsMiddleware());
   app.use('*', requestLog());
@@ -67,6 +83,24 @@ export function buildApp(
     retentionDays: config.TELEMETRY_RETENTION_DAYS,
     maxRows: config.TELEMETRY_MAX_ROWS,
   }));
+
+  // YouTube: /api/yt/stream is public (RangeFetcher sends no bearer, like Plex's
+  // token-in-URL); /api/yt/subs is authed (client attaches bearer, like /api/subtitles).
+  app.use('/api/yt/subs', requireUser(() => db));
+  app.route('/api/yt', makeYtStreamRoutes({
+    yt: ytdlp,
+    ytDash,
+    signer: streamSigner,
+    ytdlpPath: config.YTDLP_PATH,
+    ffmpegPath: config.FFMPEG_PATH,
+    jsRuntime: config.YT_JS_RUNTIME,
+    maxConcurrent: config.YT_MAX_CONCURRENT_STREAMS,
+    internalBase: `http://127.0.0.1:${config.PORT}`,
+  }));
+
+  // Followed channels/playlists (authed) — the YouTube page's curated feed.
+  app.use('/api/youtube/*', requireUser(() => db));
+  app.route('/api/youtube', makeYoutubeRoutes(() => db, ytdlp));
 
   // Everything else under /api/* requires a valid bearer token.
   app.use('/api/pair/*',        requireUser(() => db));

@@ -3,16 +3,29 @@ import { emit, sanitizeMessage } from './diagnostics';
 export interface RangeFetcherOptions {
   url: string;
   chunkSize?: number;
+  /**
+   * Whether the URL supports HTTP byte-Range resumption. True (default) for
+   * static files / seekable transcodes (Plex, Flixify) — a mid-stream drop is
+   * retried with `Range: bytes=<offset>-`. False for a live transcode pipe
+   * (YouTube /stream): Range is meaningless there (the server restarts the mux
+   * from the top), so instead of a corrupting byte-resume we bail via
+   * onInterrupted and let the engine re-open by *time*.
+   */
+  seekable?: boolean;
   onChunk: (offset: number, bytes: Uint8Array) => void | Promise<void>;
   onError: (err: Error) => void;
   onDone: () => void;
+  /** Called for a live (non-seekable) source when the stream drops mid-transfer. */
+  onInterrupted?: () => void;
 }
 
 export class RangeFetcher {
   private readonly url: string;
+  private readonly seekable: boolean;
   private readonly onChunk: RangeFetcherOptions['onChunk'];
   private readonly onError: RangeFetcherOptions['onError'];
   private readonly onDone: RangeFetcherOptions['onDone'];
+  private readonly onInterrupted: (() => void) | undefined;
   private offset = 0;
   private totalSize: number | null = null;
   private controller: AbortController | null = null;
@@ -35,9 +48,11 @@ export class RangeFetcher {
 
   constructor(opts: RangeFetcherOptions) {
     this.url = opts.url;
+    this.seekable = opts.seekable ?? true;
     this.onChunk = opts.onChunk;
     this.onError = opts.onError;
     this.onDone = opts.onDone;
+    this.onInterrupted = opts.onInterrupted;
   }
 
   start(): void {
@@ -86,19 +101,29 @@ export class RangeFetcher {
         lastError = e as Error;
         // Non-retryable: HTTP status error (server-side rejection).
         if (this.lastStatus >= 400) break;
+        // Live (non-seekable) source: a byte-Range retry would corrupt the
+        // demuxer (the server restarts the mux from the top). Bail so the
+        // engine re-opens by time instead of retrying here.
+        if (!this.seekable) break;
       }
     }
 
     // All attempts exhausted or non-retryable failure.
     this.running = false;
-    if (lastError) {
-      emit('fetch_error', {
-        message: sanitizeMessage(lastError.message),
-        offset: this.offset,
-        status: this.lastStatus,
-      });
-      this.onError(lastError);
+    if (!lastError) return;
+    // Live source dropped mid-transfer on a transport (not HTTP-status) error →
+    // hand off to time-based recovery rather than surfacing a fatal.
+    if (!this.seekable && this.lastStatus < 400 && this.onInterrupted) {
+      emit('stream_interrupted', { offset: this.offset, status: this.lastStatus });
+      this.onInterrupted();
+      return;
     }
+    emit('fetch_error', {
+      message: sanitizeMessage(lastError.message),
+      offset: this.offset,
+      status: this.lastStatus,
+    });
+    this.onError(lastError);
   }
 
   private async attemptFetch(): Promise<void> {
@@ -115,10 +140,11 @@ export class RangeFetcher {
       emit('fetch_start', {
         rangeStart: this.offset,
         rangeEnd: this.totalSize ?? null,
-        hostname: new URL(this.url).hostname,
+        hostname: new URL(this.url, typeof location !== 'undefined' ? location.href : undefined).hostname,
       });
       const res = await fetch(this.url, {
-        headers: this.offset > 0 ? { Range: `bytes=${this.offset}-` } : {},
+        // Only a seekable source gets a byte-Range; a live pipe can't honor one.
+        headers: this.seekable && this.offset > 0 ? { Range: `bytes=${this.offset}-` } : {},
         signal: this.controller.signal,
         referrerPolicy: 'no-referrer',
       });
@@ -160,7 +186,24 @@ export class RangeFetcher {
         this.offset += value.length;
         this.totalRead += value.length;
         this.emitChunk(offsetForChunk, value.length);
-        await this.onChunk(offsetForChunk, value);
+        try {
+          await this.onChunk(offsetForChunk, value);
+        } catch (e) {
+          // An error thrown by the consumer is a demux/decode failure (corrupt
+          // container, or WebCodecs unavailable in an insecure context) — NOT a
+          // transport drop. Neither a byte-range retry nor a time-reseek can fix
+          // it, so surface it as fatal immediately rather than letting loop()
+          // treat it as retryable / (for live sources) route it to onInterrupted
+          // and spin forever.
+          this.running = false;
+          emit('fetch_error', {
+            message: sanitizeMessage((e as Error).message),
+            offset: this.offset,
+            status: this.lastStatus,
+          });
+          this.onError(e as Error);
+          return;
+        }
       }
       if (this.running) {
         this.running = false;

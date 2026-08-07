@@ -12,6 +12,10 @@ export interface BootEngineOptions {
   onAudioSample: (chunk: EncodedAudioChunk) => void;
   onFatal: (err: Error) => void;
   onDone: () => void;
+  /** True for a live transcode pipe (YouTube) — resume drops by time, not byte-Range. */
+  live?: boolean;
+  /** Live-source drop: the engine can't self-recover; the view re-opens by time. */
+  onInterrupted?: () => void;
 }
 
 export interface EngineHandle {
@@ -35,9 +39,18 @@ export function bootEngine(opts: BootEngineOptions): EngineHandle {
 
   const buffer = new ChunkBuffer({
     getClock: opts.getClock,
+    // feedLeadSec governs how far ahead of the clock the decoder is fed — it sets
+    // A/V timing, so it stays put. pauseLead/resumeLead only govern the *network*
+    // buffer depth (demuxed-but-not-fed samples). The old 3s/2s band kept just
+    // ~2s buffered ahead, so the fetcher burst-and-drained on a ~7-8s cycle and
+    // each trough (videoDepth ~19 frames) left no cushion — one late chunk on a
+    // jittery 4G link starved the decoder for a frame or two (the intermittent
+    // micro-stutter). Deepening to 12s/6s keeps a ~6s floor at all times so
+    // network jitter is absorbed, while the fetcher still pauses well within the
+    // server's 120s idle timeout. Decode/render/clock path is unchanged.
     feedLeadSec: 1.5,
-    pauseLeadSec: 3.0,
-    resumeLeadSec: 2.0,
+    pauseLeadSec: 12.0,
+    resumeLeadSec: 6.0,
     onFeedVideo: (c) => { if (!disposed) opts.onVideoSample(c); },
     onFeedAudio: (c) => { if (!disposed) opts.onAudioSample(c); },
     onBackpressure: (state) => {
@@ -57,9 +70,13 @@ export function bootEngine(opts: BootEngineOptions): EngineHandle {
   const fetcher = new RangeFetcher({
     url: opts.url,
     chunkSize: 4 * 1024 * 1024,
+    seekable: !opts.live,
     onChunk: (offset, bytes) => { if (!disposed) source.appendChunk(offset, bytes); },
     onError: (e) => { if (!disposed) opts.onFatal(e); },
     onDone: () => { if (!disposed) { source.flush(); opts.onDone(); } },
+    ...(opts.live && opts.onInterrupted
+      ? { onInterrupted: () => { if (!disposed) opts.onInterrupted!(); } }
+      : {}),
   });
   fetcher.start();
 

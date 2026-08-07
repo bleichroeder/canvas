@@ -1,4 +1,4 @@
-export type SourceType = 'plex' | 'jellyfin' | 'flixify' | 'generic';
+export type SourceType = 'plex' | 'jellyfin' | 'flixify' | 'generic' | 'youtube';
 
 export interface SourceContext {
   baseUrl: string;
@@ -41,6 +41,16 @@ export interface Item {
   artistName?: string;
   /** Music: 1-indexed track number within the album. */
   trackNumber?: number;
+  /** YouTube: originating channel id (UC…) — lets a card open the channel page. */
+  channelId?: string;
+  /** YouTube: channel / uploader display name, shown on the card byline. */
+  channelTitle?: string;
+  /** YouTube: view count, rendered as the "N views" card stat. */
+  viewCount?: number;
+  /** YouTube: upload date as ISO `YYYY-MM-DD`; rendered as a relative "3 days ago". */
+  uploadDate?: string;
+  /** YouTube: true for a live / currently-streaming video — shows a LIVE badge. */
+  isLive?: boolean;
 }
 
 export interface Episode {
@@ -105,13 +115,20 @@ export interface PlayResolution {
    * substring "{ms}" the client replaces with a rounded millisecond offset.
    */
   thumbnailUrlTemplate?: string;
+  /**
+   * True when `url` is a live transcode pipe (YouTube) rather than a
+   * byte-seekable file/transcode (Plex, Flixify). A live stream can't be
+   * resumed with an HTTP byte-Range — the client must re-open by *time*
+   * (?fromSec=…) instead. Absent/false ⇒ byte-seekable (default).
+   */
+  live?: boolean;
 }
 
 export interface SourceAdapter {
   readonly type: SourceType;
   startPair(code: string): Promise<{ pairUrl: string; expiresAt: number }>;
   home(ctx: SourceContext): Promise<HomeRow[]>;
-  search(ctx: SourceContext, query: string): Promise<Item[]>;
+  search(ctx: SourceContext, query: string, page?: BrowsePage): Promise<Item[]>;
   library(ctx: SourceContext, libraryId?: string, path?: string, page?: BrowsePage): Promise<BrowseResult>;
   item(ctx: SourceContext, id: string): Promise<ItemDetail>;
   /**

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Db } from '../db';
-import { getSource, listAllSources, listAccessibleSources, deleteSource, listAllSourceAccessGrants, updateSource } from '../storage/sources';
+import { getSource, listAllSources, listAccessibleSources, deleteSource, listAllSourceAccessGrants, updateSource, createSource, grantSourceAccess } from '../storage/sources';
 import { getAuthContext } from '../middleware/auth';
 import { logger } from '../log';
 
@@ -37,6 +37,37 @@ export function makeSourcesMgmtRoutes(getDb: () => Db) {
       // NB: s.token (upstream auth) is NEVER returned in the listing — it stays
       // server-side. The frontend never needs to know it post-pair.
     })));
+  });
+
+  // POST — add a tokenless public source (v1: YouTube only). Public sources
+  // have no credential and no pair flow; any authed user can add one and is
+  // granted access to it (admins can then share via the Users UI). Pairing-based
+  // sources (plex/flixify) must NOT be created here — they go through /api/pair.
+  r.post('/', async (c) => {
+    const auth = getAuthContext(c);
+    const body = await c.req.json().catch(() => ({})) as { type?: unknown; label?: unknown };
+    if (body.type !== 'youtube') {
+      return c.json({ error: 'only public source type "youtube" can be added here; other sources use pairing' }, 400);
+    }
+    const label = typeof body.label === 'string' && body.label.trim() ? body.label.trim() : 'YouTube';
+    const db = getDb();
+    const shape = (s: { id: number; type: string; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }) => ({
+      id: s.id, type: s.type, baseUrl: s.baseUrl, label: s.label, pairedByUserId: s.pairedByUserId, createdAt: s.createdAt,
+    });
+
+    // Idempotent: if the caller already has a YouTube source, return it rather
+    // than creating a duplicate (public sources are tokenless and interchangeable).
+    const owned = auth.role === 'admin' ? listAllSources(db) : listAccessibleSources(db, auth.userId);
+    const existing = owned.find((s) => s.type === 'youtube');
+    if (existing) {
+      grantSourceAccess(db, auth.userId, existing.id);
+      return c.json(shape(existing), 200);
+    }
+
+    const created = createSource(db, { type: 'youtube', baseUrl: '', token: '', label, pairedByUserId: auth.userId });
+    grantSourceAccess(db, auth.userId, created.id);
+    logger.info({ sourceId: created.id, by: auth.userId, type: 'youtube' }, 'public source created');
+    return c.json(shape(created), 201);
   });
 
   r.delete('/:id', async (c) => {

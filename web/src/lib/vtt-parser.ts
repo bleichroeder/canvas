@@ -27,6 +27,22 @@ function stripTags(s: string): string {
   return s.replace(/<\/?[^>]+>/g, '');
 }
 
+// Decode HTML entities. YouTube's VTT text is entity-encoded (&gt; &#39; &amp; …),
+// so without this the raw entities show up literally in captions. Run AFTER
+// stripTags so a decoded "<" can't be mistaken for a tag.
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+};
+function decodeEntities(s: string): string {
+  return s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (m, e: string) => {
+    if (e[0] === '#') {
+      const code = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : m;
+    }
+    return NAMED_ENTITIES[e.toLowerCase()] ?? m;
+  });
+}
+
 export function parseVtt(text: string): Cue[] {
   const cues: Cue[] = [];
   // Normalize newlines, then split on blank lines.
@@ -44,7 +60,7 @@ export function parseVtt(text: string): Cue[] {
     const startSec = parseTimestamp(startStr);
     const endSec = parseTimestamp(endStr);
     if (!Number.isFinite(startSec) || !Number.isFinite(endSec)) continue;
-    const textLines = lines.slice(timingIdx + 1).map(stripTags).filter((l) => l.length > 0);
+    const textLines = lines.slice(timingIdx + 1).map((l) => decodeEntities(stripTags(l))).filter((l) => l.length > 0);
     if (textLines.length === 0) continue;
     cues.push({ startSec, endSec, text: textLines.join('\n') });
   }

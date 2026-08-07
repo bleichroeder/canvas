@@ -11,6 +11,8 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Divider from '@mui/material/Divider';
 import CloseIcon from '@mui/icons-material/Close';
+import PictureInPictureAltIcon from '@mui/icons-material/PictureInPictureAlt';
+import ViewSidebarOutlinedIcon from '@mui/icons-material/ViewSidebarOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import Replay10Icon from '@mui/icons-material/Replay10';
@@ -58,6 +60,9 @@ interface PlayerControlsProps {
   onSeek(sec: number): void;
   onSeekRelative(deltaSec: number): void;
   onClose(): void;
+  onMinimize(): void;
+  detailsOpen: boolean;
+  onToggleDetails(): void;
   onVolumeChange(v: number): void;
   onMuteToggle(): void;
   onFullscreenToggle(): void;
@@ -65,6 +70,8 @@ interface PlayerControlsProps {
   queueContext: QueueControlProps | null;
   onSubtitleChange(id: string | null): void;
   onCaptionsOffsetChange(ms: number): void;
+  /** Called on pointer activity within the controls, to re-arm their auto-hide. */
+  onActivity?(): void;
 }
 
 function fmt(sec: number): string {
@@ -152,22 +159,38 @@ export function PlayerControls(p: PlayerControlsProps) {
     : null;
 
   return (
-    <Box onClick={(e) => e.stopPropagation()}>
+    <Box
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={() => p.onActivity?.()}
+      onPointerMove={() => p.onActivity?.()}
+    >
       <Fade in={p.visible} timeout={200}>
-        <IconButton
-          onClick={p.onClose}
-          aria-label="close"
-          sx={{
-            position: 'fixed', top: 20, right: 20, zIndex: 10,
-            color: 'text.primary',
-            width: 48, height: 48,
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            backdropFilter: 'blur(8px)',
-            '&:hover': { backgroundColor: 'rgba(0,0,0,0.6)' },
-          }}
-        >
-          <CloseIcon />
-        </IconButton>
+        <Box sx={{ position: 'absolute', top: 20, right: 20, zIndex: 10, display: 'flex', gap: 1 }}>
+          <Tooltip title="Minimize">
+            <IconButton
+              onClick={p.onMinimize}
+              aria-label="minimize"
+              sx={{
+                color: 'text.primary', width: 48, height: 48,
+                backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+                '&:hover': { backgroundColor: 'rgba(0,0,0,0.6)' },
+              }}
+            >
+              <PictureInPictureAltIcon />
+            </IconButton>
+          </Tooltip>
+          <IconButton
+            onClick={p.onClose}
+            aria-label="close"
+            sx={{
+              color: 'text.primary', width: 48, height: 48,
+              backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
+              '&:hover': { backgroundColor: 'rgba(0,0,0,0.6)' },
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
       </Fade>
 
       {previewSrc && !previewBroken && (
@@ -178,7 +201,7 @@ export function PlayerControls(p: PlayerControlsProps) {
             alt=""
             onError={() => setPreviewBroken(true)}
             sx={{
-              position: 'fixed', bottom: 130, left: '50%',
+              position: 'absolute', bottom: 130, left: '50%',
               transform: `translateX(calc(-50% + ${
                 ((scrubPos / sliderMax) - 0.5) * Math.min(window.innerWidth - 40, 1400)
               }px))`,
@@ -195,7 +218,7 @@ export function PlayerControls(p: PlayerControlsProps) {
       <Fade in={p.visible} timeout={200}>
         <Box
           sx={{
-            position: 'fixed', left: 0, right: 0, bottom: 0,
+            position: 'absolute', left: 0, right: 0, bottom: 0,
             px: 3, pt: 4, pb: 2.5,
             background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.65) 50%, transparent 100%)',
             backdropFilter: 'blur(2px)',
@@ -308,18 +331,28 @@ export function PlayerControls(p: PlayerControlsProps) {
                 </IconButton>
               </Tooltip>
             )}
-            <Tooltip title="More">
+            <Tooltip title={p.detailsOpen ? 'Hide details' : 'Show details'}>
               <IconButton
-                onClick={(e) => setMoreAnchor(e.currentTarget)}
-                aria-label="more"
-                sx={{ ml: 1 }}
+                onClick={p.onToggleDetails}
+                aria-label="toggle details"
+                sx={{ ml: 1.5, color: p.detailsOpen ? 'primary.main' : undefined }}
               >
-                <MoreVertIcon />
+                <ViewSidebarOutlinedIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title={p.fullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
               <IconButton onClick={p.onFullscreenToggle} aria-label="fullscreen toggle" sx={{ ml: 1.5 }}>
                 {p.fullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+              </IconButton>
+            </Tooltip>
+            {/* Overflow last — Minimize lives only in the top-right chrome now. */}
+            <Tooltip title="More">
+              <IconButton
+                onClick={(e) => setMoreAnchor(e.currentTarget)}
+                aria-label="more"
+                sx={{ ml: 1.5 }}
+              >
+                <MoreVertIcon />
               </IconButton>
             </Tooltip>
           </Box>

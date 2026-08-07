@@ -21,6 +21,38 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 import type { HomeRow, Item, ItemDetail, BrowseResult, PlayResolution, SourceHomeResponse } from './types';
+
+export interface YoutubeFollow {
+  id: number;
+  kind: 'channel' | 'playlist';
+  ytId: string;
+  title: string;
+  thumbnail: string | null;
+  createdAt: number;
+}
+
+export interface YoutubeLike {
+  id: number;
+  ytId: string;
+  title: string;
+  thumbnail: string | null;
+  channelId: string | null;
+  channelTitle: string | null;
+  durationSec: number | null;
+  createdAt: number;
+}
+
+export interface YoutubeHistoryEntry {
+  id: number;
+  ytId: string;
+  title: string;
+  thumbnail: string | null;
+  channelId: string | null;
+  channelTitle: string | null;
+  durationSec: number | null;
+  posSec: number;
+  updatedAt: number;
+}
 import type { StoredSource } from './storage';
 import type { SessionUser } from './lib/session';
 
@@ -40,12 +72,21 @@ export const api = {
   },
   item: (srcKey: string, id: string) =>
     request<ItemDetail>(`/api/item/${encodeURIComponent(srcKey)}/${encodeURIComponent(id)}`),
-  play: (srcKey: string, id: string, fromSec?: number) => {
+  play: async (srcKey: string, id: string, fromSec?: number) => {
     const qs = typeof fromSec === 'number' && fromSec > 0 ? `?fromSec=${Math.floor(fromSec)}` : '';
-    return request<PlayResolution>(
+    const res = await request<PlayResolution>(
       `/api/play/${encodeURIComponent(srcKey)}/${encodeURIComponent(id)}${qs}`,
       { method: 'POST' },
     );
+    // Plex/Flixify return absolute upstream URLs; canvas-internal streams (YouTube)
+    // are root-relative. The player's RangeFetcher does `new URL(url)` and fetches
+    // it directly, so relative URLs both throw and (in dev) hit the wrong origin.
+    // Absolutize against the API base (dev) or the page origin (same-origin prod).
+    if (res.url.startsWith('/')) {
+      const base = API_BASE || (typeof location !== 'undefined' ? location.origin : '');
+      res.url = `${base}${res.url}`;
+    }
+    return res;
   },
   progress: (srcKey: string, id: string, posSec: number, completed = false) =>
     request<void>(`/api/progress/${encodeURIComponent(srcKey)}/${encodeURIComponent(id)}`, {
@@ -157,13 +198,52 @@ export const api = {
   adminRevokeSource: (userId: number, sourceId: number) => request<void>(`/api/admin/users/${userId}/sources/${sourceId}`, { method: 'DELETE' }),
 
   // Source management
-  listSources: () => request<{ id: number; type: 'plex' | 'flixify'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number; usersWithAccess?: number[] }[]>('/api/sources'),
+  listSources: () => request<{ id: number; type: 'plex' | 'flixify' | 'youtube'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number; usersWithAccess?: number[] }[]>('/api/sources'),
   deleteSource: (id: number) => request<void>(`/api/sources/${id}`, { method: 'DELETE' }),
   updateSource: (id: number, patch: { baseUrl?: string; label?: string }) =>
-    request<{ id: number; type: 'plex' | 'flixify'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }>(
+    request<{ id: number; type: 'plex' | 'flixify' | 'youtube'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }>(
       `/api/sources/${id}`,
       { method: 'PATCH', body: JSON.stringify(patch) },
     ),
+  // Add a tokenless public source (v1: YouTube). No pair flow.
+  addPublicSource: (type: 'youtube', label?: string) =>
+    request<{ id: number; type: 'youtube'; baseUrl: string; label: string; pairedByUserId: number | null; createdAt: number }>(
+      '/api/sources',
+      { method: 'POST', body: JSON.stringify({ type, ...(label ? { label } : {}) }) },
+    ),
+
+  // Followed YouTube channels/playlists (the YouTube page's curated feed).
+  youtubeFollows: {
+    list: () => request<YoutubeFollow[]>('/api/youtube/follows'),
+    add: (body: { kind?: 'channel' | 'playlist'; ytId?: string; url?: string }) =>
+      request<YoutubeFollow>('/api/youtube/follows', { method: 'POST', body: JSON.stringify(body) }),
+    remove: (id: number) => request<void>(`/api/youtube/follows/${id}`, { method: 'DELETE' }),
+  },
+
+  // Paged YouTube search for the YouTube page (infinite scroll). Distinct from
+  // the aggregated /api/search, which is a single capped shot across all sources.
+  youtubeSearch: (q: string, page: { offset: number; limit: number }, source?: string) => {
+    const params = new URLSearchParams({ q, offset: String(page.offset), limit: String(page.limit) });
+    if (source) params.set('source', source);
+    return request<{ items: Item[] }>(`/api/youtube/search?${params.toString()}`);
+  },
+
+  // Liked/favorited YouTube videos (the YouTube page's quick-return shelf).
+  youtubeLikes: {
+    list: () => request<YoutubeLike[]>('/api/youtube/likes'),
+    add: (body: { ytId: string; title: string; thumbnail?: string | null; channelId?: string | null; channelTitle?: string | null; durationSec?: number | null }) =>
+      request<YoutubeLike>('/api/youtube/likes', { method: 'POST', body: JSON.stringify(body) }),
+    remove: (ytId: string) => request<void>(`/api/youtube/likes/${encodeURIComponent(ytId)}`, { method: 'DELETE' }),
+  },
+
+  // YouTube watch history + resume positions ("Continue watching").
+  youtubeHistory: {
+    list: () => request<YoutubeHistoryEntry[]>('/api/youtube/history'),
+    record: (body: { ytId: string; title: string; posSec: number; thumbnail?: string | null; channelId?: string | null; channelTitle?: string | null; durationSec?: number | null }) =>
+      request<YoutubeHistoryEntry>('/api/youtube/history', { method: 'POST', body: JSON.stringify(body) }),
+    remove: (ytId: string) => request<void>(`/api/youtube/history/${encodeURIComponent(ytId)}`, { method: 'DELETE' }),
+    clear: () => request<void>('/api/youtube/history', { method: 'DELETE' }),
+  },
 
   // Setup (first-run wizard)
   setupProbe: () =>
