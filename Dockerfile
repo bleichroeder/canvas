@@ -36,7 +36,7 @@ RUN apk add --no-cache gettext tini
 #              without it many videos fail "This video is not available".
 #              (Deno is yt-dlp's default but is glibc-only — hence Node here.)
 # Bump YTDLP_VERSION to update the extractor when a YouTube change breaks it.
-ARG YTDLP_VERSION=2026.07.04
+ARG YTDLP_VERSION=2026.08.19
 RUN apk add --no-cache ffmpeg python3 nodejs \
  && wget -qO /usr/local/bin/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp" \
  && chmod +x /usr/local/bin/yt-dlp \
